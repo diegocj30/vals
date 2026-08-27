@@ -3,6 +3,7 @@
 //! miniquad puro o wgpu sin tocar `vals-core`.
 
 use macroquad::prelude::*;
+use vals_core::bullets::{BULLET_KINDS, Bullets};
 use vals_core::{ARENA_H, ARENA_W, World, player};
 
 use crate::stats::FrameStats;
@@ -17,6 +18,16 @@ const PLAYER_BODY: Color = color_u8!(190, 240, 255, 255);
 const TRAIL: Color = color_u8!(110, 190, 255, 255);
 const TRAIL_DASH: Color = color_u8!(255, 120, 200, 255);
 const HITBOX: Color = color_u8!(255, 70, 140, 255);
+// Un color por tipo de bala. Que cada tipo se lea de un vistazo importa mas
+// que que sea bonito: con la pantalla llena, el color es la unica pista de a
+// que velocidad viene algo.
+const BULLET_COLORS: [Color; 4] = [
+    color_u8!(120, 230, 255, 255), // pequena: cian
+    color_u8!(255, 190, 90, 255),  // media: ambar
+    color_u8!(200, 130, 255, 255), // grande: violeta
+    color_u8!(255, 245, 210, 255), // aguja: blanco caliente
+];
+
 const TEXT: Color = color_u8!(150, 210, 235, 255);
 const TEXT_DIM: Color = color_u8!(90, 120, 145, 255);
 
@@ -55,7 +66,25 @@ pub fn frame(world: &World, alpha: f32, layout: &Layout) {
     clear_background(BG);
     draw_arena(layout);
     draw_trail(world, layout);
+    // Las balas van debajo del jugador: taparte tu propia hitbox con una bala
+    // seria exactamente lo contrario de lo que hace falta.
+    draw_bullets(&world.bullets, layout);
     draw_player(world, alpha, layout);
+}
+
+/// Dibuja las balas.
+///
+/// Dos circulos por bala (halo y nucleo) con las primitivas normales de
+/// macroquad. Es a proposito la version lenta: H6 la sustituye por un unico
+/// draw call instanciado, y esto es el "antes" con el que se comparara.
+pub fn draw_bullets(bullets: &Bullets, l: &Layout) {
+    for b in bullets.iter_live() {
+        let color = BULLET_COLORS[b.kind as usize];
+        let r = l.len(BULLET_KINDS[b.kind as usize].draw_radius);
+        let s = l.to_screen(b.pos.x, b.pos.y);
+        draw_circle(s.x, s.y, r * 1.9, fade(color, 0.18));
+        draw_circle(s.x, s.y, r, color);
+    }
 }
 
 fn draw_arena(l: &Layout) {
@@ -131,18 +160,17 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
     );
 }
 
-pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
-    let x = 14.0;
-    let mut y = 26.0;
-    let line = 18.0;
+const X: f32 = 14.0;
 
-    let put = |text: &str, color: Color, y: &mut f32| {
-        draw_text(text, x, *y, 18.0, color);
-        *y += line;
-    };
+fn put(text: &str, color: Color, y: &mut f32) {
+    draw_text(text, X, *y, 18.0, color);
+    *y += 18.0;
+}
 
-    put(&format!("{:>6.1} fps", stats.fps()), TEXT, &mut y);
-    put(&format!("p50 {:>5.2} ms", stats.p50_ms()), TEXT_DIM, &mut y);
+/// Bloque de rendimiento, comun al juego y a la escena de stress.
+fn stats_block(stats: &FrameStats, steps: u32, y: &mut f32) {
+    put(&format!("{:>6.1} fps", stats.fps()), TEXT, y);
+    put(&format!("p50 {:>5.2} ms", stats.p50_ms()), TEXT_DIM, y);
     put(
         &format!("p99 {:>5.2} ms", stats.p99_ms()),
         // Rojo por encima de 20 ms: ahi ya se nota el tiron.
@@ -151,24 +179,63 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
         } else {
             TEXT_DIM
         },
-        &mut y,
+        y,
     );
-    y += 6.0;
-    put(
-        &format!("sim  {:>5.3} ms", stats.sim_ms()),
-        TEXT_DIM,
-        &mut y,
-    );
-    put(
-        &format!("draw {:>5.3} ms", stats.render_ms()),
-        TEXT_DIM,
-        &mut y,
-    );
-    y += 6.0;
-    put(&format!("tick {}", world.tick), TEXT_DIM, &mut y);
+    *y += 6.0;
+    put(&format!("sim  {:>5.3} ms", stats.sim_ms()), TEXT_DIM, y);
+    put(&format!("draw {:>5.3} ms", stats.render_ms()), TEXT_DIM, y);
     put(
         &format!("steps/frame {steps}"),
         if steps > 1 { HITBOX } else { TEXT_DIM },
+        y,
+    );
+}
+
+/// Overlay de la escena de stress. Sin jugador: solo cuenta y coste.
+pub fn bench_overlay(stats: &FrameStats, bullets: &Bullets, target: usize, steps: u32) {
+    let mut y = 26.0;
+    put("ESCENA DE STRESS", HITBOX, &mut y);
+    y += 6.0;
+    stats_block(stats, steps, &mut y);
+    y += 6.0;
+    put(
+        &format!("balas    {:>6}", bullets.live_count()),
+        TEXT,
+        &mut y,
+    );
+    put(&format!("objetivo {:>6}", target), TEXT_DIM, &mut y);
+    put(
+        &format!("slots    {:>6}", bullets.scanned_slots()),
+        TEXT_DIM,
+        &mut y,
+    );
+    draw_text(
+        "estos numeros van a docs/PERF.md",
+        X,
+        screen_height() - 14.0,
+        16.0,
+        TEXT_DIM,
+    );
+}
+
+pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
+    let mut y = 26.0;
+    stats_block(stats, steps, &mut y);
+
+    y += 6.0;
+    put(&format!("tick    {}", world.tick), TEXT_DIM, &mut y);
+    put(
+        &format!("balas   {}", world.bullets.live_count()),
+        TEXT_DIM,
+        &mut y,
+    );
+    put(
+        &format!("muertes {}", world.player.deaths),
+        if world.player.deaths > 0 {
+            HITBOX
+        } else {
+            TEXT_DIM
+        },
         &mut y,
     );
 
@@ -181,7 +248,10 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
         &mut y,
     );
     put(
-        &format!("dash {:>2}  iframes {:>2}", d.ticks_left, d.iframes),
+        &format!(
+            "dash {:>2}  iframes {:>3}",
+            d.ticks_left, world.player.iframes
+        ),
         if world.player.is_invulnerable() {
             HITBOX
         } else {
@@ -190,11 +260,11 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
         &mut y,
     );
     put(
-        &format!("cd   {:>2}  buffer  {:>2}", d.cooldown, d.buffer),
+        &format!("cd   {:>2}  buffer  {:>3}", d.cooldown, d.buffer),
         TEXT_DIM,
         &mut y,
     );
 
     let help = "F1 debug   R reset   SHIFT focus   X dash";
-    draw_text(help, x, screen_height() - 14.0, 16.0, TEXT_DIM);
+    draw_text(help, X, screen_height() - 14.0, 16.0, TEXT_DIM);
 }

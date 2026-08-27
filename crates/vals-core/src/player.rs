@@ -60,6 +60,14 @@ pub const DASH_COOLDOWN_TICKS: u32 = 26;
 /// culpa parece del jugador cuando en realidad es del programador.
 pub const INPUT_BUFFER_TICKS: u32 = 8;
 
+/// Invulnerabilidad al reaparecer tras morir.
+///
+/// Dos segundos enteros. Es larguisimo comparado con los i-frames del dash, y
+/// tiene que serlo: al morir la pantalla se limpia, pero el jefe sigue
+/// disparando y reaparecer directamente dentro de un patron seria una muerte
+/// que el jugador no puede evitar.
+pub const RESPAWN_IFRAME_TICKS: u32 = 120;
+
 /// Puntos que guarda la estela.
 pub const TRAIL_LEN: usize = 20;
 
@@ -132,8 +140,6 @@ impl Trail {
 pub struct Dash {
     /// Ticks que le quedan al dash en curso.
     pub ticks_left: u32,
-    /// Ticks de invulnerabilidad restantes.
-    pub iframes: u32,
     /// Ticks hasta poder volver a hacer dash.
     pub cooldown: u32,
     /// Ticks que le quedan de vida a una pulsacion guardada en el buffer.
@@ -157,6 +163,13 @@ pub struct Player {
     pub focused: bool,
     /// Transicion del focus en `[0, 1]`. Solo la usa el render.
     pub focus_t: f32,
+    /// Ticks de invulnerabilidad restantes.
+    ///
+    /// Vive en el jugador y no en el dash porque tiene dos fuentes: el dash y
+    /// el respawn. Un unico contador evita la pregunta de cual manda cuando
+    /// coinciden.
+    pub iframes: u32,
+    pub deaths: u32,
     pub dash: Dash,
     pub trail: Trail,
 }
@@ -170,6 +183,8 @@ impl Player {
             facing: Vec2::new(0.0, -1.0),
             focused: false,
             focus_t: 0.0,
+            iframes: 0,
+            deaths: 0,
             dash: Dash::default(),
             trail: Trail::new(pos),
         }
@@ -189,7 +204,21 @@ impl Player {
 
     /// Si ahora mismo las balas le atraviesan sin hacerle nada.
     pub fn is_invulnerable(&self) -> bool {
-        self.dash.iframes > 0
+        self.iframes > 0
+    }
+
+    /// Mata al jugador y lo devuelve a `respawn` con invulnerabilidad larga.
+    ///
+    /// Se cancela el dash en curso: reaparecer y salir disparado por inercia
+    /// hacia donde ibas antes de morir seria desorientante.
+    pub(crate) fn die(&mut self, respawn: Vec2) {
+        self.deaths += 1;
+        self.pos = respawn;
+        self.prev_pos = respawn;
+        self.vel = Vec2::ZERO;
+        self.dash = Dash::default();
+        self.iframes = RESPAWN_IFRAME_TICKS;
+        self.trail = Trail::new(respawn);
     }
 
     /// Avanza al jugador un tick.
@@ -204,8 +233,8 @@ impl Player {
         // invulnerabilidad y no 11: si se decrementara al final, el tick en el
         // que arranca el dash se comeria uno.
         self.dash.ticks_left = self.dash.ticks_left.saturating_sub(1);
-        self.dash.iframes = self.dash.iframes.saturating_sub(1);
         self.dash.cooldown = self.dash.cooldown.saturating_sub(1);
+        self.iframes = self.iframes.saturating_sub(1);
         self.dash.buffer = self.dash.buffer.saturating_sub(1);
 
         self.focused = input.is_down(InputFrame::FOCUS);
@@ -230,8 +259,10 @@ impl Player {
         if self.dash.buffer > 0 && self.dash.ticks_left == 0 && self.dash.cooldown == 0 {
             self.dash.buffer = 0;
             self.dash.ticks_left = DASH_TICKS;
-            self.dash.iframes = DASH_IFRAME_TICKS;
             self.dash.cooldown = DASH_COOLDOWN_TICKS;
+            // `max`: dashear justo despues de reaparecer no debe recortar la
+            // invulnerabilidad larga del respawn.
+            self.iframes = self.iframes.max(DASH_IFRAME_TICKS);
             self.dash.dir = if dir != Vec2::ZERO { dir } else { self.facing };
         }
 

@@ -2,7 +2,11 @@
 
 use glam::Vec2;
 
-use crate::{ARENA_H, ARENA_W, InputFrame, Pcg32, Player};
+use crate::bullets::Bullets;
+use crate::hash::Fnv1a;
+use crate::player::PLAYER_HITBOX_RADIUS;
+use crate::spawner::Spawner;
+use crate::{ARENA_H, ARENA_W, DT, InputFrame, Pcg32, Player};
 
 /// Todo el estado simulado.
 #[derive(Clone, Debug)]
@@ -12,10 +16,15 @@ pub struct World {
     pub tick: u64,
     pub rng: Pcg32,
     pub player: Player,
+    pub bullets: Bullets,
+    /// Patron provisional. H3 lo sustituye por el interprete cargado de RON.
+    pub spawner: Spawner,
     /// Input del tick anterior. Hace falta para detectar flancos (el dash
     /// reacciona a la pulsacion, no a mantener la tecla) y vive en el mundo
     /// para que un replay lo reproduzca sin depender de nada externo.
     prev_input: InputFrame,
+    /// Si el patron dispara. Ver [`World::sandbox`].
+    spawner_enabled: bool,
     seed: u64,
 }
 
@@ -25,9 +34,24 @@ impl World {
         Self {
             tick: 0,
             rng: Pcg32::new(seed),
-            player: Player::new(Vec2::new(ARENA_W * 0.5, ARENA_H * 0.78)),
+            player: Player::new(Self::spawn_pos()),
+            bullets: Bullets::default(),
+            spawner: Spawner::new(),
             prev_input: InputFrame::NONE,
+            spawner_enabled: true,
             seed,
+        }
+    }
+
+    /// Mundo sin nada disparando.
+    ///
+    /// Sirve para los tests de movimiento —que si no acabarian peleandose con
+    /// el jefe en vez de probando lo suyo— y es la base del modo entrenamiento
+    /// que tarde o temprano querra existir.
+    pub fn sandbox(seed: u64) -> Self {
+        Self {
+            spawner_enabled: false,
+            ..Self::new(seed)
         }
     }
 
@@ -36,12 +60,39 @@ impl World {
         self.seed
     }
 
+    /// Donde aparece y reaparece el jugador.
+    pub fn spawn_pos() -> Vec2 {
+        Vec2::new(ARENA_W * 0.5, ARENA_H * 0.78)
+    }
+
     /// Avanza la simulacion exactamente un tick.
     ///
     /// Es la unica puerta de entrada al mundo. No lee reloj, ni ficheros, ni
     /// nada del entorno: mismo estado + mismo input = mismo resultado, siempre.
     pub fn step(&mut self, input: InputFrame) {
         self.player.update(input, self.prev_input);
+        if self.spawner_enabled {
+            self.spawner
+                .update(self.tick, &mut self.bullets, self.player.pos);
+        }
+        self.bullets.update(DT);
+
+        // La colision va al final, contra las posiciones ya actualizadas de
+        // ambos. Comprobarla antes de mover dejaria pasar balas rapidas por
+        // encima del jugador dentro del mismo tick.
+        if !self.player.is_invulnerable()
+            && self
+                .bullets
+                .hit_circle(self.player.pos, PLAYER_HITBOX_RADIUS)
+                .is_some()
+        {
+            self.player.die(Self::spawn_pos());
+            // Limpiar la pantalla al morir es lo canonico del genero: sin
+            // esto reaparecerias dentro de la misma pared de balas que te
+            // acaba de matar.
+            self.bullets.clear();
+        }
+
         self.prev_input = input;
         self.tick += 1;
     }
@@ -72,50 +123,17 @@ impl World {
         h.write_f32(p.focus_t);
         h.write_u64(u64::from(p.focused));
         h.write_u64(u64::from(p.dash.ticks_left));
-        h.write_u64(u64::from(p.dash.iframes));
         h.write_u64(u64::from(p.dash.cooldown));
         h.write_u64(u64::from(p.dash.buffer));
         h.write_vec2(p.dash.dir);
+        h.write_u64(u64::from(p.iframes));
+        h.write_u64(u64::from(p.deaths));
+
+        h.write_u64(u64::from(self.spawner_enabled));
+        self.spawner.hash_into(&mut h);
+        self.bullets.hash_into(&mut h);
 
         h.finish()
-    }
-}
-
-/// FNV-1a de 64 bits.
-///
-/// No usamos `DefaultHasher` porque `std` no garantiza que su algoritmo sea
-/// estable entre versiones de Rust, y aqui el hash tiene que seguir valiendo
-/// dentro de un ano.
-struct Fnv1a(u64);
-
-impl Fnv1a {
-    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
-    const PRIME: u64 = 0x0000_0100_0000_01b3;
-
-    fn new() -> Self {
-        Self(Self::OFFSET)
-    }
-
-    fn write_u64(&mut self, v: u64) {
-        for b in v.to_le_bytes() {
-            self.0 ^= u64::from(b);
-            self.0 = self.0.wrapping_mul(Self::PRIME);
-        }
-    }
-
-    /// Se hashean los bits, no el valor: `to_bits` es exacto y distingue
-    /// `-0.0` de `0.0`, que es justo lo que queremos al comparar estados.
-    fn write_f32(&mut self, v: f32) {
-        self.write_u64(u64::from(v.to_bits()));
-    }
-
-    fn write_vec2(&mut self, v: Vec2) {
-        self.write_f32(v.x);
-        self.write_f32(v.y);
-    }
-
-    fn finish(self) -> u64 {
-        self.0
     }
 }
 
@@ -126,6 +144,11 @@ mod tests {
 
     const DASH: InputFrame = InputFrame::from_bits(InputFrame::DASH);
     const NADA: InputFrame = InputFrame::NONE;
+
+    /// Mundo de pruebas de movimiento: sin nada disparando.
+    fn mundo(seed: u64) -> World {
+        World::sandbox(seed)
+    }
 
     fn pulsar(bits: u8) -> InputFrame {
         InputFrame::from_bits(bits)
@@ -174,8 +197,8 @@ mod tests {
 
     #[test]
     fn la_diagonal_no_es_mas_rapida_que_la_recta() {
-        let mut recto = World::new(0);
-        let mut diagonal = World::new(0);
+        let mut recto = mundo(0);
+        let mut diagonal = mundo(0);
         correr(&mut recto, pulsar(InputFrame::RIGHT), 30);
         correr(
             &mut diagonal,
@@ -194,7 +217,7 @@ mod tests {
 
     #[test]
     fn alcanza_la_velocidad_plena_en_los_ticks_previstos() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         correr(
             &mut w,
             pulsar(InputFrame::RIGHT),
@@ -209,7 +232,7 @@ mod tests {
 
     #[test]
     fn se_para_del_todo_al_soltar() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         correr(&mut w, pulsar(InputFrame::RIGHT), 30);
         correr(&mut w, NADA, PLAYER_DECEL_TICKS as usize);
         assert_eq!(w.player.vel, Vec2::ZERO);
@@ -217,8 +240,8 @@ mod tests {
 
     #[test]
     fn el_focus_frena_al_jugador() {
-        let mut normal = World::new(0);
-        let mut focus = World::new(0);
+        let mut normal = mundo(0);
+        let mut focus = mundo(0);
         correr(&mut normal, pulsar(InputFrame::UP), 30);
         correr(&mut focus, pulsar(InputFrame::UP | InputFrame::FOCUS), 30);
         assert!(
@@ -229,7 +252,7 @@ mod tests {
 
     #[test]
     fn el_jugador_no_se_sale_de_la_arena() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         correr(&mut w, pulsar(InputFrame::LEFT | InputFrame::UP), 600);
         assert!(w.player.pos.x >= PLAYER_SPRITE_RADIUS - 0.001);
         assert!(w.player.pos.y >= PLAYER_SPRITE_RADIUS - 0.001);
@@ -241,7 +264,7 @@ mod tests {
 
     #[test]
     fn chocar_con_el_borde_mata_la_velocidad_de_ese_eje() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         // Contra la pared izquierda el tiempo suficiente para llegar y seguir.
         correr(&mut w, pulsar(InputFrame::LEFT), 300);
         assert_eq!(
@@ -258,7 +281,7 @@ mod tests {
 
     #[test]
     fn el_dash_dura_los_ticks_previstos() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         w.step(DASH);
         let mut ticks = 0;
         while w.player.is_dashing() {
@@ -270,7 +293,7 @@ mod tests {
 
     #[test]
     fn los_iframes_duran_exactamente_lo_declarado() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         w.step(DASH);
         let mut ticks = 0;
         while w.player.is_invulnerable() {
@@ -284,7 +307,7 @@ mod tests {
     fn los_iframes_sobreviven_al_final_del_dash() {
         // La invariante DASH_IFRAME_TICKS > DASH_TICKS se comprueba al
         // compilar en player.rs. Aqui se comprueba el efecto observable.
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         w.step(DASH);
         correr(&mut w, NADA, DASH_TICKS as usize);
         assert!(!w.player.is_dashing(), "el dash ya deberia haber acabado");
@@ -296,7 +319,7 @@ mod tests {
 
     #[test]
     fn mantener_la_tecla_de_dash_no_encadena_dashes() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         // Mantener pulsado mucho mas que el enfriamiento.
         correr(&mut w, DASH, (DASH_COOLDOWN_TICKS * 3) as usize);
         assert!(
@@ -307,7 +330,7 @@ mod tests {
 
     #[test]
     fn no_se_puede_hacer_dash_durante_el_enfriamiento() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         w.step(DASH);
         // Soltar y volver a pulsar demasiado pronto: fuera de la ventana del
         // buffer, para aislar el efecto del enfriamiento.
@@ -324,7 +347,7 @@ mod tests {
 
     #[test]
     fn el_buffer_de_input_recupera_una_pulsacion_temprana() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         w.step(DASH);
         // Esperar hasta justo dentro de la ventana del buffer antes de que
         // acabe el enfriamiento.
@@ -345,7 +368,7 @@ mod tests {
 
     #[test]
     fn el_dash_sin_direccion_usa_la_ultima_encarada() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         correr(&mut w, pulsar(InputFrame::LEFT), 10);
         let encarada = w.player.facing;
         correr(&mut w, NADA, 5);
@@ -360,7 +383,7 @@ mod tests {
 
     #[test]
     fn el_dash_no_saca_al_jugador_de_la_arena() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         // Pegarse a la pared izquierda y dashear contra ella.
         correr(&mut w, pulsar(InputFrame::LEFT), 200);
         w.step(pulsar(InputFrame::LEFT | InputFrame::DASH));
@@ -370,7 +393,7 @@ mod tests {
 
     #[test]
     fn el_dash_es_mas_rapido_que_correr() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         w.step(DASH);
         assert!(w.player.vel.length() > PLAYER_SPEED * 2.0);
     }
@@ -379,7 +402,7 @@ mod tests {
 
     #[test]
     fn la_estela_se_llena_y_no_crece_sin_limite() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         assert!(w.player.trail.is_empty());
         correr(&mut w, pulsar(InputFrame::UP), 1000);
         assert_eq!(w.player.trail.len(), TRAIL_LEN);
@@ -388,11 +411,145 @@ mod tests {
 
     #[test]
     fn la_estela_va_del_punto_mas_reciente_al_mas_antiguo() {
-        let mut w = World::new(0);
+        let mut w = mundo(0);
         correr(&mut w, pulsar(InputFrame::UP), 60);
         let puntos: Vec<_> = w.player.trail.iter_newest_first().collect();
         // Subiendo, la y decrece con el tiempo: el mas reciente es el de y menor.
         assert!(puntos[0].0.pos.y < puntos[puntos.len() - 1].0.pos.y);
         assert!((puntos[0].0.pos - w.player.pos).length() < 0.001);
+    }
+    // --- Balas, muerte y respawn ---
+
+    /// Pone una bala en el camino del jugador, sin depender del patron.
+    ///
+    /// Se anticipa la posicion del siguiente tick, no la actual: durante un
+    /// dash el jugador recorre 15 unidades por tick y se saldria de una bala
+    /// puesta donde esta ahora antes de que se compruebe la colision.
+    fn bala_encima(w: &mut World) {
+        let pos = w.player.pos + w.player.vel * DT;
+        w.bullets
+            .spawn(crate::bullets::Spawn {
+                pos,
+                ..Default::default()
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn el_patron_provisional_dispara() {
+        let mut w = World::new(0);
+        correr(&mut w, NADA, 30);
+        assert!(
+            w.bullets.live_count() > 0,
+            "el jefe deberia estar disparando"
+        );
+    }
+
+    #[test]
+    fn una_bala_encima_mata_al_jugador() {
+        let mut w = mundo(0);
+        // Alejarse del punto de reaparicion para notar que vuelve.
+        correr(&mut w, pulsar(InputFrame::LEFT), 40);
+        assert!(!w.player.is_invulnerable());
+        let muertes = w.player.deaths;
+
+        bala_encima(&mut w);
+        w.step(NADA);
+
+        assert_eq!(w.player.deaths, muertes + 1);
+        assert_eq!(
+            w.player.pos,
+            World::spawn_pos(),
+            "deberia reaparecer en el inicio"
+        );
+    }
+
+    #[test]
+    fn morir_limpia_la_pantalla() {
+        let mut w = mundo(0);
+        for i in 0..20 {
+            w.bullets
+                .spawn(crate::bullets::Spawn {
+                    pos: Vec2::new(50.0 + i as f32, 50.0),
+                    ..Default::default()
+                })
+                .unwrap();
+        }
+        bala_encima(&mut w);
+        w.step(NADA);
+        assert_eq!(
+            w.bullets.live_count(),
+            0,
+            "reaparecer dentro de la misma pared de balas seria injusto"
+        );
+    }
+
+    #[test]
+    fn al_reaparecer_hay_invulnerabilidad_larga() {
+        let mut w = mundo(0);
+        bala_encima(&mut w);
+        w.step(NADA);
+        assert!(w.player.is_invulnerable());
+        assert!(
+            w.player.iframes > DASH_IFRAME_TICKS,
+            "el respawn tiene que dar mucho mas margen que un dash"
+        );
+    }
+
+    #[test]
+    fn los_iframes_del_dash_salvan_de_una_bala() {
+        let mut w = mundo(0);
+        w.step(DASH);
+        assert!(w.player.is_invulnerable());
+        let muertes = w.player.deaths;
+
+        bala_encima(&mut w);
+        w.step(NADA);
+        assert_eq!(
+            w.player.deaths, muertes,
+            "el dash deberia haberla atravesado"
+        );
+    }
+
+    #[test]
+    fn al_expirar_la_invulnerabilidad_vuelve_a_morir() {
+        let mut w = mundo(0);
+        bala_encima(&mut w);
+        w.step(NADA);
+        let muertes = w.player.deaths;
+
+        // Esperar a que se acabe el margen del respawn.
+        correr(&mut w, NADA, RESPAWN_IFRAME_TICKS as usize + 1);
+        assert!(!w.player.is_invulnerable());
+
+        bala_encima(&mut w);
+        w.step(NADA);
+        assert_eq!(w.player.deaths, muertes + 1);
+    }
+
+    #[test]
+    fn morir_cancela_el_dash_en_curso() {
+        let mut w = mundo(0);
+        w.step(pulsar(InputFrame::LEFT | InputFrame::DASH));
+        assert!(w.player.is_dashing());
+
+        // Forzar la muerte pese a los i-frames del dash.
+        w.player.iframes = 0;
+        bala_encima(&mut w);
+        w.step(NADA);
+
+        assert!(
+            !w.player.is_dashing(),
+            "salir disparado al reaparecer desorienta"
+        );
+        assert_eq!(w.player.vel, Vec2::ZERO);
+    }
+
+    #[test]
+    fn el_mundo_sandbox_no_dispara() {
+        let mut w = mundo(0);
+        correr(&mut w, NADA, 300);
+        assert_eq!(w.bullets.live_count(), 0);
+        assert_eq!(w.player.deaths, 0);
     }
 }

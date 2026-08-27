@@ -10,11 +10,17 @@
 //! 3. Cambiar de renderer (miniquad puro, wgpu) es reescribir `vals-app`,
 //!    no reescribir el juego.
 
+pub mod bench;
+pub mod bullets;
+pub mod emitter;
+mod hash;
 pub mod input;
 pub mod player;
 pub mod rng;
+pub mod spawner;
 pub mod world;
 
+pub use bullets::{Bullets, MAX_BULLETS};
 pub use input::InputFrame;
 pub use player::Player;
 pub use rng::Pcg32;

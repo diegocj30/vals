@@ -4,6 +4,7 @@
 //! entera en `vals-core` y no sabe que esto existe.
 
 use macroquad::prelude::*;
+use vals_core::bench::Stress;
 use vals_core::{DT, InputFrame, World};
 
 mod draw;
@@ -13,6 +14,9 @@ use stats::FrameStats;
 
 /// "VALS" en ASCII. Semilla por defecto.
 const SEED: u64 = 0x5641_4C53;
+
+/// Balas de la escena de stress si no se pide otra cosa.
+const BENCH_DEFAULT: usize = 10_000;
 
 /// Maximo de ticks de simulacion por frame.
 ///
@@ -37,6 +41,43 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    match Args::parse() {
+        Some(args) => run_bench(args).await,
+        None => run_game().await,
+    }
+}
+
+/// Configuracion de la escena de stress.
+struct Args {
+    target: usize,
+    /// Si se indica, se mide ese numero de frames, se imprime el resumen y se
+    /// sale. Es lo que hace que las filas de `docs/PERF.md` salgan de un
+    /// comando repetible y no de mirar el overlay a ojo.
+    frames: Option<u32>,
+}
+
+impl Args {
+    /// Lee `--bench-scene [n] [--frames n]`.
+    ///
+    /// En web no hay argumentos, asi que alli siempre se juega.
+    fn parse() -> Option<Self> {
+        let args: Vec<String> = std::env::args().collect();
+        let i = args.iter().position(|a| a == "--bench-scene")?;
+        let valor = |flag: &str| -> Option<usize> {
+            let j = args.iter().position(|a| a == flag)?;
+            args.get(j + 1)?.parse().ok()
+        };
+        Some(Self {
+            target: args
+                .get(i + 1)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(BENCH_DEFAULT),
+            frames: valor("--frames").map(|n| n as u32),
+        })
+    }
+}
+
+async fn run_game() {
     let mut world = World::new(SEED);
     let mut stats = FrameStats::new();
     let mut accumulator = 0.0f32;
@@ -82,6 +123,68 @@ async fn main() {
             draw::debug_overlay(&world, &stats, steps);
         }
         stats.push_render((get_time() - t1) as f32);
+
+        next_frame().await;
+    }
+}
+
+/// Escena de stress: la misma que miden los benchmarks, pero con render.
+///
+/// No hay jugador ni input. Sirve para ver a ojo cuanto aguanta el render y
+/// para sacar las cifras que van a `docs/PERF.md`.
+async fn run_bench(args: Args) {
+    let target = args.target;
+    let mut stress = Stress::new(target);
+    let mut stats = FrameStats::new();
+    let mut accumulator = 0.0f32;
+    let mut frames: u32 = 0;
+    // Frames que no se cuentan: los primeros siempre incluyen la compilacion
+    // de shaders y el llenado inicial del pool, y falsearian el p99.
+    let calentamiento = 60;
+
+    loop {
+        let frame_dt = get_frame_time().min(MAX_FRAME_DT);
+        stats.push_frame(frame_dt);
+
+        let t0 = get_time();
+        accumulator += frame_dt;
+        let mut steps = 0;
+        while accumulator >= DT {
+            stress.step(DT);
+            accumulator -= DT;
+            steps += 1;
+            if steps >= MAX_STEPS_PER_FRAME {
+                accumulator = 0.0;
+                break;
+            }
+        }
+        stats.push_sim((get_time() - t0) as f32);
+
+        let t1 = get_time();
+        let layout = draw::Layout::compute();
+        clear_background(BLACK);
+        draw::draw_bullets(&stress.bullets, &layout);
+        draw::bench_overlay(&stats, &stress.bullets, stress.target(), steps);
+        stats.push_render((get_time() - t1) as f32);
+
+        frames += 1;
+        if let Some(limite) = args.frames
+            && frames >= limite + calentamiento
+        {
+            println!("balas={} objetivo={target}", stress.live_count());
+            println!(
+                "p50={:.3}ms p99={:.3}ms sim={:.3}ms draw={:.3}ms fps={:.1}",
+                stats.p50_ms(),
+                stats.p99_ms(),
+                stats.sim_ms(),
+                stats.render_ms(),
+                stats.fps()
+            );
+            std::process::exit(0);
+        }
+        if frames == calentamiento {
+            stats = FrameStats::new();
+        }
 
         next_frame().await;
     }

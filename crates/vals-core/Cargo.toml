@@ -5,5 +5,17 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+# Sin esto, `cargo bench` intenta lanzar tambien el harness de libtest del lib
+# y se atraganta con los argumentos de criterion.
+[lib]
+bench = false
+
 [dependencies]
 glam = "0.33"
+
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "sim"
+harness = false
