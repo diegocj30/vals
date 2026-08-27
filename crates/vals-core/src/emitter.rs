@@ -11,11 +11,12 @@
 use std::f32::consts::TAU;
 
 use glam::Vec2;
+use serde::{Deserialize, Serialize};
 
 use crate::bullets::{Bullets, KIND_SMALL, Spawn};
 
 /// Hacia donde se orienta el emisor.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Aim {
     /// Angulo absoluto en radianes.
     Fixed(f32),
@@ -27,7 +28,12 @@ pub enum Aim {
 }
 
 /// Descripcion de una tanda de balas.
-#[derive(Clone, Copy, Debug)]
+///
+/// `#[serde(default)]` a nivel de struct para que en el RON se pueda escribir
+/// solo lo que se aparta de lo normal. Un patron legible es un patron que se
+/// itera, y eso importa mas aqui que en ningun otro sitio.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct EmitterSpec {
     /// Balas por capa.
     pub count: u32,

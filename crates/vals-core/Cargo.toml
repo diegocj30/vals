@@ -11,7 +11,9 @@ license.workspace = true
 bench = false
 
 [dependencies]
-glam = "0.33"
+glam = { version = "0.33", features = ["serde"] }
+ron = "0.12.2"
+serde = { version = "1.0.229", features = ["derive"] }
 
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }

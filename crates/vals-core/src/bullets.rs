@@ -291,6 +291,30 @@ impl Bullets {
         None
     }
 
+    /// Mata todas las balas que solapan el circulo y devuelve cuantas eran.
+    ///
+    /// A diferencia de [`Bullets::hit_circle`], que para en la primera, aqui
+    /// interesan todas: es el impacto de los disparos del jugador contra el
+    /// jefe, y cada bala tiene que contar su dano.
+    pub fn damage_circle(&mut self, p: Vec2, r: f32) -> u32 {
+        let mut n = 0;
+        for i in 0..self.high_water {
+            if !self.alive[i] {
+                continue;
+            }
+            let rad = BULLET_KINDS[self.kind[i] as usize].radius + r;
+            let dx = self.pos_x[i] - p.x;
+            let dy = self.pos_y[i] - p.y;
+            if dx * dx + dy * dy <= rad * rad {
+                self.alive[i] = false;
+                self.free.push(i as u32);
+                self.live -= 1;
+                n += 1;
+            }
+        }
+        n
+    }
+
     pub fn get(&self, i: u32) -> BulletView {
         let i = i as usize;
         BulletView {
@@ -517,6 +541,22 @@ mod tests {
         assert!(b.hit_circle(p, 2.5).is_some());
         b.kill(i);
         assert!(b.hit_circle(p, 2.5).is_none());
+    }
+
+    #[test]
+    fn damage_circle_mata_todas_las_que_tocan() {
+        let mut b = Bullets::with_capacity(32);
+        let p = centro();
+        // Tres encima y dos lejos.
+        for _ in 0..3 {
+            b.spawn(en(p));
+        }
+        b.spawn(en(p + Vec2::new(200.0, 0.0)));
+        b.spawn(en(p + Vec2::new(0.0, 200.0)));
+
+        assert_eq!(b.damage_circle(p, 5.0), 3);
+        assert_eq!(b.live_count(), 2, "las lejanas siguen vivas");
+        assert_eq!(b.damage_circle(p, 5.0), 0, "no se cobran dos veces");
     }
 
     #[test]

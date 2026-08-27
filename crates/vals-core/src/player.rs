@@ -68,6 +68,21 @@ pub const INPUT_BUFFER_TICKS: u32 = 8;
 /// que el jugador no puede evitar.
 pub const RESPAWN_IFRAME_TICKS: u32 = 120;
 
+/// Ticks entre disparos del jugador.
+///
+/// Cuatro ticks son 15 disparos por segundo. Lo bastante rapido para que
+/// mantener el boton se sienta como una manguera y no como pulsar un boton.
+pub const SHOT_EVERY: u32 = 4;
+
+/// Velocidad de los disparos del jugador.
+pub const SHOT_SPEED: f32 = 900.0;
+
+/// Dano por bala.
+pub const SHOT_DAMAGE: i32 = 1;
+
+/// Separacion entre los dos chorros, a cada lado del personaje.
+pub const SHOT_SPREAD: f32 = 9.0;
+
 /// Puntos que guarda la estela.
 pub const TRAIL_LEN: usize = 20;
 
@@ -170,6 +185,8 @@ pub struct Player {
     /// coinciden.
     pub iframes: u32,
     pub deaths: u32,
+    /// Ticks hasta el siguiente disparo.
+    pub shot_cooldown: u32,
     pub dash: Dash,
     pub trail: Trail,
 }
@@ -185,6 +202,7 @@ impl Player {
             focus_t: 0.0,
             iframes: 0,
             deaths: 0,
+            shot_cooldown: 0,
             dash: Dash::default(),
             trail: Trail::new(pos),
         }
@@ -217,6 +235,7 @@ impl Player {
         self.prev_pos = respawn;
         self.vel = Vec2::ZERO;
         self.dash = Dash::default();
+        self.shot_cooldown = 0;
         self.iframes = RESPAWN_IFRAME_TICKS;
         self.trail = Trail::new(respawn);
     }
@@ -235,6 +254,7 @@ impl Player {
         self.dash.ticks_left = self.dash.ticks_left.saturating_sub(1);
         self.dash.cooldown = self.dash.cooldown.saturating_sub(1);
         self.iframes = self.iframes.saturating_sub(1);
+        self.shot_cooldown = self.shot_cooldown.saturating_sub(1);
         self.dash.buffer = self.dash.buffer.saturating_sub(1);
 
         self.focused = input.is_down(InputFrame::FOCUS);

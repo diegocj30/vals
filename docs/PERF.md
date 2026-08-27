@@ -101,6 +101,7 @@ Consecuencias directas, y por esto se mide antes de tocar nada:
 |---|---|---|---|
 | 2026-08-27 | H0 | 474 KB | macroquad 0.4.16, release con LTO y `strip`. Referencia: un proyecto equivalente en Bevy ronda los 20 MB. |
 | 2026-08-27 | H2 | 492 KB | +18 KB por el sistema de balas y los emisores. |
+| 2026-08-27 | H3 | 671 KB | +179 KB: el interprete de patrones y, sobre todo, serde y el parser de RON. Es el precio de que los jefes se disenen en un fichero en vez de en codigo, y a este tamano sale a cuenta. |
 
 ## Palancas pendientes
 

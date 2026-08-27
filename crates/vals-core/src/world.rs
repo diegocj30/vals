@@ -2,11 +2,17 @@
 
 use glam::Vec2;
 
-use crate::bullets::Bullets;
+use crate::boss::{Boss, BossDef};
+use crate::bullets::{Bullets, KIND_NEEDLE, Spawn};
 use crate::hash::Fnv1a;
-use crate::player::PLAYER_HITBOX_RADIUS;
-use crate::spawner::Spawner;
+use crate::player::{PLAYER_HITBOX_RADIUS, SHOT_DAMAGE, SHOT_EVERY, SHOT_SPEED, SHOT_SPREAD};
 use crate::{ARENA_H, ARENA_W, DT, InputFrame, Pcg32, Player};
+
+/// Capacidad del pool de disparos del jugador.
+///
+/// Muy por encima de lo que cabe en pantalla: a 15 disparos por segundo con un
+/// ttl de 2 segundos, nunca pasan de un centenar.
+const PLAYER_SHOT_CAPACITY: usize = 512;
 
 /// Todo el estado simulado.
 #[derive(Clone, Debug)]
@@ -16,15 +22,20 @@ pub struct World {
     pub tick: u64,
     pub rng: Pcg32,
     pub player: Player,
+    /// Balas del jefe. Las que te matan.
     pub bullets: Bullets,
-    /// Patron provisional. H3 lo sustituye por el interprete cargado de RON.
-    pub spawner: Spawner,
+    /// Disparos del jugador. Pool aparte: distinto tamano, distinto objetivo, y
+    /// asi la colision de cada bando no tiene que filtrar por equipo.
+    pub player_shots: Bullets,
+    pub boss: Boss,
+    /// Se pone a `true` al derrotar la ultima fase.
+    pub victory: bool,
     /// Input del tick anterior. Hace falta para detectar flancos (el dash
     /// reacciona a la pulsacion, no a mantener la tecla) y vive en el mundo
     /// para que un replay lo reproduzca sin depender de nada externo.
     prev_input: InputFrame,
-    /// Si el patron dispara. Ver [`World::sandbox`].
-    spawner_enabled: bool,
+    /// Si el jefe actua. Ver [`World::sandbox`].
+    boss_enabled: bool,
     seed: u64,
 }
 
@@ -36,9 +47,11 @@ impl World {
             rng: Pcg32::new(seed),
             player: Player::new(Self::spawn_pos()),
             bullets: Bullets::default(),
-            spawner: Spawner::new(),
+            player_shots: Bullets::with_capacity(PLAYER_SHOT_CAPACITY),
+            boss: Boss::from_def(&BossDef::default_boss()),
+            victory: false,
             prev_input: InputFrame::NONE,
-            spawner_enabled: true,
+            boss_enabled: true,
             seed,
         }
     }
@@ -50,9 +63,19 @@ impl World {
     /// que tarde o temprano querra existir.
     pub fn sandbox(seed: u64) -> Self {
         Self {
-            spawner_enabled: false,
+            boss_enabled: false,
             ..Self::new(seed)
         }
+    }
+
+    /// Reemplaza al jefe en caliente, conservando el resto del mundo.
+    ///
+    /// Es lo que usa el hot-reload: al guardar el RON el jefe se reconstruye
+    /// desde cero y la pantalla se limpia, pero no pierdes la partida.
+    pub fn reload_boss(&mut self, def: &BossDef) {
+        self.boss = Boss::from_def(def);
+        self.bullets.clear();
+        self.victory = false;
     }
 
     /// Semilla con la que se creo. Necesaria para reproducir un replay.
@@ -71,30 +94,78 @@ impl World {
     /// nada del entorno: mismo estado + mismo input = mismo resultado, siempre.
     pub fn step(&mut self, input: InputFrame) {
         self.player.update(input, self.prev_input);
-        if self.spawner_enabled {
-            self.spawner
-                .update(self.tick, &mut self.bullets, self.player.pos);
+        self.player_shoot(input);
+
+        if self.boss_enabled {
+            self.boss.update(&mut self.bullets, self.player.pos);
         }
         self.bullets.update(DT);
+        self.player_shots.update(DT);
 
-        // La colision va al final, contra las posiciones ya actualizadas de
-        // ambos. Comprobarla antes de mover dejaria pasar balas rapidas por
-        // encima del jugador dentro del mismo tick.
-        if !self.player.is_invulnerable()
-            && self
-                .bullets
-                .hit_circle(self.player.pos, PLAYER_HITBOX_RADIUS)
-                .is_some()
-        {
-            self.player.die(Self::spawn_pos());
-            // Limpiar la pantalla al morir es lo canonico del genero: sin
-            // esto reaparecerias dentro de la misma pared de balas que te
-            // acaba de matar.
-            self.bullets.clear();
-        }
+        self.resolve_player_shots();
+        self.resolve_player_hit();
 
         self.prev_input = input;
         self.tick += 1;
+    }
+
+    fn player_shoot(&mut self, input: InputFrame) {
+        if !input.is_down(InputFrame::SHOOT) || self.player.shot_cooldown > 0 {
+            return;
+        }
+        self.player.shot_cooldown = SHOT_EVERY;
+        // Dos chorros paralelos. Uno solo se siente escuchimizado, y dos muy
+        // separados obligarian a apuntar, que no es de lo que va este juego.
+        for dx in [-SHOT_SPREAD, SHOT_SPREAD] {
+            self.player_shots.spawn(Spawn {
+                pos: self.player.pos + Vec2::new(dx, -10.0),
+                vel: Vec2::new(0.0, -SHOT_SPEED),
+                ttl: 2.0,
+                kind: KIND_NEEDLE,
+                ..Default::default()
+            });
+        }
+    }
+
+    fn resolve_player_shots(&mut self) {
+        if self.boss.defeated {
+            return;
+        }
+        let impactos = self
+            .player_shots
+            .damage_circle(self.boss.pos, self.boss.radius);
+        if impactos == 0 {
+            return;
+        }
+        if self.boss.damage(impactos as i32 * SHOT_DAMAGE) {
+            // Cambio de fase o derrota: en ambos casos se limpia la pantalla.
+            // Heredar la pared de balas de la fase anterior seria una muerte
+            // imposible de evitar justo en el momento de celebrar.
+            self.bullets.clear();
+            if self.boss.defeated {
+                self.victory = true;
+            }
+        }
+    }
+
+    fn resolve_player_hit(&mut self) {
+        // La colision va al final, contra las posiciones ya actualizadas de
+        // ambos. Comprobarla antes de mover dejaria pasar balas rapidas por
+        // encima del jugador dentro del mismo tick.
+        if self.player.is_invulnerable() {
+            return;
+        }
+        if self
+            .bullets
+            .hit_circle(self.player.pos, PLAYER_HITBOX_RADIUS)
+            .is_some()
+        {
+            self.player.die(Self::spawn_pos());
+            // Limpiar la pantalla al morir es lo canonico del genero: sin esto
+            // reaparecerias dentro de la misma pared de balas que acaba de
+            // matarte.
+            self.bullets.clear();
+        }
     }
 
     /// Huella del estado completo, para tests de determinismo.
@@ -129,9 +200,11 @@ impl World {
         h.write_u64(u64::from(p.iframes));
         h.write_u64(u64::from(p.deaths));
 
-        h.write_u64(u64::from(self.spawner_enabled));
-        self.spawner.hash_into(&mut h);
+        h.write_u64(u64::from(self.boss_enabled));
+        h.write_u64(u64::from(self.victory));
+        self.boss.hash_into(&mut h);
         self.bullets.hash_into(&mut h);
+        self.player_shots.hash_into(&mut h);
 
         h.finish()
     }
@@ -551,5 +624,124 @@ mod tests {
         correr(&mut w, NADA, 300);
         assert_eq!(w.bullets.live_count(), 0);
         assert_eq!(w.player.deaths, 0);
+    }
+    // --- Jefe y disparos del jugador ---
+
+    const DISPARAR: InputFrame = InputFrame::from_bits(InputFrame::SHOOT);
+
+    #[test]
+    fn el_jugador_dispara_a_la_cadencia_pedida() {
+        let mut w = mundo(0);
+        // 4 ticks entre disparos y 2 balas por disparo.
+        correr(&mut w, DISPARAR, SHOT_EVERY as usize * 3);
+        assert_eq!(w.player_shots.live_count(), 6);
+    }
+
+    #[test]
+    fn sin_pulsar_el_boton_no_sale_nada() {
+        let mut w = mundo(0);
+        correr(&mut w, NADA, 60);
+        assert_eq!(w.player_shots.live_count(), 0);
+    }
+
+    #[test]
+    fn los_disparos_mueren_al_salir_por_arriba() {
+        let mut w = mundo(0);
+        w.step(DISPARAR);
+        assert!(w.player_shots.live_count() > 0);
+        correr(&mut w, NADA, 120);
+        assert_eq!(w.player_shots.live_count(), 0);
+    }
+
+    #[test]
+    fn disparar_al_jefe_le_quita_vida() {
+        let mut w = mundo(0);
+        // Colocarse justo debajo del jefe para no fallar.
+        w.player.pos = w.boss.pos + Vec2::new(0.0, 200.0);
+        let vida = w.boss.hp;
+        correr(&mut w, DISPARAR, 60);
+        assert!(w.boss.hp < vida, "deberia haberle hecho dano");
+    }
+
+    #[test]
+    fn cambiar_de_fase_limpia_la_pantalla() {
+        let mut w = World::new(0);
+        correr(&mut w, NADA, 120); // que el jefe llene de balas
+        assert!(w.bullets.live_count() > 0);
+
+        // Bajarle la vida a uno y rematarlo con un disparo.
+        w.boss.hp = 1;
+        w.player.pos = w.boss.pos + Vec2::new(0.0, 150.0);
+        let fase = w.boss.phase;
+        correr(&mut w, DISPARAR, 40);
+
+        assert_eq!(w.boss.phase, fase + 1, "deberia haber cambiado de fase");
+        assert!(!w.victory, "aun quedan fases");
+    }
+
+    #[test]
+    fn agotar_todas_las_fases_da_la_victoria() {
+        let mut w = mundo(0);
+        w.player.pos = w.boss.pos + Vec2::new(0.0, 150.0);
+        // Rematar cada fase por turnos.
+        for _ in 0..w.boss.phase_count() {
+            w.boss.hp = 1;
+            correr(&mut w, DISPARAR, 40);
+        }
+        assert!(w.boss.defeated);
+        assert!(w.victory);
+    }
+
+    /// Dispara `n` ticks con el jugador aparcado debajo del jefe e invulnerable.
+    ///
+    /// Hace falta cuando el jefe esta activo: si no, el jugador muere,
+    /// reaparece lejos y deja de acertar, y el test acaba midiendo su
+    /// supervivencia en vez de lo que pretende medir.
+    fn disparar_a_bocajarro(w: &mut World, n: usize) {
+        for _ in 0..n {
+            w.player.pos = w.boss.pos + Vec2::new(0.0, 150.0);
+            w.player.iframes = 10;
+            w.step(DISPARAR);
+        }
+    }
+
+    #[test]
+    fn un_jefe_derrotado_deja_de_llenar_la_pantalla() {
+        let mut w = World::new(0);
+        let fases = w.boss.phase_count();
+        for _ in 0..fases {
+            w.boss.hp = 1;
+            disparar_a_bocajarro(&mut w, 40);
+        }
+        assert!(w.victory);
+        let tras_victoria = w.bullets.live_count();
+        correr(&mut w, NADA, 120);
+        assert!(
+            w.bullets.live_count() <= tras_victoria,
+            "no deberia salir ni una bala nueva"
+        );
+    }
+
+    #[test]
+    fn recargar_el_jefe_lo_reinicia_sin_perder_la_partida() {
+        let mut w = World::new(0);
+        correr(&mut w, NADA, 120);
+        w.boss.hp = 50;
+        let muertes = w.player.deaths;
+
+        w.reload_boss(&crate::boss::BossDef::default_boss());
+
+        assert_eq!(w.boss.phase, 0, "el jefe vuelve al principio");
+        assert_eq!(w.bullets.live_count(), 0, "y la pantalla se limpia");
+        assert_eq!(w.player.deaths, muertes, "pero la partida sigue");
+    }
+
+    #[test]
+    fn el_mundo_sandbox_tiene_al_jefe_quieto() {
+        let mut w = mundo(0);
+        let pos = w.boss.pos;
+        correr(&mut w, NADA, 300);
+        assert_eq!(w.bullets.live_count(), 0);
+        assert_eq!(w.boss.pos, pos, "ni dispara ni se mueve");
     }
 }

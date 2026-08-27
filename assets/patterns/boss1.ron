@@ -1,0 +1,257 @@
+// El patron del primer jefe.
+//
+// Este fichero es la fuente de verdad: el jefe se disena aqui, no en el codigo.
+// En nativo hay HOT-RELOAD: guarda y el cambio entra sin recompilar. Si el RON
+// tiene un error de sintaxis se ignora y se sigue jugando con la ultima version
+// buena, para que un parentesis mal puesto no te eche del juego a medio afinar.
+//
+// Guia rapida de pasos:
+//   Wait(n)               espera n ticks (60 ticks = 1 segundo)
+//   Fire(emisor)          dispara una tanda
+//   Turn(radianes)        gira la mira de ESTE hilo; repetido, hace la espiral
+//   Repeat(times:, body:) repite un bloque
+//   Forever([...])        lo repite hasta que acabe la fase
+//   Parallel([[...],...]) lanza cada rama como un hilo aparte, a la vez
+//   MoveTo(pos:,dur:,ease:) mueve al jefe; BLOQUEA su hilo mientras dura
+//
+// En el emisor: arc 6.28 es un anillo completo, menos es un abanico centrado
+// en la mira. aim: Fixed(rad) o AtPlayer. kind: 0 pequena, 1 media, 2 grande,
+// 3 aguja. accel negativa frena la bala y la hace volver. spin la curva.
+(
+  name: "El Vals",
+  pos: (320.0, 140.0),
+  radius: 34.0,
+  phases: [
+    (
+      hp: 240,
+      steps: [
+        Parallel([
+          [
+            Forever([
+              MoveTo(
+                pos: (200.0, 140.0),
+                dur: 90,
+                ease: InOut,
+              ),
+              MoveTo(
+                pos: (440.0, 140.0),
+                dur: 90,
+                ease: InOut,
+              ),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 7,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 130.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              Turn(0.41),
+              Wait(8),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(100),
+              Fire((
+                count: 5,
+                arc: 0.55,
+                aim: AtPlayer,
+                speed: 200.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 1,
+                flags: 0,
+              )),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+    (
+      hp: 360,
+      steps: [
+        Parallel([
+          [
+            Forever([
+              MoveTo(
+                pos: (240.0, 120.0),
+                dur: 60,
+                ease: InOut,
+              ),
+              MoveTo(
+                pos: (400.0, 175.0),
+                dur: 60,
+                ease: InOut,
+              ),
+              MoveTo(
+                pos: (320.0, 120.0),
+                dur: 60,
+                ease: InOut,
+              ),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 9,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 150.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Turn(0.33),
+              Wait(6),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 9,
+                arc: 6.2831855,
+                aim: Fixed(0.3),
+                speed: 110.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Turn(-0.29),
+              Wait(6),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(140),
+              Repeat(
+                times: 3,
+                body: [
+                  Fire((
+                    count: 3,
+                    arc: 0.35,
+                    aim: AtPlayer,
+                    speed: 240.0,
+                    rings: 1,
+                    speed_step: 40.0,
+                    ring_offset: 0.0,
+                    accel: 0.0,
+                    spin: 0.0,
+                    ttl: 30.0,
+                    kind: 1,
+                    flags: 0,
+                  )),
+                  Wait(10),
+                ],
+              ),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+    (
+      hp: 480,
+      steps: [
+        Parallel([
+          [
+            Forever([
+              MoveTo(
+                pos: (260.0, 130.0),
+                dur: 50,
+                ease: Out,
+              ),
+              MoveTo(
+                pos: (380.0, 130.0),
+                dur: 50,
+                ease: Out,
+              ),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 12,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 120.0,
+                rings: 2,
+                speed_step: 55.0,
+                ring_offset: 0.13,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Turn(0.22),
+              Wait(11),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(55),
+              Fire((
+                count: 7,
+                arc: 0.8,
+                aim: AtPlayer,
+                speed: 330.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 4,
+                arc: 6.2831855,
+                aim: Fixed(0.7),
+                speed: 180.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: -120.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 2,
+                flags: 0,
+              )),
+              Turn(-0.5),
+              Wait(24),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+  ],
+)

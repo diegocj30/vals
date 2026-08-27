@@ -23,8 +23,19 @@ cargo run -p vals-app --profile fast   # nativo, optimizado, compila rapido
 cargo test                       # tests, incluido el de determinismo
 ```
 
-Controles: flechas o WASD, `SHIFT` para focus (lento + hitbox marcada),
-`F1` alterna el overlay de debug, `R` reinicia.
+Controles: flechas o WASD para moverse, `Z` dispara, `X` es el dash con
+i-frames y `SHIFT` el modo focus (lento, con la hitbox marcada). `F1` alterna el
+overlay de debug y `R` reinicia.
+
+## Disenar un jefe
+
+Los jefes se definen en `assets/patterns/*.ron`, **no en codigo**. El fichero
+lleva en la cabecera la guia de los pasos del lenguaje (`Wait`, `Fire`, `Turn`,
+`Repeat`, `Forever`, `Parallel`, `MoveTo`).
+
+Con el juego abierto en nativo hay **hot-reload**: guarda el RON y el cambio
+entra sin recompilar. Si el fichero tiene un error de sintaxis se avisa y se
+sigue jugando con la ultima version buena.
 
 ## Medir
 

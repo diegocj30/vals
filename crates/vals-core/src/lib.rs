@@ -11,13 +11,14 @@
 //!    no reescribir el juego.
 
 pub mod bench;
+pub mod boss;
 pub mod bullets;
 pub mod emitter;
 mod hash;
 pub mod input;
+pub mod pattern;
 pub mod player;
 pub mod rng;
-pub mod spawner;
 pub mod world;
 
 pub use bullets::{Bullets, MAX_BULLETS};

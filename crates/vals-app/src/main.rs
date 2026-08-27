@@ -8,12 +8,20 @@ use vals_core::bench::Stress;
 use vals_core::{DT, InputFrame, World};
 
 mod draw;
+mod hot;
 mod stats;
 
+use hot::HotReload;
 use stats::FrameStats;
 
 /// "VALS" en ASCII. Semilla por defecto.
 const SEED: u64 = 0x5641_4C53;
+
+/// Cada cuantos frames se mira si cambio el fichero del patron.
+///
+/// Tres veces por segundo: imperceptible al guardar, e irrelevante para el
+/// frame time comparado con dibujar un millar de balas.
+const HOT_RELOAD_EVERY: u32 = 20;
 
 /// Balas de la escena de stress si no se pide otra cosa.
 const BENCH_DEFAULT: usize = 10_000;
@@ -82,8 +90,17 @@ async fn run_game() {
     let mut stats = FrameStats::new();
     let mut accumulator = 0.0f32;
     let mut show_debug = true;
+    let mut hot = HotReload::new();
+    let mut frames: u32 = 0;
 
     loop {
+        frames += 1;
+        if frames.is_multiple_of(HOT_RELOAD_EVERY)
+            && let Some(def) = hot.poll()
+        {
+            world.reload_boss(&def);
+        }
+
         let frame_dt = get_frame_time().min(MAX_FRAME_DT);
         stats.push_frame(frame_dt);
 
@@ -121,6 +138,9 @@ async fn run_game() {
         draw::frame(&world, alpha, &layout);
         if show_debug {
             draw::debug_overlay(&world, &stats, steps);
+        }
+        if let Some((msg, error)) = hot.aviso() {
+            draw::hot_reload_banner(msg, error);
         }
         stats.push_render((get_time() - t1) as f32);
 

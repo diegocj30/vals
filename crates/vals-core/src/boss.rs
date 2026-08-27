@@ -1,0 +1,336 @@
+//! El jefe: fases, vida y ejecucion de su patron.
+//!
+//! Un jefe es una lista de fases. Cada fase tiene su propia vida y su propio
+//! patron, y se pasa a la siguiente cuando la vida de la actual llega a cero.
+//! Es la estructura canonica del genero, y la razon por la que un boss-rush se
+//! puede ampliar indefinidamente sin tocar codigo: un jefe nuevo es un fichero
+//! RON nuevo.
+
+use glam::Vec2;
+use serde::{Deserialize, Serialize};
+
+use crate::bullets::Bullets;
+use crate::hash::Fnv1a;
+use crate::pattern::{Pattern, PatternRunner, RunCtx, Step};
+
+/// El jefe por defecto, embebido en el binario.
+///
+/// Se embebe para que el build web funcione sin sistema de ficheros, y para
+/// que el juego arranque aunque alguien deje un RON a medias en disco. En
+/// nativo se prefiere el fichero, que es lo que permite el hot-reload.
+pub const DEFAULT_BOSS_RON: &str = include_str!("../../../assets/patterns/boss1.ron");
+
+/// Ticks que el jefe parpadea al recibir dano.
+const HIT_FLASH_TICKS: u32 = 4;
+
+/// Una fase, tal y como se escribe en el RON.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PhaseDef {
+    /// Vida de esta fase. Al llegar a cero se pasa a la siguiente.
+    pub hp: i32,
+    pub steps: Vec<Step>,
+}
+
+/// La definicion completa de un jefe.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BossDef {
+    pub name: String,
+    pub pos: Vec2,
+    /// Radio para recibir los disparos del jugador. No colisiona con nada mas.
+    pub radius: f32,
+    pub phases: Vec<PhaseDef>,
+}
+
+impl BossDef {
+    /// Lee una definicion desde texto RON.
+    ///
+    /// Se descarta el BOM inicial si lo hay. Varios editores de Windows —y
+    /// PowerShell con `Set-Content -Encoding utf8`— lo escriben por defecto, y
+    /// sin esto el parser falla en la posicion 1:1 con un mensaje que no
+    /// menciona el BOM por ningun lado. Es un fallo carisimo de diagnosticar
+    /// para lo trivial que resulta tolerarlo.
+    pub fn from_ron(src: &str) -> Result<Self, ron::error::SpannedError> {
+        ron::from_str(src.trim_start_matches('\u{feff}'))
+    }
+
+    /// La definicion embebida en el binario.
+    pub fn default_boss() -> Self {
+        // Si esto falla, el fichero de assets esta roto y no hay nada que
+        // hacer: es un error de compilacion disfrazado de error de ejecucion.
+        Self::from_ron(DEFAULT_BOSS_RON).expect("el RON embebido debe ser valido")
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CompiledPhase {
+    hp: i32,
+    pattern: Pattern,
+}
+
+/// El jefe en ejecucion.
+#[derive(Clone, Debug)]
+pub struct Boss {
+    pub name: String,
+    pub pos: Vec2,
+    /// Posicion del tick anterior, para que el render interpole.
+    pub prev_pos: Vec2,
+    pub radius: f32,
+    pub hp: i32,
+    pub phase: usize,
+    pub defeated: bool,
+    /// Ticks de parpadeo por impacto. Sin esto disparar no da ninguna
+    /// sensacion de estar haciendo algo.
+    pub hit_flash: u32,
+    phases: Vec<CompiledPhase>,
+    runner: PatternRunner,
+    start_pos: Vec2,
+}
+
+impl Boss {
+    pub fn from_def(def: &BossDef) -> Self {
+        let phases: Vec<CompiledPhase> = def
+            .phases
+            .iter()
+            .map(|p| CompiledPhase {
+                hp: p.hp.max(1),
+                pattern: Pattern::compile(&p.steps),
+            })
+            .collect();
+
+        // Un jefe sin fases seria un juego sin juego, pero tampoco merece un
+        // panic: se degrada a un jefe inerte con un punto de vida.
+        let hp = phases.first().map(|p| p.hp).unwrap_or(1);
+        let runner = PatternRunner::new(
+            phases
+                .first()
+                .map(|p| p.pattern.clone())
+                .unwrap_or_else(|| Pattern::compile(&[])),
+        );
+
+        Self {
+            name: def.name.clone(),
+            pos: def.pos,
+            prev_pos: def.pos,
+            radius: def.radius,
+            hp,
+            phase: 0,
+            defeated: phases.is_empty(),
+            hit_flash: 0,
+            phases,
+            runner,
+            start_pos: def.pos,
+        }
+    }
+
+    pub fn phase_count(&self) -> usize {
+        self.phases.len()
+    }
+
+    pub fn phase_max_hp(&self) -> i32 {
+        self.phases.get(self.phase).map(|p| p.hp).unwrap_or(1)
+    }
+
+    /// Vida de la fase actual en `[0, 1]`. Es lo que dibuja la barra.
+    pub fn hp_ratio(&self) -> f32 {
+        (self.hp as f32 / self.phase_max_hp() as f32).clamp(0.0, 1.0)
+    }
+
+    pub fn render_pos(&self, alpha: f32) -> Vec2 {
+        self.prev_pos.lerp(self.pos, alpha)
+    }
+
+    /// Avanza el patron un tick.
+    pub fn update(&mut self, bullets: &mut Bullets, player: Vec2) {
+        self.prev_pos = self.pos;
+        self.hit_flash = self.hit_flash.saturating_sub(1);
+        if self.defeated {
+            return;
+        }
+
+        let mut ctx = RunCtx {
+            bullets,
+            origin: &mut self.pos,
+            player,
+        };
+        self.runner.tick(&mut ctx);
+
+        // Un patron que se acaba se reinicia. Asi una fase puede escribirse
+        // como una secuencia finita sin tener que envolverla en `Forever`.
+        if self.runner.finished() {
+            self.runner.restart();
+        }
+    }
+
+    /// Aplica dano. Devuelve `true` si ha cambiado de fase o ha caido.
+    pub fn damage(&mut self, amount: i32) -> bool {
+        if self.defeated || amount <= 0 {
+            return false;
+        }
+        self.hp -= amount;
+        self.hit_flash = HIT_FLASH_TICKS;
+        if self.hp > 0 {
+            return false;
+        }
+
+        if self.phase + 1 < self.phases.len() {
+            self.phase += 1;
+            self.hp = self.phases[self.phase].hp;
+            self.pos = self.start_pos;
+            self.prev_pos = self.start_pos;
+            self.runner = PatternRunner::new(self.phases[self.phase].pattern.clone());
+        } else {
+            self.hp = 0;
+            self.defeated = true;
+        }
+        true
+    }
+
+    pub(crate) fn hash_into(&self, h: &mut Fnv1a) {
+        h.write_vec2(self.pos);
+        h.write_vec2(self.prev_pos);
+        h.write_u64(self.hp as i64 as u64);
+        h.write_u64(self.phase as u64);
+        h.write_u64(u64::from(self.defeated));
+        h.write_u64(self.runner.ticks());
+        h.write_u64(self.runner.live_threads() as u64);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bullets::Bullets;
+
+    fn def_de_prueba() -> BossDef {
+        BossDef {
+            name: "Prueba".into(),
+            pos: Vec2::new(320.0, 130.0),
+            radius: 30.0,
+            phases: vec![
+                PhaseDef {
+                    hp: 10,
+                    steps: vec![Step::Forever(vec![
+                        Step::Fire(crate::emitter::EmitterSpec::ring(4, 100.0)),
+                        Step::Wait(5),
+                    ])],
+                },
+                PhaseDef {
+                    hp: 20,
+                    steps: vec![Step::Forever(vec![
+                        Step::Fire(crate::emitter::EmitterSpec::ring(8, 120.0)),
+                        Step::Wait(3),
+                    ])],
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn el_ron_embebido_es_valido_y_compila() {
+        let def = BossDef::default_boss();
+        assert!(!def.phases.is_empty(), "el jefe necesita al menos una fase");
+        assert!(!def.name.is_empty());
+        let boss = Boss::from_def(&def);
+        assert!(!boss.defeated);
+        assert_eq!(boss.phase_count(), def.phases.len());
+    }
+
+    #[test]
+    fn el_ron_embebido_tiene_tres_fases() {
+        assert_eq!(BossDef::default_boss().phases.len(), 3);
+    }
+
+    #[test]
+    fn el_jefe_dispara() {
+        let mut boss = Boss::from_def(&def_de_prueba());
+        let mut b = Bullets::with_capacity(1024);
+        for _ in 0..30 {
+            boss.update(&mut b, Vec2::new(320.0, 600.0));
+        }
+        assert!(b.live_count() > 0);
+    }
+
+    #[test]
+    fn el_dano_cambia_de_fase_al_agotar_la_vida() {
+        let mut boss = Boss::from_def(&def_de_prueba());
+        assert_eq!(boss.phase, 0);
+        assert!(!boss.damage(9), "aun le queda vida");
+        assert!(boss.damage(1), "aqui cambia de fase");
+        assert_eq!(boss.phase, 1);
+        assert_eq!(boss.hp, 20, "la fase nueva trae su propia vida");
+        assert!(!boss.defeated);
+    }
+
+    #[test]
+    fn agotar_la_ultima_fase_lo_derrota() {
+        let mut boss = Boss::from_def(&def_de_prueba());
+        boss.damage(10);
+        boss.damage(20);
+        assert!(boss.defeated);
+        assert_eq!(boss.hp, 0);
+    }
+
+    #[test]
+    fn un_jefe_derrotado_deja_de_disparar_y_de_recibir_dano() {
+        let mut boss = Boss::from_def(&def_de_prueba());
+        boss.damage(10);
+        boss.damage(20);
+        let mut b = Bullets::with_capacity(1024);
+        for _ in 0..60 {
+            boss.update(&mut b, Vec2::new(320.0, 600.0));
+        }
+        assert_eq!(b.live_count(), 0);
+        assert!(!boss.damage(5), "ya no acepta dano");
+    }
+
+    #[test]
+    fn la_barra_de_vida_va_de_uno_a_cero() {
+        let mut boss = Boss::from_def(&def_de_prueba());
+        assert!((boss.hp_ratio() - 1.0).abs() < 1e-6);
+        boss.damage(5);
+        assert!((boss.hp_ratio() - 0.5).abs() < 1e-6);
+        boss.damage(5);
+        // Ya en la fase 2, la barra vuelve a estar llena.
+        assert!((boss.hp_ratio() - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn el_impacto_enciende_el_parpadeo() {
+        let mut boss = Boss::from_def(&def_de_prueba());
+        assert_eq!(boss.hit_flash, 0);
+        boss.damage(1);
+        assert!(boss.hit_flash > 0);
+        let mut b = Bullets::with_capacity(64);
+        for _ in 0..10 {
+            boss.update(&mut b, Vec2::ZERO);
+        }
+        assert_eq!(boss.hit_flash, 0, "el parpadeo se apaga solo");
+    }
+
+    #[test]
+    fn un_jefe_sin_fases_no_revienta() {
+        let def = BossDef {
+            name: "Vacio".into(),
+            pos: Vec2::ZERO,
+            radius: 10.0,
+            phases: vec![],
+        };
+        let mut boss = Boss::from_def(&def);
+        assert!(boss.defeated);
+        let mut b = Bullets::with_capacity(16);
+        boss.update(&mut b, Vec2::ZERO);
+        assert_eq!(b.live_count(), 0);
+    }
+
+    #[test]
+    fn un_ron_con_bom_se_lee_igual() {
+        let con_bom = format!("\u{feff}{DEFAULT_BOSS_RON}");
+        let def = BossDef::from_ron(&con_bom).expect("el BOM no deberia estorbar");
+        assert_eq!(def.phases.len(), 3);
+    }
+
+    #[test]
+    fn un_ron_invalido_da_error_en_vez_de_panic() {
+        assert!(BossDef::from_ron("esto no es RON valido {{{").is_err());
+    }
+}

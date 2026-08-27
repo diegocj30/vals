@@ -28,6 +28,16 @@ const BULLET_COLORS: [Color; 4] = [
     color_u8!(255, 245, 210, 255), // aguja: blanco caliente
 ];
 
+// El jefe. Formas geometricas girando: arte procedural, cero dibujo.
+const BOSS_RING: Color = color_u8!(120, 240, 255, 255);
+const BOSS_INNER: Color = color_u8!(255, 110, 190, 255);
+const BOSS_CORE: Color = color_u8!(30, 20, 60, 255);
+const BOSS_FLASH: Color = color_u8!(255, 255, 255, 255);
+const HP_BAR: Color = color_u8!(255, 90, 160, 255);
+const HP_BAR_BG: Color = color_u8!(40, 26, 48, 255);
+const SHOT: Color = color_u8!(180, 255, 240, 255);
+const VICTORY: Color = color_u8!(180, 255, 220, 255);
+
 const TEXT: Color = color_u8!(150, 210, 235, 255);
 const TEXT_DIM: Color = color_u8!(90, 120, 145, 255);
 
@@ -65,11 +75,87 @@ fn fade(c: Color, a: f32) -> Color {
 pub fn frame(world: &World, alpha: f32, layout: &Layout) {
     clear_background(BG);
     draw_arena(layout);
+    draw_boss(world, alpha, layout);
+    draw_player_shots(world, layout);
     draw_trail(world, layout);
-    // Las balas van debajo del jugador: taparte tu propia hitbox con una bala
-    // seria exactamente lo contrario de lo que hace falta.
+    // Las balas van encima del jefe pero debajo del jugador: taparte tu propia
+    // hitbox seria exactamente lo contrario de lo que hace falta.
     draw_bullets(&world.bullets, layout);
     draw_player(world, alpha, layout);
+    draw_hp_bar(world, layout);
+    if world.victory {
+        draw_victory(layout);
+    }
+}
+
+/// El jefe: poligonos concentricos girando a distintas velocidades.
+///
+/// Todo procedural. No hay ni un pixel dibujado a mano en este juego, y esa
+/// decision es la que hace que anadir un jefe nuevo sea escribir un RON.
+fn draw_boss(world: &World, alpha: f32, l: &Layout) {
+    let b = &world.boss;
+    if b.defeated {
+        return;
+    }
+    let p = b.render_pos(alpha);
+    let s = l.to_screen(p.x, p.y);
+    let r = l.len(b.radius);
+    let t = world.tick as f32 + alpha;
+
+    // Cada anillo gira a su ritmo y en su sentido. Es lo que hace que la
+    // figura parezca viva estando hecha de tres poligonos.
+    draw_poly_lines(s.x, s.y, 6, r * 1.55, t * 0.6, 2.0, fade(BOSS_RING, 0.55));
+    draw_poly_lines(s.x, s.y, 3, r * 1.15, -t * 1.1, 2.5, fade(BOSS_INNER, 0.8));
+    draw_circle(s.x, s.y, r * 0.72, BOSS_CORE);
+    draw_poly_lines(s.x, s.y, 8, r * 0.72, t * 0.25, 1.5, BOSS_RING);
+
+    if b.hit_flash > 0 {
+        draw_circle(s.x, s.y, r * 0.8, fade(BOSS_FLASH, 0.5));
+    }
+}
+
+/// Barra de vida de la fase, con una marca por fase superada.
+fn draw_hp_bar(world: &World, l: &Layout) {
+    let b = &world.boss;
+    if b.defeated {
+        return;
+    }
+    let o = l.to_screen(0.0, 0.0);
+    let w = l.len(ARENA_W);
+    let alto = 6.0;
+    let y = o.y + 8.0;
+
+    draw_rectangle(o.x, y, w, alto, HP_BAR_BG);
+    draw_rectangle(o.x, y, w * b.hp_ratio(), alto, HP_BAR);
+
+    // Un punto por fase: lleno el que se esta jugando, hueco el que queda.
+    for i in 0..b.phase_count() {
+        let cx = o.x + 8.0 + i as f32 * 12.0;
+        let cy = y + alto + 10.0;
+        if i <= b.phase {
+            draw_circle(cx, cy, 3.0, HP_BAR);
+        } else {
+            draw_circle_lines(cx, cy, 3.0, 1.0, HP_BAR_BG);
+        }
+    }
+}
+
+fn draw_victory(l: &Layout) {
+    let o = l.to_screen(ARENA_W * 0.5, ARENA_H * 0.42);
+    let texto = "FIN DEL VALS";
+    let m = measure_text(texto, None, 48, 1.0);
+    draw_text(texto, o.x - m.width * 0.5, o.y, 48.0, VICTORY);
+}
+
+/// Los disparos del jugador: trazos finos, para no confundirlos con las balas
+/// que matan.
+fn draw_player_shots(world: &World, l: &Layout) {
+    for b in world.player_shots.iter_live() {
+        let s = l.to_screen(b.pos.x, b.pos.y);
+        let largo = l.len(14.0);
+        draw_line(s.x, s.y - largo, s.x, s.y + largo, 2.0, fade(SHOT, 0.85));
+        draw_circle(s.x, s.y, l.len(2.5), SHOT);
+    }
 }
 
 /// Dibuja las balas.
@@ -267,4 +353,11 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
 
     let help = "F1 debug   R reset   SHIFT focus   X dash";
     draw_text(help, X, screen_height() - 14.0, 16.0, TEXT_DIM);
+}
+
+/// Aviso de recarga del patron. Verde si entro, rojo si el RON esta roto.
+pub fn hot_reload_banner(msg: &str, error: bool) {
+    let color = if error { HITBOX } else { VICTORY };
+    let y = screen_height() - 38.0;
+    draw_text(msg, X, y, 18.0, color);
 }
