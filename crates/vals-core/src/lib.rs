@@ -11,12 +11,14 @@
 //!    no reescribir el juego.
 
 pub mod input;
+pub mod player;
 pub mod rng;
 pub mod world;
 
 pub use input::InputFrame;
+pub use player::Player;
 pub use rng::Pcg32;
-pub use world::{Player, World};
+pub use world::World;
 
 /// Frecuencia de la simulacion. El render va desacoplado e interpola.
 pub const TICK_HZ: u32 = 60;
