@@ -1,0 +1,4 @@
+# Normaliza finales de linea: en el repo siempre LF.
+# Sin esto, CI en Linux puede pelearse con `cargo fmt --check`.
+* text=auto eol=lf
+*.ps1 text eol=crlf

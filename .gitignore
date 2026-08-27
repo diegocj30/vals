@@ -1,0 +1,5 @@
+/target
+**/*.rs.bk
+
+# Artefactos del build web: se regeneran con scripts/build-web.ps1
+/web/vals.wasm

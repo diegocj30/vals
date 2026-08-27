@@ -1,0 +1,37 @@
+[workspace]
+resolver = "3"
+members = ["crates/vals-core", "crates/vals-app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+# Perfiles ajustados desde el dia 1: este proyecto se optimiza a lo largo del
+# tiempo, asi que las mediciones tienen que ser siempre comparables.
+
+# `dev` compila NUESTRO codigo rapido (opt-level 1) pero las dependencias a
+# tope: sin esto macroquad va a pedales en depuracion y el frame time medido
+# no significa nada.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+# `release` es el perfil de medicion y de distribucion. LTO gordo y una sola
+# unidad de codegen: compila mas lento, pero es el numero honesto.
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# `fast` = release sin LTO, para iterar cuando release tarda demasiado.
+# NO se usa para las mediciones de docs/PERF.md.
+[profile.fast]
+inherits = "release"
+lto = false
+codegen-units = 16
+strip = false

@@ -1,0 +1,10 @@
+[package]
+name = "vals-app"
+description = "Capa de plataforma de VALS: ventana, render, input y audio."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+vals-core = { path = "../vals-core" }
+macroquad = "0.4"
