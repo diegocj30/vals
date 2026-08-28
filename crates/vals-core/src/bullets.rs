@@ -12,6 +12,7 @@
 use glam::Vec2;
 
 use crate::hash::Fnv1a;
+use crate::math;
 use crate::{ARENA_H, ARENA_W};
 
 /// Capacidad del pool. Se reserva entera de golpe al arrancar.
@@ -229,7 +230,7 @@ impl Bullets {
 
             let spin = self.spin[i];
             if spin != 0.0 {
-                let (s, c) = (spin * dt).sin_cos();
+                let (s, c) = math::sin_cos(spin * dt);
                 let nx = vx * c - vy * s;
                 vy = vx * s + vy * c;
                 vx = nx;

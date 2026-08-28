@@ -16,6 +16,7 @@ pub mod bullets;
 pub mod emitter;
 mod hash;
 pub mod input;
+pub mod math;
 pub mod pattern;
 pub mod player;
 pub mod replay;

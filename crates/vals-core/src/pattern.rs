@@ -362,7 +362,10 @@ impl PatternRunner {
                     return;
                 }
 
-                Op::Turn(a) => self.threads[i].aim += a,
+                // Se envuelve en [0, TAU): un `Forever` con `Turn` dentro
+                // acumularia angulo sin limite durante toda la partida, y la
+                // precision de la reduccion de rango se degrada con el tamano.
+                Op::Turn(a) => self.threads[i].aim = crate::math::wrap_tau(self.threads[i].aim + a),
 
                 Op::Fire(idx) => {
                     if let Some(spec) = self.pattern.emitters.get(idx as usize) {

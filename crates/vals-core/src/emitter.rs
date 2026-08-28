@@ -14,6 +14,7 @@ use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
 use crate::bullets::{Bullets, KIND_SMALL, Spawn};
+use crate::math;
 
 /// Hacia donde se orienta el emisor.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -145,7 +146,7 @@ pub fn fire(bullets: &mut Bullets, origin: Vec2, spec: &EmitterSpec, player: Vec
             if d.length_squared() < 1e-6 {
                 std::f32::consts::FRAC_PI_2
             } else {
-                d.to_angle()
+                math::to_angle(d)
             }
         }
     };
@@ -168,7 +169,7 @@ pub fn fire(bullets: &mut Bullets, origin: Vec2, spec: &EmitterSpec, player: Vec
         let offset = spec.ring_offset * capa as f32;
         for i in 0..spec.count {
             let angulo = inicio + paso * i as f32 + offset;
-            let vel = Vec2::from_angle(angulo) * speed;
+            let vel = math::from_angle(angulo) * speed;
             if bullets
                 .spawn(Spawn {
                     pos: origin,
