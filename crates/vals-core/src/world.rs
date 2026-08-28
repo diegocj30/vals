@@ -152,6 +152,29 @@ impl World {
         w
     }
 
+    /// Da el baile por bailado sin tener que bailarlo.
+    ///
+    /// Es una trampa, y esta puesta a proposito: ver como avanza el juego no
+    /// deberia costar pasarse el jefe cada vez. Le quita la vida a todas las
+    /// figuras que queden y luego llama a lo mismo que llama caer de verdad,
+    /// asi que el juego no distingue esta victoria de la otra —eventos,
+    /// sonido y paso al baile siguiente incluidos—.
+    ///
+    /// Lo que si rompe es el replay en curso: los inputs grabados ya no
+    /// reproducen lo que ha pasado. Quien lo llama vuelve a empezar la
+    /// grabacion.
+    pub fn saltar_el_baile(&mut self) {
+        if self.boss.defeated || self.is_over() {
+            return;
+        }
+        while !self.boss.defeated {
+            self.boss.damage(i32::MAX / 4);
+        }
+        self.bullets.clear();
+        self.player_shots.clear();
+        self.advance_boss();
+    }
+
     /// Vuelve a empezar **el jefe actual**, con las vidas llenas.
     ///
     /// Hoy que un baile es un jefe, esto reinicia el vals entero. No es un
@@ -774,6 +797,9 @@ mod tests {
     #[test]
     fn caer_un_jefe_y_ganar_emiten_sus_eventos() {
         let mut w = mundo(0);
+        // Hay que mirarlo ANTES de tumbarlo: al caer, el mundo ya ha pasado al
+        // jefe siguiente y el indice de despues no dice nada.
+        let era_el_ultimo = w.boss_index + 1 >= w.boss_count();
         w.boss.phase = w.boss.phase_count() - 1;
         w.boss.hp = 1;
         w.player.pos = w.boss.pos + Vec2::new(0.0, 300.0);
@@ -784,8 +810,9 @@ mod tests {
             }
         }
         assert!(w.events.boss_down);
-        // Con un solo baile, tumbar la ultima figura es ademas ganar.
-        assert!(w.events.victory);
+        // Ganar solo si era el ultimo baile. Con el tango puesto, tumbar el
+        // vals da paso al siguiente en vez de terminar la partida.
+        assert_eq!(w.events.victory, era_el_ultimo);
     }
 
     #[test]
@@ -1482,6 +1509,36 @@ mod tests {
         // Un indice imposible no revienta: se queda en el ultimo que hay.
         let w = World::empezar_en(0, Mode::Flight, 99);
         assert_eq!(w.boss_index, w.boss_count() - 1);
+    }
+
+    #[test]
+    fn saltar_el_baile_lo_da_por_bailado() {
+        let mut w = mundo(0);
+        w.saltar_el_baile();
+        assert!(w.boss.defeated || w.boss_index == 1);
+        assert!(
+            w.events.boss_down,
+            "tiene que sonar igual que caer de verdad"
+        );
+        assert!(!w.defeat);
+        // Y saltarlos todos gana la partida.
+        let mut w = mundo(0);
+        for _ in 0..w.boss_count() {
+            w.saltar_el_baile();
+        }
+        assert!(w.victory);
+    }
+
+    #[test]
+    fn saltar_no_hace_nada_si_la_partida_ya_acabo() {
+        let mut w = mundo(0);
+        for _ in 0..w.boss_count() {
+            w.saltar_el_baile();
+        }
+        assert!(w.victory);
+        let antes = w.boss_index;
+        w.saltar_el_baile();
+        assert_eq!(w.boss_index, antes, "no hay nada mas que saltar");
     }
 
     // --- Reintentar el jefe actual ---

@@ -8,7 +8,7 @@ use vals_core::pista::{Miron, Nodo, Pista};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bullet_renderer::BulletRenderer;
-use crate::music::Baile;
+use crate::music::Tema;
 use crate::skeleton::{self, HUESOS, N_CINTA, N_FALDA, Pose, REMATES};
 use crate::stats::FrameStats;
 
@@ -211,7 +211,7 @@ fn draw_hud(world: &World, l: &Layout) {
 
         // Y debajo, que vals suena. "Cada jefe es un baile" se entiende mejor
         // si el baile tiene nombre y autor.
-        let baile = Baile::de_la_fase(world.boss.phase).titulo();
+        let baile = Tema::de(world.boss_index, world.boss.phase).titulo();
         let m = measure_text(baile, None, 14, 1.0);
         draw_text(
             baile,
@@ -250,35 +250,45 @@ fn draw_cartel(l: &Layout, titulo: &str, color: Color, lineas: &[&str]) {
 }
 
 /// Menu. De fondo corre el replay dorado, que es el modo atractor.
-pub fn menu(l: &Layout, intentos: u32, mando: bool) {
+/// El menu, con los controles del mando que haya puesto.
+///
+/// Si hay mando, la lista es **la del mando y solo la del mando**. Enterarse de
+/// que el super era el triangulo probando los cuatro botones es exactamente lo
+/// que una pantalla de controles existe para evitar, y una lista doble se lee
+/// peor que la que toca.
+pub fn menu(l: &Layout, intentos: u32, mando: Option<[&str; 4]>) {
     let cola = if intentos == 0 {
         String::new()
     } else {
         format!("   ({intentos} intentos)")
     };
-    draw_cartel(
-        l,
-        "VALS",
-        TITLE,
-        &[
-            &format!("Z   entrar a la pista, volando{cola}"),
-            "X   entrar a la pista, con salto",
-            "",
-            "flechas mover    Z disparar    X dash",
-            "C parry    SHIFT focus    M mudo",
-            "",
-            "Parriar las balas ROSAS llena la barra SUPER.",
-            "Llena, ESPACIO limpia la pantalla y hace mucho dano.",
-            "",
-            // Decirlo aqui ahorra la pregunta de si el mando esta llegando o
-            // no, que sin esto solo se puede averiguar probando a ciegas.
-            if mando {
-                "mando conectado:  A disparar   X dash   B parry   Y super"
-            } else {
-                "(sin mando: teclado)"
-            },
+
+    let lineas: Vec<String> = match mando {
+        Some(b) => vec![
+            format!("{}   entrar a la pista, volando{cola}", b[0]),
+            format!("{}   entrar a la pista, con salto", b[1]),
+            String::new(),
+            "stick o cruceta   mover".to_owned(),
+            format!("{}  disparar     {}  dash", b[0], b[1]),
+            format!("{}  parry        {}  super", b[2], b[3]),
+            "L2  focus        M  mudo".to_owned(),
+            String::new(),
+            "Parriar las balas ROSAS llena la barra SUPER;".to_owned(),
+            format!("llena, {} limpia la pantalla y hace mucho dano.", b[3]),
         ],
-    );
+        None => vec![
+            format!("Z   entrar a la pista, volando{cola}"),
+            "X   entrar a la pista, con salto".to_owned(),
+            String::new(),
+            "flechas mover    Z disparar    X dash".to_owned(),
+            "C parry    SHIFT focus    M mudo".to_owned(),
+            String::new(),
+            "Parriar las balas ROSAS llena la barra SUPER.".to_owned(),
+            "Llena, ESPACIO limpia la pantalla y hace mucho dano.".to_owned(),
+        ],
+    };
+    let refs: Vec<&str> = lineas.iter().map(String::as_str).collect();
+    draw_cartel(l, "VALS", TITLE, &refs);
 }
 
 pub fn fin_de_partida(l: &Layout, world: &World) {
@@ -837,7 +847,7 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
         &mut y,
     );
 
-    let help = "Z disparar  X dash  C parry  ESPACIO super  SHIFT focus  M mudo  F1  R";
+    let help = "Z disparar  X dash  C parry  ESPACIO super  SHIFT focus  M mudo  F1  R  F3 saltar";
     draw_text(help, X, screen_height() - 14.0, 16.0, TEXT_DIM);
 }
 

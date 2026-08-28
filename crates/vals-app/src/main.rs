@@ -24,7 +24,7 @@ use audio::{Audio, Sfx};
 use bullet_renderer::BulletRenderer;
 use hot::HotReload;
 use mando::Mando;
-use music::Baile;
+use music::Tema;
 use stats::FrameStats;
 
 /// En que parte del juego estamos.
@@ -215,13 +215,13 @@ async fn run_game() {
 
         hubo_interaccion |= get_last_key_pressed().is_some() || mando.frame().bits() != 0;
         if hubo_interaccion {
-            // La musica va por figura, no por jefe: cada fase del vals tiene
-            // la suya. El menu y la pista suenan con la primera, que es la que
-            // corre de fondo en el atractor y la que hace de salon de baile.
-            audio.poner_musica(Baile::de_la_fase(match escena {
-                Escena::Combate => world.boss.phase,
-                _ => 0,
-            }));
+            // La musica se busca por (jefe, figura). La pista tiene la suya
+            // propia: dejar sonando el vals en el mapa decia que el vals era
+            // el juego, y el vals es UN jefe del juego.
+            audio.poner_musica(match escena {
+                Escena::Combate => Tema::de(world.boss_index, world.boss.phase),
+                _ => Tema::Sala,
+            });
         }
 
         let frame_dt = get_frame_time().min(MAX_FRAME_DT);
@@ -296,6 +296,18 @@ async fn run_game() {
                 accumulator = 0.0;
             }
         }
+        // Saltarse el baile. Es una trampa y esta puesta a proposito: ver
+        // como avanza el juego no deberia costar pasarse el jefe cada vez.
+        // Rompe el replay en curso, asi que se vuelve a empezar la grabacion.
+        if is_key_pressed(KeyCode::F3) && escena == Escena::Combate && !world.is_over() {
+            world.saltar_el_baile();
+            recorder = Recorder::for_world(&world);
+            // El sonido se pide a mano: los eventos del mundo se recogen
+            // dentro del bucle de simulacion, y el proximo tick ya los habra
+            // vaciado.
+            audio.play(Sfx::Fase, 1.0);
+            aviso = Some(("baile saltado".to_owned(), false, 120));
+        }
         if is_key_pressed(KeyCode::F2) {
             aviso = Some(match guardar_replay(&recorder) {
                 Ok(m) => (m, false, 240),
@@ -369,7 +381,11 @@ async fn run_game() {
             };
             draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut());
             if escena == Escena::Menu {
-                draw::menu(&layout, intentos, mando.conectado());
+                draw::menu(
+                    &layout,
+                    intentos,
+                    mando.conectado().then(|| mando.botones()),
+                );
             } else if world.is_over() {
                 draw::fin_de_partida(&layout, &world);
             }

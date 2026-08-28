@@ -21,12 +21,15 @@ use crate::pattern::{Pattern, PatternRunner, RunCtx, Step};
 ///
 /// **Anadir un jefe es anadir un fichero y una linea aqui.** Ni una linea de
 /// codigo mas: esa era toda la razon de ser del interprete de patrones.
-/// Los jefes de la partida.
+/// Los jefes de la partida: **un baile cada uno**.
 ///
-/// Hay uno solo, y es a proposito: **un baile es un jefe**. El vals entero cabe
-/// en `boss1.ron`, con una fase por figura. Cuando llegue el tango sera un
-/// fichero mas aqui, no cuatro.
-pub const DEFAULT_BOSS_RONS: [&str; 1] = [include_str!("../../../assets/patterns/boss1.ron")];
+/// El vals entero cabe en `boss1.ron` y el tango en `boss2.ron`, cada uno con
+/// una fase por figura suya. Anadir un baile es anadir su fichero y una linea
+/// aqui: la pista le pone el nodo sola y la musica lo busca por indice.
+pub const DEFAULT_BOSS_RONS: [&str; 2] = [
+    include_str!("../../../assets/patterns/boss1.ron"),
+    include_str!("../../../assets/patterns/boss2.ron"),
+];
 
 /// El primer jefe. Se conserva por comodidad y para los tests.
 pub const DEFAULT_BOSS_RON: &str = DEFAULT_BOSS_RONS[0];
@@ -272,8 +275,8 @@ mod tests {
     #[test]
     fn los_jefes_embebidos_son_validos() {
         let defs = BossDef::default_bosses();
-        // Uno, y a proposito: un baile es un jefe. El vals entero cabe en el.
-        assert_eq!(defs.len(), 1);
+        // Uno por baile: el vals y el tango.
+        assert_eq!(defs.len(), 2);
         for (i, d) in defs.iter().enumerate() {
             assert!(!d.name.is_empty(), "el jefe {} no tiene nombre", i + 1);
             assert!(!d.phases.is_empty(), "el jefe {} no tiene fases", i + 1);
@@ -300,7 +303,7 @@ mod tests {
     ///
     /// Se ejecuta el patron sin llamar a `bullets.update()`: nada se mueve ni
     /// caduca, asi que las vivas al final son exactamente las disparadas.
-    fn balas_de_la_fase(fase: &PhaseDef, ticks: usize) -> usize {
+    pub(super) fn balas_de_la_fase(fase: &PhaseDef, ticks: usize) -> usize {
         use crate::pattern::{Pattern, PatternRunner, RunCtx};
         let mut runner = PatternRunner::new(Pattern::compile(&fase.steps));
         let mut bullets = Bullets::with_capacity(crate::MAX_BULLETS);
@@ -314,6 +317,42 @@ mod tests {
             runner.tick(&mut ctx);
         }
         bullets.live_count()
+    }
+
+    /// Si en algun sitio del arbol hay un `Turn`, o sea una espiral.
+    fn hay_espirales(steps: &[Step]) -> bool {
+        steps.iter().any(|paso| match paso {
+            Step::Turn(_) => true,
+            Step::Repeat { body, .. } | Step::Forever(body) => hay_espirales(body),
+            Step::Parallel(ramas) => ramas.iter().any(|r| hay_espirales(r)),
+            _ => false,
+        })
+    }
+
+    /// La regla que separa un baile de otro, y por tanto la que hay que
+    /// vigilar.
+    ///
+    /// Una espiral es un giro continuo: es lo que hace un vals, y el vals las
+    /// usa en las cuatro figuras. El tango va en linea recta y cambia de
+    /// golpe, asi que no tiene ninguna. Si algun dia se cuela una, las dos
+    /// gramaticas empiezan a parecerse y "cada jefe es un baile" deja de ser
+    /// verdad sin que nadie se entere.
+    #[test]
+    fn el_vals_gira_y_el_tango_no() {
+        let defs = BossDef::default_bosses();
+        let vals = &defs[0];
+        let tango = &defs[1];
+        assert!(
+            vals.phases.iter().all(|f| hay_espirales(&f.steps)),
+            "el vals sin espirales ha dejado de ser un vals"
+        );
+        for f in &tango.phases {
+            assert!(
+                !hay_espirales(&f.steps),
+                "{} tiene una espiral, y eso es un vals",
+                f.name
+            );
+        }
     }
 
     #[test]
@@ -483,5 +522,31 @@ mod tests {
     #[test]
     fn un_ron_invalido_da_error_en_vez_de_panic() {
         assert!(BossDef::from_ron("esto no es RON valido {{{").is_err());
+    }
+}
+
+#[cfg(test)]
+mod medida {
+    use super::tests::balas_de_la_fase;
+    use super::*;
+
+    /// Imprime las balas por segundo de cada fase de cada jefe.
+    ///
+    /// `cargo test -p vals-core densidades -- --nocapture --ignored`
+    #[test]
+    #[ignore]
+    fn densidades() {
+        for def in BossDef::default_bosses() {
+            println!("{}", def.name);
+            for f in &def.phases {
+                let n = balas_de_la_fase(f, 600);
+                println!(
+                    "  {:<14} hp {:>5}  {:>6.0} balas/s",
+                    f.name,
+                    f.hp,
+                    n as f32 / 10.0
+                );
+            }
+        }
     }
 }

@@ -16,7 +16,7 @@
 use macroquad::audio::{PlaySoundParams, Sound, load_sound_from_bytes, play_sound, stop_sound};
 use vals_core::Events;
 
-use crate::music::{self, Baile};
+use crate::music::{self, TEMAS, Tema};
 
 /// 44.100 Hz para que el mezclador de macroquad no tenga que remuestrear.
 const SAMPLE_RATE: u32 = 44_100;
@@ -72,6 +72,12 @@ impl Voz {
         self.delay + self.dur
     }
 
+    /// Solo la usa el test que comprueba que la sala no lleva golpes secos.
+    #[cfg(test)]
+    pub(crate) fn forma(&self) -> Wave {
+        self.wave
+    }
+
     #[cfg(test)]
     pub(crate) fn frecuencia(&self) -> f32 {
         self.f0
@@ -109,8 +115,6 @@ pub enum Sfx {
     Derrota,
     Empezar,
 }
-
-const BAILES: [Baile; 4] = [Baile::PasoBase, Baile::Espejo, Baile::Molinete, Baile::Coda];
 
 const TODOS: [Sfx; 10] = [
     Sfx::Disparo,
@@ -204,9 +208,9 @@ impl Audio {
         }
         let cargados = sonidos.iter().filter(|s| s.is_some()).count();
 
-        let mut musica = Vec::with_capacity(BAILES.len());
+        let mut musica = Vec::with_capacity(TEMAS.len());
         let mut bytes_musica = 0usize;
-        for b in BAILES {
+        for b in TEMAS {
             let bytes = wav(&render_len(&music::tema(b), music::duracion(b)));
             bytes_musica += bytes.len();
             match load_sound_from_bytes(&bytes).await {
@@ -221,7 +225,7 @@ impl Audio {
         println!(
             "[audio] {cargados}/{} sonidos y {temas}/{} temas sintetizados ({:.1} MB de musica)",
             TODOS.len(),
-            BAILES.len(),
+            TEMAS.len(),
             bytes_musica as f32 / (1024.0 * 1024.0)
         );
 
@@ -234,7 +238,7 @@ impl Audio {
     }
 
     /// Pone el tema de un baile, en bucle. No hace nada si ya sonaba.
-    pub fn poner_musica(&mut self, b: Baile) {
+    pub fn poner_musica(&mut self, b: Tema) {
         let idx = b.indice();
         if self.sonando == Some(idx) {
             return;
@@ -274,7 +278,7 @@ impl Audio {
             self.sonando = actual;
         } else if let Some(i) = actual {
             self.sonando = None;
-            self.poner_musica(Baile::por_indice(i));
+            self.poner_musica(Tema::por_indice(i));
         }
     }
 
@@ -502,7 +506,7 @@ mod tests {
 
     #[test]
     fn los_temas_de_musica_duran_lo_que_dicen() {
-        for b in BAILES {
+        for b in TEMAS {
             let muestras = render_len(&music::tema(b), music::duracion(b));
             let esperado = (music::duracion(b) * SAMPLE_RATE as f32) as usize;
             assert_eq!(muestras.len(), esperado, "{b:?}");
@@ -514,7 +518,7 @@ mod tests {
 
     #[test]
     fn los_temas_no_saturan() {
-        for b in BAILES {
+        for b in TEMAS {
             let muestras = render_len(&music::tema(b), music::duracion(b));
             let pico = muestras.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
             assert!(pico < i16::MAX as u16, "{b:?} llega al tope y distorsiona");
@@ -525,7 +529,7 @@ mod tests {
     fn el_bucle_no_da_un_salto_al_volver_a_empezar() {
         // El final y el principio tienen que ser silencio o casi: si el bucle
         // corta una nota a media vibracion, se oye un chasquido cada vuelta.
-        for b in BAILES {
+        for b in TEMAS {
             let m = render_len(&music::tema(b), music::duracion(b));
             let cola: i32 = m[m.len() - 200..]
                 .iter()

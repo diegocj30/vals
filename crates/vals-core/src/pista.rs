@@ -236,10 +236,13 @@ fn sitio(i: usize, n: usize) -> Vec2 {
     }
     // Mas ancha que alta: el fondo de la pista queda mas lejos que los lados.
     let (rx, ry) = (ARENA_W * 0.30, ARENA_H * 0.20);
-    // Empezando arriba, que es el fondo de la pista.
+    // Empezando por delante, que es por donde se entra: asi el primer baile es
+    // con el que te tropiezas primero. Al reves te encontrabas antes el tango,
+    // que es el dificil, y el orden en que estan escritos dejaba de significar
+    // nada.
     let angulo = TAU * i as f32 / n as f32;
     let (s, c) = sin_cos(angulo);
-    centro + vec2(s * rx, -c * ry)
+    centro + vec2(s * rx, c * ry)
 }
 
 #[cfg(test)]
@@ -281,6 +284,21 @@ mod tests {
         }
         assert!((p.bailarina.x - (ARENA_W - MARGEN)).abs() < 0.01);
         assert!(p.bailarina.y <= ARENA_H - MARGEN);
+    }
+
+    #[test]
+    fn el_primer_baile_es_el_que_pilla_mas_cerca() {
+        // El orden de `DEFAULT_BOSS_RONS` es el orden en que estan pensados
+        // para jugarse, y la pista tiene que respetarlo: si no, te tropiezas
+        // primero con el ultimo.
+        let p = pista_de(3);
+        let cerca = |n: &Nodo| (n.pos - ENTRADA).length();
+        for otro in &p.nodos[1..] {
+            assert!(
+                cerca(&p.nodos[0]) < cerca(otro),
+                "el primer baile no es el mas cercano a la entrada"
+            );
+        }
     }
 
     #[test]

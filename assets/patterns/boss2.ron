@@ -1,0 +1,476 @@
+// EL TANGO. El segundo baile.
+//
+// Un baile es un jefe y cada fase es una figura suya (decision 70). Aqui lo
+// que cambia respecto al vals no es la melodia: es la **gramatica**.
+//
+// El vals no para de girar, y por eso todas sus fases son espirales. El tango
+// es lo contrario: silencio, arranque seco y parada en seco. De ahi salen las
+// tres figuras:
+//
+//   1. La caminata    87 b/s   el paso del tango: recto y marcado.
+//   2. El corte      131 b/s   balas que salen, frenan y VUELVEN.
+//   3. La quebrada   210 b/s   el abrazo roto: fuego cruzado desde dos lados.
+//
+// NO HAY UN SOLO `Turn` EN TODO EL FICHERO, y es la regla que define el baile.
+// Una espiral es un giro continuo, que es lo que hace un vals; el tango va en
+// linea recta y cambia de golpe. Hay un test que lo vigila.
+//
+// EL COMPAS ES DE VERDAD. El tema va a 120 negras por minuto en 4/4: 30 ticks
+// por tiempo, 120 por compas. Todas las esperas de aqui son multiplos de 30,
+// asi que **las balas caen con la musica**. Es lo mas lejos que llega hasta
+// ahora la idea de que cada jefe sea un baile.
+//
+// Los movimientos van con ease Linear a proposito. El vals usa InOut, que
+// arranca y frena suave y hace que el jefe parezca que pesa; el tango no
+// suaviza nada, porque un tango tampoco.
+//
+// Guia rapida de pasos:
+//   Wait(n)               espera n ticks (60 ticks = 1 segundo)
+//   Fire(emisor)          dispara una tanda
+//   Turn(radianes)        gira la mira de ESTE hilo; repetido, hace la espiral
+//   Repeat(times:, body:) repite un bloque
+//   Forever([...])        lo repite hasta que acabe la fase
+//   Parallel([[...],...]) lanza cada rama como un hilo aparte, a la vez
+//   MoveTo(pos:,dur:,ease:) mueve al jefe; BLOQUEA su hilo mientras dura
+//
+// En el emisor: arc 6.28 es un anillo completo, menos es un abanico centrado
+// en la mira. aim: Fixed(rad) o AtPlayer. kind: 0 pequena, 1 media, 2 grande,
+// 3 aguja. accel negativa frena la bala y la hace volver. spin la curva.
+// flags: 1 = parryable (rosa). Solo lo gordo y lento deberia serlo.
+(
+  name: "El Tango",
+  pos: (320.0, 150.0),
+  radius: 46.0,
+  phases: [
+    // --- La caminata. El paso del tango: recto y marcado, ni una espiral.
+    (
+      name: "La caminata",
+      hp: 500,
+      steps: [
+        Parallel([
+          [
+            // Anda un compas, se para uno. Sin suavizar.
+            Forever([
+              MoveTo(pos: (170.0, 150.0), dur: 120, ease: Linear),
+              Wait(120),
+              MoveTo(pos: (470.0, 150.0), dur: 120, ease: Linear),
+              Wait(120),
+            ]),
+          ],
+          [
+            // El marcato: un golpe en cada tiempo, siempre recto al jugador.
+            Forever([
+              Fire((
+                count: 9,
+                arc: 0.62,
+                aim: AtPlayer,
+                speed: 230.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              Wait(30),
+            ]),
+          ],
+          [
+            // Y cada tres tiempos, la sala entera.
+            Forever([
+              Fire((
+                count: 32,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 135.0,
+                rings: 2,
+                speed_step: 55.0,
+                ring_offset: 0.12,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Wait(90),
+            ]),
+          ],
+          [
+            // Un anillo suelto a contratiempo, para que no se lea todo igual.
+            Forever([
+              Wait(30),
+              Fire((
+                count: 18,
+                arc: 6.2831855,
+                aim: Fixed(0.9),
+                speed: 190.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Wait(30),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(30),
+              Fire((
+                count: 8,
+                arc: 1.1,
+                aim: AtPlayer,
+                speed: 300.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              Wait(30),
+            ]),
+          ],
+          [
+            // Una rosa cada dos compases: el respiro para cargar el super.
+            Forever([
+              Wait(240),
+              Fire((
+                count: 3,
+                arc: 0.9,
+                aim: AtPlayer,
+                speed: 120.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 2,
+                flags: 1,
+              )),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+    // --- El corte. Salen, frenan, se paran y vuelven.
+    (
+      name: "El corte",
+      hp: 700,
+      steps: [
+        Parallel([
+          [
+            Forever([
+              MoveTo(pos: (430.0, 130.0), dur: 60, ease: Linear),
+              Wait(180),
+              MoveTo(pos: (210.0, 190.0), dur: 60, ease: Linear),
+              Wait(180),
+            ]),
+          ],
+          [
+            // LA figura. Con `accel` negativa la bala sale, se queda sin
+            // velocidad y se da la vuelta: avanza, se para y vuelve. Es un
+            // corte de tango, y no hizo falta tocar el motor para tenerlo.
+            Forever([
+              Fire((
+                count: 30,
+                arc: 6.2831855,
+                aim: Fixed(0.2),
+                speed: 330.0,
+                rings: 2,
+                speed_step: 70.0,
+                ring_offset: 0.1,
+                accel: -190.0,
+                spin: 0.0,
+                ttl: 9.0,
+                kind: 2,
+                flags: 0,
+              )),
+              Wait(60),
+            ]),
+          ],
+          [
+            // Otro corte a contratiempo y en otro angulo: cuando el primero
+            // esta volviendo, el segundo esta yendo.
+            Forever([
+              Wait(30),
+              Fire((
+                count: 20,
+                arc: 6.2831855,
+                aim: Fixed(1.4),
+                speed: 300.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: -175.0,
+                spin: 0.0,
+                ttl: 9.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Wait(30),
+            ]),
+          ],
+          [
+            // Agujas rectas: si te quedas quieto esperando a que vuelva el
+            // corte, te cosen.
+            Forever([
+              Wait(30),
+              Fire((
+                count: 8,
+                arc: 0.5,
+                aim: AtPlayer,
+                speed: 330.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              Wait(30),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 16,
+                arc: 6.2831855,
+                aim: Fixed(1.1),
+                speed: 175.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Wait(30),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(30),
+              Fire((
+                count: 10,
+                arc: 1.6,
+                aim: AtPlayer,
+                speed: 250.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Wait(30),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(240),
+              Fire((
+                count: 4,
+                arc: 1.2,
+                aim: AtPlayer,
+                speed: 115.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 2,
+                flags: 1,
+              )),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+    // --- La quebrada. El abrazo roto: fuego cruzado desde dos lados.
+    (
+      name: "La quebrada",
+      hp: 1000,
+      steps: [
+        Parallel([
+          [
+            Forever([
+              MoveTo(pos: (150.0, 120.0), dur: 60, ease: Linear),
+              Wait(60),
+              MoveTo(pos: (490.0, 200.0), dur: 60, ease: Linear),
+              Wait(60),
+            ]),
+          ],
+          [
+            // Los dos de la pareja, disparando el uno contra el otro y tu en
+            // medio. Se alternan en cada tiempo.
+            Forever([
+              Fire((
+                count: 16,
+                arc: 1.5,
+                aim: Fixed(0.6),
+                speed: 265.0,
+                rings: 1,
+                speed_step: 45.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Wait(30),
+              Fire((
+                count: 16,
+                arc: 1.5,
+                aim: Fixed(3.74),
+                speed: 265.0,
+                rings: 1,
+                speed_step: 45.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Wait(30),
+            ]),
+          ],
+          [
+            // El corte vuelve, y ahora en cada tiempo fuerte.
+            Forever([
+              Fire((
+                count: 34,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 355.0,
+                rings: 2,
+                speed_step: 70.0,
+                ring_offset: 0.09,
+                accel: -215.0,
+                spin: 0.0,
+                ttl: 9.0,
+                kind: 2,
+                flags: 0,
+              )),
+              Wait(60),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(30),
+              Fire((
+                count: 9,
+                arc: 0.55,
+                aim: AtPlayer,
+                speed: 320.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              Wait(30),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 22,
+                arc: 6.2831855,
+                aim: Fixed(2.1),
+                speed: 210.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Wait(30),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(30),
+              Fire((
+                count: 26,
+                arc: 6.2831855,
+                aim: Fixed(4.4),
+                speed: 160.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Wait(30),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 20,
+                arc: 2.4,
+                aim: AtPlayer,
+                speed: 185.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Wait(60),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(120),
+              Fire((
+                count: 5,
+                arc: 1.4,
+                aim: AtPlayer,
+                speed: 130.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 2,
+                flags: 1,
+              )),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+  ],
+)

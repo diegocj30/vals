@@ -33,16 +33,22 @@
 
 use crate::audio::{Voz, Wave};
 
-/// La musica de cada **figura** del baile, no de cada jefe.
+/// Cada trozo de musica del juego.
 ///
-/// Un baile es un jefe y sus fases son figuras suyas, asi que la musica sigue a
-/// la fase. Las cuatro son valses: tres piezas y una vuelta al tema del
-/// principio, acelerada, que es literalmente lo que es una coda.
+/// Se llama `Tema` y no `Baile` porque **la sala no es un baile**: la pista
+/// tiene su propia musica, y hacerla pasar por una figura de vals era mentir
+/// en el nombre.
 ///
-/// Cuando llegue el tango, sera otro juego de variantes aqui: cambia el compas
-/// a 4/4 y el patron de acompanamiento, y el resto del modulo sirve.
+/// Un baile es un jefe y sus fases son figuras suyas, asi que la musica se
+/// busca por (jefe, fase). Antes iba solo por fase, que funcionaba mientras
+/// hubo un unico baile y habria hecho que la segunda figura del tango sonase a
+/// vals en cuanto entrara el segundo.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Baile {
+pub enum Tema {
+    /// La pista. No es ningun baile: es la sala antes de que empiece nada.
+    Sala,
+
+    // --- El Vals ---
     /// El Danubio azul entero. 3/4, oom-pah-pah, el vals de toda la vida.
     PasoBase,
     /// El mismo Danubio, reflejado y en menor. Mas lento y mas oscuro.
@@ -52,30 +58,52 @@ pub enum Baile {
     /// El tema del principio otra vez, un tono mas arriba y a toda velocidad.
     /// Una coda, en musica, es exactamente eso.
     Coda,
+
+    // --- El Tango ---
+    /// La Cumparsita, primera parte. 4/4 y marcato: ni rastro de oom-pah-pah.
+    Caminata,
+    /// Su segunda parte, mas lenta y mas grave.
+    Corte,
+    /// Y vuelta a la primera, disparada. Un tango tambien vuelve al tema.
+    Quebrada,
 }
 
-impl Baile {
-    /// La musica de una figura del baile, por orden.
-    pub fn de_la_fase(fase: usize) -> Self {
-        match fase {
-            0 => Baile::PasoBase,
-            1 => Baile::Espejo,
-            2 => Baile::Molinete,
-            _ => Baile::Coda,
+/// Todos, en el orden en que se sintetizan y se guardan.
+pub const TEMAS: [Tema; 8] = [
+    Tema::Sala,
+    Tema::PasoBase,
+    Tema::Espejo,
+    Tema::Molinete,
+    Tema::Coda,
+    Tema::Caminata,
+    Tema::Corte,
+    Tema::Quebrada,
+];
+
+impl Tema {
+    /// La musica de una figura, buscada por el baile al que pertenece.
+    ///
+    /// Un jefe o una fase que no existan caen en la ultima figura de ese
+    /// baile, que es lo que menos sorprende: un indice raro suena a final, no
+    /// a silencio.
+    pub fn de(jefe: usize, fase: usize) -> Self {
+        match (jefe, fase) {
+            (0, 0) => Tema::PasoBase,
+            (0, 1) => Tema::Espejo,
+            (0, 2) => Tema::Molinete,
+            (0, _) => Tema::Coda,
+            (_, 0) => Tema::Caminata,
+            (_, 1) => Tema::Corte,
+            (_, _) => Tema::Quebrada,
         }
     }
 
     pub fn indice(self) -> usize {
-        match self {
-            Baile::PasoBase => 0,
-            Baile::Espejo => 1,
-            Baile::Molinete => 2,
-            Baile::Coda => 3,
-        }
+        TEMAS.iter().position(|t| *t == self).unwrap_or(0)
     }
 
     pub fn por_indice(i: usize) -> Self {
-        Self::de_la_fase(i)
+        TEMAS.get(i).copied().unwrap_or(Tema::Sala)
     }
 
     /// Que suena, para poder decirlo en pantalla.
@@ -84,12 +112,13 @@ impl Baile {
     }
 }
 
-/// Tiempos por compas. Tres: es un vals.
-const TIEMPOS: usize = 3;
-/// En que se mide la duracion de una nota. Cuatro por tiempo, doce por compas:
-/// da para negras, corcheas y el puntillo del ultimo compas del Danubio.
+/// En que se mide la duracion de una nota. Cuatro por tiempo: da para negras,
+/// corcheas, semicorcheas y el puntillo del ultimo compas del Danubio.
+///
+/// Los tiempos por compas ya no son una constante del modulo: los pone cada
+/// partitura, porque un vals tiene tres y un tango cuatro. Fue el unico cambio
+/// estructural que pidio meter otro baile.
 const UNIDADES_POR_TIEMPO: u32 = 4;
-const UNIDADES_POR_COMPAS: u32 = UNIDADES_POR_TIEMPO * TIEMPOS as u32;
 
 /// Una nota de la melodia: semitonos sobre la tonica y duracion en unidades.
 #[derive(Clone, Copy)]
@@ -143,6 +172,21 @@ const fn sep(raiz: i32) -> Acorde {
         raiz,
         triada: Triada::Septima,
     }
+}
+
+/// Como se toca el acorde debajo de la melodia.
+///
+/// Es la mitad de la identidad de un baile, y se oye antes que ninguna nota.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Acompanamiento {
+    /// Grave al uno, acorde al dos y al tres. **Esto es un vals.**
+    OomPahPah,
+    /// Grave en los tiempos fuertes y golpe seco en los debiles. Esto es un
+    /// tango: no mece, marca.
+    Marcato,
+    /// Ni una cosa ni la otra: notas largas y nada de golpes. Una sala no
+    /// tiene compas porque no se esta bailando todavia.
+    Sala,
 }
 
 impl Acorde {
@@ -255,10 +299,74 @@ const OLAS_ACORDES: [Acorde; 16] = [
     men(2), may(0), sep(7), may(0),                             // 13-16
 ];
 
+/// **La Cumparsita**, Matos Rodriguez (1916), primera parte.
+///
+/// En la menor: los tonos son semitonos sobre el la. Aqui un compas son
+/// dieciseis unidades, no doce, porque un tango va en 4/4.
+///
+/// Es el arranque de tango mas reconocible que existe, y la figura que lo hace
+/// reconocible son los cuatro golpes secos del primer compas: mi, re, si, sol
+/// sostenido. Ni un adorno.
+#[rustfmt::skip]
+const CUMPARSITA_A: [Nota; 46] = [
+    n(-5, 4), n(5, 4), n(2, 4), n(-1, 4),                                   // 1
+    z(2), n(-5, 2), n(-4, 2), n(-5, 2), n(-6, 4), n(-5, 2), n(-5, 1), n(-5, 1), // 2
+    n(-5, 4), n(7, 4), n(3, 4), n(0, 4),                                    // 3
+    z(2), n(-5, 2), n(-4, 2), n(-5, 2), n(-6, 4), n(-5, 2), n(-5, 1), n(-5, 1), // 4
+    n(-5, 4), n(5, 4), n(2, 4), n(-1, 4),                                   // 5
+    z(2), n(-5, 2), n(-4, 2), n(-5, 2), n(-6, 4), n(-5, 2), n(-5, 1), n(-5, 1), // 6
+    n(-5, 4), n(7, 4), n(3, 4), n(0, 4),                                    // 7
+    z(2), n(-5, 2), n(-4, 2), n(-5, 2), n(-6, 4), n(-5, 4),                 // 8
+];
+
+#[rustfmt::skip]
+const CUMPARSITA_A_ACORDES: [Acorde; 8] = [
+    sep(7), sep(7), men(0), men(0),
+    sep(7), sep(7), men(0), men(0),
+];
+
+/// Su segunda parte: la melodia baja y baja hasta el suelo.
+#[rustfmt::skip]
+const CUMPARSITA_B: [Nota; 40] = [
+    n(5, 4), n(0, 4), n(-1, 4), n(0, 4),                                    // 9
+    z(2), n(-5, 2), n(-4, 2), n(-5, 2), n(-4, 4), n(-1, 4),                 // 10
+    n(-5, 6), n(-7, 1), n(-8, 1), n(-9, 8),                                 // 11
+    z(2), n(-6, 2), n(-5, 2), n(-7, 2), n(-5, 4), n(-4, 4),                 // 12
+    n(-7, 6), n(-8, 1), n(-9, 1), n(-11, 8),                                // 13
+    z(2), n(-7, 2), n(-9, 2), n(-11, 2), n(-12, 4), n(-13, 4),              // 14
+    n(-12, 6), n(-4, 2), n(-5, 2), n(-7, 2), n(-9, 2), n(-11, 2),           // 15
+    n(-12, 6), n(-13, 2), n(-12, 2), z(6),                                  // 16
+];
+
+#[rustfmt::skip]
+const CUMPARSITA_B_ACORDES: [Acorde; 8] = [
+    men(5), men(5), men(0), men(0),
+    sep(7), sep(7), men(0), men(0),
+];
+
+/// La sala. No es una pieza de nadie: son cuatro acordes largos.
+///
+/// Y es a proposito que no se reconozca ni suene a ningun baile. En la pista no
+/// se esta bailando: se esta eligiendo. Poner ahi el vals en bucle decia que el
+/// vals era el juego, y el vals es **un** jefe del juego.
+#[rustfmt::skip]
+const SALA: [Nota; 9] = [
+    n(12, 10), z(6),
+    n(15, 10), z(6),
+    n(19, 8), n(17, 4), z(4),
+    n(12, 12), z(4),
+];
+
+#[rustfmt::skip]
+const SALA_ACORDES: [Acorde; 4] = [men(0), may(8), men(5), men(0)];
+
 /// Todo lo que hace falta para sonar.
 struct Partitura {
     titulo: &'static str,
     bpm: f32,
+    /// Tiempos por compas: tres en un vals, cuatro en un tango.
+    tiempos: usize,
+    acompanamiento: Acompanamiento,
     /// Semitonos de la tonica sobre La2 (110 Hz).
     tonica: i32,
     melodia: &'static [Nota],
@@ -267,44 +375,102 @@ struct Partitura {
     espejo: bool,
 }
 
-fn partitura(b: Baile) -> Partitura {
-    match b {
-        Baile::PasoBase => Partitura {
-            titulo: "El Danubio azul - Johann Strauss II, 1866",
-            bpm: 174.0,
-            tonica: 15, // do central
-            melodia: &DANUBIO,
-            acordes: &DANUBIO_ACORDES,
-            espejo: false,
-        },
-        Baile::Espejo => Partitura {
-            titulo: "El Danubio azul, reflejado",
-            bpm: 132.0,
+fn partitura(t: Tema) -> Partitura {
+    // El vals: tres tiempos y oom-pah-pah en las cuatro figuras.
+    let vals = |titulo, bpm, tonica, melodia, acordes, espejo| Partitura {
+        titulo,
+        bpm,
+        tiempos: 3,
+        acompanamiento: Acompanamiento::OomPahPah,
+        tonica,
+        melodia,
+        acordes,
+        espejo,
+    };
+    // El tango: cuatro tiempos y marcato. Mismo modulo, otra gramatica.
+    let tango = |titulo, bpm, tonica, melodia, acordes| Partitura {
+        titulo,
+        bpm,
+        tiempos: 4,
+        acompanamiento: Acompanamiento::Marcato,
+        tonica,
+        melodia,
+        acordes,
+        espejo: false,
+    };
+
+    match t {
+        Tema::Sala => Partitura {
+            titulo: "la sala",
+            bpm: 60.0,
+            tiempos: 4,
+            acompanamiento: Acompanamiento::Sala,
             tonica: 12, // la
-            melodia: &DANUBIO[DANUBIO_MITAD..],
-            acordes: &DANUBIO_ACORDES[16..],
-            espejo: true,
-        },
-        Baile::Molinete => Partitura {
-            titulo: "Sobre las olas - Juventino Rosas, 1888",
-            bpm: 192.0,
-            tonica: 22, // sol
-            melodia: &OLAS,
-            acordes: &OLAS_ACORDES,
+            melodia: &SALA,
+            acordes: &SALA_ACORDES,
             espejo: false,
         },
+
+        Tema::PasoBase => vals(
+            "El Danubio azul - Johann Strauss II, 1866",
+            174.0,
+            15, // do central
+            &DANUBIO,
+            &DANUBIO_ACORDES,
+            false,
+        ),
+        Tema::Espejo => vals(
+            "El Danubio azul, reflejado",
+            132.0,
+            12, // la
+            &DANUBIO[DANUBIO_MITAD..],
+            &DANUBIO_ACORDES[16..],
+            true,
+        ),
+        Tema::Molinete => vals(
+            "Sobre las olas - Juventino Rosas, 1888",
+            192.0,
+            22, // sol
+            &OLAS,
+            &OLAS_ACORDES,
+            false,
+        ),
         // La coda no es una pieza nueva: es la segunda mitad del Danubio otra
         // vez, un tono mas arriba y disparada. En musica una coda es eso —el
         // tema del principio, acelerado, para cerrar—, y aqui ademas hace que
         // la ultima figura suene a que ya has estado ahi antes.
-        Baile::Coda => Partitura {
-            titulo: "El Danubio azul, coda",
-            bpm: 232.0,
-            tonica: 17, // re: un tono por encima del principio
-            melodia: &DANUBIO[DANUBIO_MITAD..],
-            acordes: &DANUBIO_ACORDES[16..],
-            espejo: false,
-        },
+        Tema::Coda => vals(
+            "El Danubio azul, coda",
+            232.0,
+            17, // re: un tono por encima del principio
+            &DANUBIO[DANUBIO_MITAD..],
+            &DANUBIO_ACORDES[16..],
+            false,
+        ),
+
+        Tema::Caminata => tango(
+            "La Cumparsita - Matos Rodriguez, 1916",
+            120.0,
+            24, // la
+            &CUMPARSITA_A,
+            &CUMPARSITA_A_ACORDES,
+        ),
+        Tema::Corte => tango(
+            "La Cumparsita, segunda parte",
+            100.0,
+            24,
+            &CUMPARSITA_B,
+            &CUMPARSITA_B_ACORDES,
+        ),
+        // Mismo truco que la coda del vals, y por el mismo motivo: un tango
+        // tambien vuelve al tema del principio para cerrar.
+        Tema::Quebrada => tango(
+            "La Cumparsita, quebrada",
+            152.0,
+            26,
+            &CUMPARSITA_A,
+            &CUMPARSITA_A_ACORDES,
+        ),
     }
 }
 
@@ -408,42 +574,26 @@ fn registro(mut s: i32) -> i32 {
     s
 }
 
+/// Unidades que dura un compas de esta partitura.
+fn unidades_por_compas(p: &Partitura) -> u32 {
+    UNIDADES_POR_TIEMPO * p.tiempos as u32
+}
+
 /// Duracion del bucle completo.
-pub fn duracion(b: Baile) -> f32 {
-    let p = partitura(b);
-    let unidades = p.acordes.len() as u32 * UNIDADES_POR_COMPAS;
+pub fn duracion(t: Tema) -> f32 {
+    let p = partitura(t);
+    let unidades = p.acordes.len() as u32 * unidades_por_compas(&p);
     unidades as f32 * (60.0 / p.bpm) / UNIDADES_POR_TIEMPO as f32
 }
 
-/// Construye el tema de un baile como lista de voces.
-pub fn tema(b: Baile) -> Vec<Voz> {
-    let p = partitura(b);
-    let t = 60.0 / p.bpm;
-    let u = t / UNIDADES_POR_TIEMPO as f32;
+/// Construye un tema como lista de voces.
+pub fn tema(t: Tema) -> Vec<Voz> {
+    let p = partitura(t);
+    let tiempo = 60.0 / p.bpm;
+    let u = tiempo / UNIDADES_POR_TIEMPO as f32;
     let mut v = Vec::with_capacity(512);
 
-    // --- Acompanamiento: el oom-pah-pah, compas a compas.
-    // Grave al uno, acorde al dos y al tres. Este patron *es* el vals: es lo
-    // que hace que se reconozca el genero antes de oir la melodia.
-    for (compas, acorde) in p.acordes.iter().enumerate() {
-        let a = if p.espejo {
-            reflejar_acorde(*acorde)
-        } else {
-            *acorde
-        };
-        let t0 = compas as f32 * TIEMPOS as f32 * t;
-        let raiz = p.tonica + a.raiz;
-
-        v.push(Voz::nota(Wave::Sine, frecuencia(bajo(raiz)), t * 0.9, 0.30, 1.6).tras(t0));
-
-        for paso in 1..TIEMPOS {
-            let cuando = t0 + paso as f32 * t;
-            for iv in a.intervalos() {
-                let f = frecuencia(registro(raiz) + iv);
-                v.push(Voz::nota(Wave::Square, f, t * 0.35, 0.055, 3.2).tras(cuando));
-            }
-        }
-    }
+    acompanar(&mut v, &p, tiempo);
 
     // --- Melodia.
     let mut unidad = 0u32;
@@ -467,11 +617,73 @@ pub fn tema(b: Baile) -> Vec<Voz> {
     v
 }
 
+/// El acompanamiento, compas a compas.
+///
+/// Es donde vive la diferencia entre un vals y un tango. La melodia se toca
+/// igual en los dos; lo que cambia —y lo que se reconoce antes de oir ninguna
+/// nota principal— es donde caen el grave y el acorde.
+fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
+    for (compas, acorde) in p.acordes.iter().enumerate() {
+        let a = if p.espejo {
+            reflejar_acorde(*acorde)
+        } else {
+            *acorde
+        };
+        let t0 = compas as f32 * p.tiempos as f32 * t;
+        let raiz = p.tonica + a.raiz;
+        let grave = frecuencia(bajo(raiz));
+        let triada = || {
+            a.intervalos()
+                .iter()
+                .map(move |iv| frecuencia(registro(raiz) + iv))
+        };
+
+        match p.acompanamiento {
+            // Grave al uno, acorde al dos y al tres. Esto *es* un vals: es lo
+            // que hace que se reconozca el genero antes de la melodia, y lo
+            // que contesta al arpegio del Danubio con su "pam, pam".
+            Acompanamiento::OomPahPah => {
+                v.push(Voz::nota(Wave::Sine, grave, t * 0.9, 0.30, 1.6).tras(t0));
+                for paso in 1..p.tiempos {
+                    let cuando = t0 + paso as f32 * t;
+                    for f in triada() {
+                        v.push(Voz::nota(Wave::Square, f, t * 0.35, 0.055, 3.2).tras(cuando));
+                    }
+                }
+            }
+            // Grave corto en los tiempos fuertes —uno y tres— y golpe seco de
+            // acorde en los debiles. No mece: marca. Las caidas son mas
+            // bruscas que en el vals a proposito: un tango es staccato.
+            Acompanamiento::Marcato => {
+                for paso in (0..p.tiempos).step_by(2) {
+                    let cuando = t0 + paso as f32 * t;
+                    v.push(Voz::nota(Wave::Sine, grave, t * 0.45, 0.34, 3.0).tras(cuando));
+                }
+                for paso in (1..p.tiempos).step_by(2) {
+                    let cuando = t0 + paso as f32 * t;
+                    for f in triada() {
+                        v.push(Voz::nota(Wave::Square, f, t * 0.22, 0.06, 4.5).tras(cuando));
+                    }
+                }
+            }
+            // Sin golpes: el grave y el acorde duran el compas entero. No hay
+            // compas que marcar porque todavia no se esta bailando.
+            Acompanamiento::Sala => {
+                let largo = p.tiempos as f32 * t;
+                v.push(Voz::nota(Wave::Sine, grave, largo * 0.95, 0.22, 1.0).tras(t0));
+                for f in triada() {
+                    v.push(Voz::nota(Wave::Sine, f, largo * 0.9, 0.05, 0.9).tras(t0));
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const TODOS: [Baile; 4] = [Baile::PasoBase, Baile::Espejo, Baile::Molinete, Baile::Coda];
+    const TODOS: [Tema; 8] = TEMAS;
 
     #[test]
     fn la_melodia_y_la_armonia_cuadran() {
@@ -483,7 +695,7 @@ mod tests {
             let unidades: u32 = p.melodia.iter().map(|n| n.unidades).sum();
             assert_eq!(
                 unidades,
-                p.acordes.len() as u32 * UNIDADES_POR_COMPAS,
+                p.acordes.len() as u32 * unidades_por_compas(&p),
                 "{b:?}: la melodia no dura los compases que dice la armonia"
             );
         }
@@ -503,7 +715,7 @@ mod tests {
     #[test]
     fn la_mitad_del_danubio_cae_en_un_compas() {
         let unidades: u32 = DANUBIO[..DANUBIO_MITAD].iter().map(|n| n.unidades).sum();
-        assert_eq!(unidades, 16 * UNIDADES_POR_COMPAS);
+        assert_eq!(unidades, 16 * 3 * UNIDADES_POR_TIEMPO);
     }
 
     #[test]
@@ -575,41 +787,109 @@ mod tests {
         }
     }
 
+    /// En que tiempo de su compas cae cada grave.
+    ///
+    /// Se redondea al tiempo mas cercano en vez de comparar segundos: los
+    /// graves caen justo en los tiempos, y en el compas 30 el error de coma
+    /// flotante ya es bastante para que un cero se lea como un "casi tres".
+    fn graves_por_compas(t: Tema) -> Vec<u32> {
+        let p = partitura(t);
+        let tiempo = 60.0 / p.bpm;
+        tema(t)
+            .iter()
+            .filter(|v| v.frecuencia() < 150.0)
+            .map(|v| (v.inicio() / tiempo).round() as u32 % p.tiempos as u32)
+            .collect()
+    }
+
     #[test]
-    fn el_compas_es_de_tres() {
-        // El bajo cae solo en el primer tiempo de cada compas: es lo que hace
+    fn el_vals_va_de_tres_y_el_tango_de_cuatro() {
+        assert_eq!(partitura(Tema::PasoBase).tiempos, 3);
+        assert_eq!(partitura(Tema::Caminata).tiempos, 4);
+    }
+
+    #[test]
+    fn en_el_vals_el_grave_cae_solo_en_el_uno() {
+        // Un grave por compas y siempre en el primer tiempo: es lo que hace
         // que se oiga como un vals y no como cualquier otra cosa.
-        for b in TODOS {
-            let p = partitura(b);
-            let t = 60.0 / p.bpm;
-            let graves: Vec<f32> = tema(b)
-                .iter()
-                .filter(|v| v.frecuencia() < 150.0)
-                .map(|v| v.inicio())
-                .collect();
-            assert_eq!(graves.len(), p.acordes.len(), "{b:?}");
-            for (i, inicio) in graves.iter().enumerate() {
-                let esperado = i as f32 * TIEMPOS as f32 * t;
-                assert!(
-                    (inicio - esperado).abs() < 0.001,
-                    "{b:?}: el bajo {i} esta fuera de sitio"
-                );
+        for t in [Tema::PasoBase, Tema::Espejo, Tema::Molinete, Tema::Coda] {
+            let p = partitura(t);
+            let graves = graves_por_compas(t);
+            assert_eq!(graves.len(), p.acordes.len(), "{t:?}");
+            for (i, sitio) in graves.iter().enumerate() {
+                assert_eq!(*sitio, 0, "{t:?}: el grave {i} no cae en el uno");
             }
         }
+    }
+
+    #[test]
+    fn en_el_tango_el_grave_cae_en_el_uno_y_en_el_tres() {
+        // El marcato. Es lo que separa un tango de un vals antes de que entre
+        // ninguna melodia: no mece en tres, marca en cuatro.
+        for t in [Tema::Caminata, Tema::Corte, Tema::Quebrada] {
+            let p = partitura(t);
+            let graves = graves_por_compas(t);
+            assert_eq!(graves.len(), p.acordes.len() * 2, "{t:?}: dos por compas");
+            for (i, sitio) in graves.iter().enumerate() {
+                let esperado = if i % 2 == 0 { 0 } else { 2 };
+                assert_eq!(*sitio, esperado, "{t:?}: el grave {i} esta fuera de sitio");
+            }
+        }
+    }
+
+    #[test]
+    fn la_sala_no_suena_a_ningun_baile() {
+        // Sin golpes: un grave por compas y nada mas percutido. Si algun dia
+        // alguien le pone un compas, la pista vuelve a decir que el juego es
+        // ese baile.
+        let p = partitura(Tema::Sala);
+        assert!(p.acompanamiento == Acompanamiento::Sala);
+        let voces = tema(Tema::Sala);
+        assert!(
+            voces.iter().all(|v| !matches!(v.forma(), Wave::Square)),
+            "la sala no lleva golpes secos"
+        );
+        assert_eq!(graves_por_compas(Tema::Sala).len(), p.acordes.len());
     }
 
     #[test]
     fn el_bucle_dura_los_compases_que_dice() {
         for b in TODOS {
             let p = partitura(b);
-            let esperado = 60.0 / p.bpm * (p.acordes.len() * 3) as f32;
-            assert!((duracion(b) - esperado).abs() < 0.001);
+            let esperado = 60.0 / p.bpm * (p.acordes.len() * p.tiempos) as f32;
+            assert!((duracion(b) - esperado).abs() < 0.001, "{b:?}");
         }
     }
 
     #[test]
+    fn cada_baile_tiene_su_musica_y_no_la_del_otro() {
+        // El fallo que esto evita es el que habria aparecido solo al entrar el
+        // segundo baile: buscar la musica por fase y no por (jefe, fase) hacia
+        // que la segunda figura del tango sonase a Danubio reflejado.
+        assert_eq!(Tema::de(0, 1), Tema::Espejo);
+        assert_eq!(Tema::de(1, 1), Tema::Corte);
+        assert_ne!(Tema::de(0, 0), Tema::de(1, 0));
+        // Una fase que no existe cae en la ultima figura de SU baile.
+        assert_eq!(Tema::de(0, 99), Tema::Coda);
+        assert_eq!(Tema::de(1, 99), Tema::Quebrada);
+        // Y el indice y su vuelta cuadran para todos.
+        for t in TEMAS {
+            assert_eq!(Tema::por_indice(t.indice()), t);
+        }
+    }
+
+    #[test]
+    fn la_cumparsita_empieza_por_donde_tiene_que_empezar() {
+        // Los cuatro golpes secos del primer compas: mi, re, si, sol#. Es la
+        // figura por la que se reconoce el tango mas conocido que hay.
+        let tonos: Vec<i32> = CUMPARSITA_A[..4].iter().map(|n| n.tono).collect();
+        assert_eq!(tonos, vec![-5, 5, 2, -1]);
+        assert!(CUMPARSITA_A[..4].iter().all(|n| n.unidades == 4));
+    }
+
+    #[test]
     fn cada_figura_suena_distinto() {
-        let firma = |b: Baile| {
+        let firma = |b: Tema| {
             tema(b)
                 .iter()
                 .map(|v| (v.frecuencia() as u32).wrapping_mul(31) ^ (v.fin() * 1000.0) as u32)
@@ -627,8 +907,8 @@ mod tests {
     fn la_coda_es_el_tema_del_principio_acelerado() {
         // Mismas notas que la segunda mitad del paso base, mas rapido y mas
         // arriba. Si alguien la convierte en otra pieza, esto avisa.
-        let base = partitura(Baile::PasoBase);
-        let coda = partitura(Baile::Coda);
+        let base = partitura(Tema::PasoBase);
+        let coda = partitura(Tema::Coda);
         let mitad: Vec<i32> = base.melodia[DANUBIO_MITAD..]
             .iter()
             .map(|n| n.tono)

@@ -34,7 +34,7 @@
     (function () {
       var UP = 1, DOWN = 2, LEFT = 4, RIGHT = 8, FOCUS = 16;
       var SHOOT = 32, DASH = 64, PARRY = 128, SUPER = 256, JUMP = 512;
-      var CONECTADO = 32768;
+      var CONECTADO = 32768, PLAYSTATION = 16384;
       var ZONA_MUERTA = 0.45;
 
       function pulsado(pad, i) {
@@ -50,6 +50,10 @@
 
           var ax = p.axes[0] || 0, ay = p.axes[1] || 0;
           var bits = CONECTADO;
+          // Solo para poner los nombres correctos en pantalla.
+          if (/playstation|dualshock|dualsense|sony|wireless controller/i.test(p.id || "")) {
+            bits |= PLAYSTATION;
+          }
           // Ojo con el signo: en la Gamepad API el eje Y crece hacia ABAJO,
           // al reves que en gilrs. Es el tipo de detalle que sale de probarlo
           // y no de leerlo.

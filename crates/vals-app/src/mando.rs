@@ -27,6 +27,32 @@ use vals_core::InputFrame;
 /// los botones y la presencia sin inventar otro canal.
 pub const CONECTADO: u16 = 1 << 15;
 
+/// Y este dice que el mando es de PlayStation.
+///
+/// Solo sirve para poner los nombres correctos en pantalla. Los botones son
+/// los mismos —el sur es el sur—, pero decirle "Y" a alguien que tiene un
+/// mando con un triangulo no le ayuda a encontrarlo.
+pub const PLAYSTATION: u16 = 1 << 14;
+
+/// Como se llaman los cuatro botones de la derecha en este mando.
+///
+/// Se decide por el nombre que da el sistema, no por el protocolo: un mando de
+/// PS4 en Windows entra por DirectInput y aun asi se llama a si mismo
+/// "Wireless Controller".
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+fn es_de_playstation(nombre: &str) -> bool {
+    let n = nombre.to_ascii_lowercase();
+    [
+        "playstation",
+        "dualshock",
+        "dualsense",
+        "sony",
+        "wireless controller",
+    ]
+    .iter()
+    .any(|pista| n.contains(pista))
+}
+
 /// Lo lejos que hay que empujar el stick para que cuente.
 ///
 /// Generosa: en un danmaku lo que se hace son diagonales limpias, no medidas
@@ -82,7 +108,19 @@ impl Mando {
 
     /// Los botones que estan pulsados ahora.
     pub fn frame(&self) -> InputFrame {
-        InputFrame::from_bits(self.actual & !CONECTADO)
+        InputFrame::from_bits(self.actual & !(CONECTADO | PLAYSTATION))
+    }
+
+    /// Los cuatro botones de la derecha, con el nombre que llevan escrito
+    /// encima en **este** mando.
+    ///
+    /// Devuelve (disparar, dash, parry, super).
+    pub fn botones(&self) -> [&'static str; 4] {
+        if self.actual & PLAYSTATION != 0 {
+            ["X", "cuadrado", "circulo", "triangulo"]
+        } else {
+            ["A", "X", "B", "Y"]
+        }
     }
 
     /// Si un boton se acaba de pulsar en este frame.
@@ -119,6 +157,9 @@ impl Mando {
 
         let (ax, ay) = (pad.value(Axis::LeftStickX), pad.value(Axis::LeftStickY));
         let mut bits = CONECTADO;
+        if es_de_playstation(pad.name()) {
+            bits |= PLAYSTATION;
+        }
         let mut set = |b: u16, v: bool| {
             if v {
                 bits |= b;
@@ -181,6 +222,30 @@ mod tests {
         assert_eq!(InputFrame::SUPER, 1 << 8);
         assert_eq!(InputFrame::JUMP, 1 << 9);
         assert_eq!(CONECTADO, 1 << 15);
+        assert_eq!(PLAYSTATION, 1 << 14);
+    }
+
+    #[test]
+    fn se_reconoce_un_mando_de_playstation_por_el_nombre() {
+        // El de PS4 en Windows entra por DirectInput y se llama a si mismo
+        // "Wireless Controller", que es el caso que hay que acertar.
+        assert!(es_de_playstation("Wireless Controller"));
+        assert!(es_de_playstation("Sony DualShock 4"));
+        assert!(es_de_playstation("DualSense Wireless Controller"));
+        assert!(!es_de_playstation("Xbox 360 Controller"));
+        assert!(!es_de_playstation("Xbox Series X Controller"));
+    }
+
+    #[test]
+    fn el_nombre_del_mando_no_se_cuela_entre_los_botones() {
+        let m = Mando {
+            anterior: 0,
+            actual: CONECTADO | PLAYSTATION,
+            #[cfg(not(target_arch = "wasm32"))]
+            gilrs: None,
+        };
+        assert_eq!(m.frame().bits(), 0);
+        assert_eq!(m.botones()[3], "triangulo");
     }
 
     #[test]
@@ -220,6 +285,7 @@ mod tests {
             gilrs: None,
         };
         assert!(m.conectado());
+        assert_eq!(m.botones()[0], "A", "sin marca de Sony, nombres de Xbox");
         assert_eq!(m.frame().bits(), 0, "estar conectado no es pulsar nada");
     }
 }
