@@ -6,6 +6,7 @@ use macroquad::prelude::*;
 use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
 use vals_core::{ARENA_H, ARENA_W, World, player};
 
+use crate::bullet_renderer::BulletRenderer;
 use crate::stats::FrameStats;
 
 // Paleta neon. El arte del juego es procedural: no se dibuja nada a mano.
@@ -78,6 +79,22 @@ impl Layout {
         self.origin + vec2(x, y) * self.scale
     }
 
+    /// Esquina de la arena en pixeles. La necesita el shader instanciado.
+    pub fn origin_px(&self) -> Vec2 {
+        self.origin
+    }
+
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+
+    /// Region logica que cabe en la ventana, para descartar lo que no se ve.
+    pub fn visible_bounds(&self) -> (Vec2, Vec2) {
+        let min = -self.origin / self.scale;
+        let max = (vec2(screen_width(), screen_height()) - self.origin) / self.scale;
+        (min, max)
+    }
+
     fn len(&self, logical: f32) -> f32 {
         logical * self.scale
     }
@@ -87,7 +104,13 @@ fn fade(c: Color, a: f32) -> Color {
     Color { a: c.a * a, ..c }
 }
 
-pub fn frame(world: &World, alpha: f32, layout: &Layout) {
+/// Dibuja un frame de juego.
+///
+/// `bullets_gpu` decide el camino de render: con `Some` va el instanciado de un
+/// solo draw call, con `None` el viejo a base de primitivas de macroquad. Los
+/// dos conviven a proposito, porque es lo que hace reproducible la comparacion
+/// de `docs/PERF.md` dentro de un ano.
+pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mut BulletRenderer>) {
     clear_background(BG);
     draw_arena(layout);
     draw_boss(world, alpha, layout);
@@ -95,7 +118,11 @@ pub fn frame(world: &World, alpha: f32, layout: &Layout) {
     draw_trail(world, layout);
     // Las balas van encima del jefe pero debajo del jugador: taparte tu propia
     // hitbox seria exactamente lo contrario de lo que hace falta.
-    draw_bullets_at(&world.bullets, layout, world.tick as f32 + alpha);
+    let phase = world.tick as f32 + alpha;
+    match bullets_gpu {
+        Some(r) => r.draw(&world.bullets, layout, pulse(phase), bullet_style),
+        None => draw_bullets_at(&world.bullets, layout, phase),
+    }
     draw_player(world, alpha, layout);
     draw_hp_bar(world, layout);
     draw_meter(world, layout);
@@ -174,6 +201,26 @@ fn draw_player_shots(world: &World, l: &Layout) {
     }
 }
 
+/// Color de una bala y si lleva anillo de parryable.
+///
+/// La usan los dos caminos de render, el viejo y el instanciado, para que no
+/// puedan divergir: la paleta vive aqui y el renderer de GPU no sabe de
+/// estetica.
+pub fn bullet_style(kind: u8, flags: u8) -> (Color, bool) {
+    let parryable = flags & FLAG_PARRYABLE != 0;
+    let c = if parryable {
+        PARRYABLE
+    } else {
+        BULLET_COLORS[kind as usize]
+    };
+    (c, parryable)
+}
+
+/// Latido del anillo de las parryables, en `[0, 1]`.
+pub fn pulse(phase: f32) -> f32 {
+    0.5 + 0.5 * (phase * 0.18).sin()
+}
+
 /// Dibuja las balas.
 ///
 /// Dos circulos por bala (halo y nucleo) con las primitivas normales de
@@ -185,15 +232,10 @@ pub fn draw_bullets(bullets: &Bullets, l: &Layout) {
 
 /// `phase` anima el latido de las parryables. La escena de stress pasa 0.
 pub fn draw_bullets_at(bullets: &Bullets, l: &Layout, phase: f32) {
-    let latido = 0.5 + 0.5 * (phase * 0.18).sin();
+    let latido = pulse(phase);
     for b in bullets.iter_live() {
         let s = l.to_screen(b.pos.x, b.pos.y);
-        let parryable = b.flags & FLAG_PARRYABLE != 0;
-        let color = if parryable {
-            PARRYABLE
-        } else {
-            BULLET_COLORS[b.kind as usize]
-        };
+        let (color, parryable) = bullet_style(b.kind, b.flags);
         let r = l.len(BULLET_KINDS[b.kind as usize].draw_radius);
 
         draw_circle(s.x, s.y, r * 1.9, fade(color, 0.18));
@@ -368,7 +410,13 @@ fn stats_block(stats: &FrameStats, steps: u32, y: &mut f32) {
 }
 
 /// Overlay de la escena de stress. Sin jugador: solo cuenta y coste.
-pub fn bench_overlay(stats: &FrameStats, bullets: &Bullets, target: usize, steps: u32) {
+pub fn bench_overlay(
+    stats: &FrameStats,
+    bullets: &Bullets,
+    target: usize,
+    steps: u32,
+    gpu: Option<&BulletRenderer>,
+) {
     let mut y = 26.0;
     put("ESCENA DE STRESS", HITBOX, &mut y);
     y += 6.0;
@@ -385,6 +433,23 @@ pub fn bench_overlay(stats: &FrameStats, bullets: &Bullets, target: usize, steps
         TEXT_DIM,
         &mut y,
     );
+    y += 6.0;
+    match gpu {
+        Some(r) => {
+            put("render  INSTANCIADO", VICTORY, &mut y);
+            put(&format!("instancias {:>6}", r.drawn), TEXT_DIM, &mut y);
+            put(&format!("culling    {:>6}", r.culled), TEXT_DIM, &mut y);
+            put("draw calls      1", METER_FULL, &mut y);
+        }
+        None => {
+            put("render  MACROQUAD", HITBOX, &mut y);
+            put(
+                &format!("draw calls {:>6}", bullets.live_count() * 2),
+                HITBOX,
+                &mut y,
+            );
+        }
+    }
     draw_text(
         "estos numeros van a docs/PERF.md",
         X,

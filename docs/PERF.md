@@ -78,6 +78,38 @@ barrido no pueda salir antes de tiempo. Aun asi, 813 Melem/s.
 A 1 000 y 5 000 el p50 esta limitado por vsync, asi que ahi el numero que
 significa algo es `draw`, no el frame time.
 
+## H6: render instanciado — el antes y el despues
+
+Mismo escenario, misma semilla, mismo dia y misma maquina; lo unico que cambia
+es el camino de render. `--legacy-render` conserva el viejo justo para que esta
+comparacion se pueda repetir dentro de un ano.
+
+| Balas | draw (macroquad) | draw (instanciado) | mejora | fps antes | fps despues |
+|---|---|---|---|---|---|
+| 1 000 | 1,114 ms | **0,077 ms** | 14x | 144 | 144 |
+| 5 000 | 4,682 ms | **0,142 ms** | 33x | 144 | 144 |
+| 10 000 | 8,321 ms | **0,247 ms** | 34x | 92 | **144** |
+| 20 000 | 16,489 ms | **0,471 ms** | 35x | 47 | **144** |
+| 32 000 | 26,345 ms | **0,716 ms** | 37x | 30 | **144** |
+
+Frame time completo (p50 / p99):
+
+| Balas | macroquad | instanciado |
+|---|---|---|
+| 10 000 | 10,85 / 12,02 ms | 6,95 / 7,40 ms |
+| 20 000 | 21,31 / 21,99 ms | 6,96 / 7,62 ms |
+| 32 000 | 33,90 / 34,76 ms | 6,95 / 7,87 ms |
+
+**A 32.000 balas el juego va a 144 fps clavados**, limitado por vsync y no por
+el render. Sim 0,207 ms mas draw 0,716 ms: menos del **6% del presupuesto de un
+frame a 60 Hz**. El cuello de botella ya no es dibujar, es el tamano del pool.
+
+Un aviso para no leer mal la tabla: `sim` **no es comparable entre las dos
+filas**. Se mide por frame, no por tick, y con el render viejo a 30 fps caben
+mas ticks de simulacion en cada frame que con el nuevo a 144. Para el coste de
+simulacion aislado estan los benchmarks de criterion, que no dependen de los
+fps.
+
 ## Hallazgo de H2: el cuello de botella no es donde se suponia
 
 **El render cuesta 70 veces mas que la simulacion.** A 20 000 balas, mover y
@@ -101,6 +133,7 @@ Consecuencias directas, y por esto se mide antes de tocar nada:
 |---|---|---|---|
 | 2026-08-27 | H0 | 474 KB | macroquad 0.4.16, release con LTO y `strip`. Referencia: un proyecto equivalente en Bevy ronda los 20 MB. |
 | 2026-08-27 | H2 | 492 KB | +18 KB por el sistema de balas y los emisores. |
+| 2026-08-28 | H6 | 700 KB | +9 KB sobre H5. El pipeline propio y los shaders son texto y codigo, no dependencias. |
 | 2026-08-27 | H4 | 674 KB | +3 KB. El parry, el graze y el super son logica, no dependencias. |
 | 2026-08-27 | H3 | 671 KB | +179 KB: el interprete de patrones y, sobre todo, serde y el parser de RON. Es el precio de que los jefes se disenen en un fichero en vez de en codigo, y a este tamano sale a cuenta. |
 
@@ -115,9 +148,9 @@ Consecuencias directas, y por esto se mide antes de tocar nada:
 - [ ] Opciones en runtime: cap de fps, vsync, densidad de particulas, bloom
 
 **Throughput** — reordenado segun lo medido en H2
-- [ ] **Render instanciado, un solo draw call** *(H6)* — es el unico que
-      importa ahora: se lleva el 98,5% del coste
-- [ ] Culling fuera de pantalla antes de subir el buffer de instancias
+- [x] **Render instanciado, un solo draw call** *(H6)* — hecho: 37x mas rapido
+      a 32.000 balas, y el render deja de ser el cuello de botella
+- [x] Culling fuera de pantalla antes de subir el buffer de instancias
 - [ ] Arrays densos (`swap_remove`) en vez de free-list con huecos
 - [ ] ~~Grid uniforme espacial~~ — **descartado por ahora**: medido en 24,6 µs
       a 20k balas, no hay nada que ganar

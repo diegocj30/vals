@@ -76,7 +76,12 @@ cargo run -p vals-core --example replay_tool -- record-golden
 ```bash
 cargo bench -p vals-core --bench sim                                  # simulacion aislada
 cargo run -p vals-app --release -- --bench-scene 20000 --frames 400   # frame completo
+cargo run -p vals-app --release -- --bench-scene 20000 --frames 400 --legacy-render
 ```
+
+El ultimo usa el render anterior a H6 (primitivas de macroquad, dos circulos
+por bala) en vez del instanciado. Se conserva para que la comparacion de
+`docs/PERF.md` se pueda repetir: **a 32.000 balas van 30 fps contra 144**.
 
 El segundo imprime el resumen y sale solo. Los resultados van a
 [`docs/PERF.md`](docs/PERF.md), que es el historico contra el que se comparan

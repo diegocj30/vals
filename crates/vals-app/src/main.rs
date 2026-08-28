@@ -6,13 +6,15 @@
 use macroquad::prelude::*;
 use vals_core::bench::Stress;
 use vals_core::replay::Replay;
-use vals_core::{DT, InputFrame, Recorder, World};
+use vals_core::{DT, InputFrame, MAX_BULLETS, Recorder, World};
 
+mod bullet_renderer;
 mod draw;
 mod hot;
 mod replay_io;
 mod stats;
 
+use bullet_renderer::BulletRenderer;
 use hot::HotReload;
 use stats::FrameStats;
 
@@ -47,6 +49,19 @@ fn window_conf() -> Conf {
         high_dpi: true,
         ..Default::default()
     }
+}
+
+/// Si se usa el render instanciado o el viejo de macroquad.
+///
+/// El viejo se conserva a proposito tras `--legacy-render`: es lo que hace que
+/// la comparacion de `docs/PERF.md` se pueda repetir dentro de un ano en vez de
+/// ser una cifra que hay que creerse.
+fn legacy_render() -> bool {
+    std::env::args().any(|a| a == "--legacy-render")
+}
+
+fn nuevo_renderer() -> Option<BulletRenderer> {
+    (!legacy_render()).then(|| BulletRenderer::new(MAX_BULLETS))
 }
 
 /// En que modo arranca la app.
@@ -105,6 +120,7 @@ async fn run_game() {
     let mut hot = HotReload::new();
     let mut frames: u32 = 0;
     let mut aviso: Option<(String, bool, u32)> = None;
+    let mut bullets_gpu = nuevo_renderer();
 
     loop {
         frames += 1;
@@ -158,7 +174,7 @@ async fn run_game() {
         // --- Render ---
         let t1 = get_time();
         let layout = draw::Layout::compute();
-        draw::frame(&world, alpha, &layout);
+        draw::frame(&world, alpha, &layout, bullets_gpu.as_mut());
         if show_debug {
             draw::debug_overlay(&world, &stats, steps);
             draw::recording_badge(recorder.ticks());
@@ -217,6 +233,7 @@ async fn run_replay(path: String) {
     let mut cursor = 0usize;
     let mut siguiente_huella = 0usize;
     let mut divergencia: Option<u64> = None;
+    let mut bullets_gpu = nuevo_renderer();
 
     loop {
         let frame_dt = get_frame_time().min(MAX_FRAME_DT);
@@ -263,7 +280,7 @@ async fn run_replay(path: String) {
 
         let t1 = get_time();
         let layout = draw::Layout::compute();
-        draw::frame(&world, alpha, &layout);
+        draw::frame(&world, alpha, &layout, bullets_gpu.as_mut());
         draw::debug_overlay(&world, &stats, steps);
         draw::replay_badge(cursor, replay.inputs.len(), divergencia);
         stats.push_render((get_time() - t1) as f32);
@@ -281,6 +298,7 @@ async fn run_bench(target: usize, limite: Option<u32>) {
     let mut stats = FrameStats::new();
     let mut accumulator = 0.0f32;
     let mut frames: u32 = 0;
+    let mut bullets_gpu = nuevo_renderer();
     // Frames que no se cuentan: los primeros siempre incluyen la compilacion
     // de shaders y el llenado inicial del pool, y falsearian el p99.
     let calentamiento = 60;
@@ -306,15 +324,37 @@ async fn run_bench(target: usize, limite: Option<u32>) {
         let t1 = get_time();
         let layout = draw::Layout::compute();
         clear_background(BLACK);
-        draw::draw_bullets(&stress.bullets, &layout);
-        draw::bench_overlay(&stats, &stress.bullets, stress.target(), steps);
+        match bullets_gpu.as_mut() {
+            Some(r) => r.draw(
+                &stress.bullets,
+                &layout,
+                draw::pulse(frames as f32),
+                draw::bullet_style,
+            ),
+            None => draw::draw_bullets(&stress.bullets, &layout),
+        }
+        draw::bench_overlay(
+            &stats,
+            &stress.bullets,
+            stress.target(),
+            steps,
+            bullets_gpu.as_ref(),
+        );
         stats.push_render((get_time() - t1) as f32);
 
         frames += 1;
         if let Some(limite) = limite
             && frames >= limite + calentamiento
         {
-            println!("balas={} objetivo={target}", stress.live_count());
+            println!(
+                "balas={} objetivo={target} render={}",
+                stress.live_count(),
+                if legacy_render() {
+                    "macroquad"
+                } else {
+                    "instanciado"
+                }
+            );
             println!(
                 "p50={:.3}ms p99={:.3}ms sim={:.3}ms draw={:.3}ms fps={:.1}",
                 stats.p50_ms(),
