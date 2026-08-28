@@ -30,7 +30,7 @@ pub use input::InputFrame;
 pub use player::Player;
 pub use replay::{Recorder, Replay};
 pub use rng::Pcg32;
-pub use world::World;
+pub use world::{Mode, World};
 
 /// Frecuencia de la simulacion. El render va desacoplado e interpola.
 pub const TICK_HZ: u32 = 60;

@@ -7,6 +7,9 @@ Los patrones de balas de este genero son coreografia: de ahi el nombre.
 Tres jefes —El Vals, El Espejo y La Coda—, tres vidas, y un parry que te empuja
 a meterte donde estan las balas en vez de huir de todas.
 
+Dos modos: **volar** por la arena, como el danmaku clasico, o **plataformas**
+con gravedad y salto, mas cerca de Cuphead.
+
 ## Estructura
 
 | Crate | Que hace |
@@ -30,7 +33,7 @@ Controles:
 
 | Tecla | |
 |---|---|
-| Flechas / WASD | mover |
+| Flechas / WASD | mover (en plataformas, arriba salta) |
 | `Z` | disparar |
 | `X` | dash con i-frames |
 | `C` | **parry**: neutraliza las balas rosas que tengas cerca y llena el medidor |
@@ -39,8 +42,11 @@ Controles:
 | `M` | silenciar |
 | `F1` / `R` | overlay de debug / reiniciar |
 
-Rozar balas sin que te den tambien llena el medidor, poco a poco. La idea es
-que acercarse compense.
+Parriar las balas **rosas** llena la barra `SUPER`; cuando esta llena, `ESPACIO`
+limpia la pantalla y hace mucho dano. Rozar balas sin que te den tambien la
+llena, poco a poco. La idea es que acercarse compense.
+
+Al perder se reintenta **ese** jefe, no la carrera entera.
 
 No hay ni un asset en el repositorio: los graficos los dibuja un shader a partir
 de la distancia al centro, y los sonidos los sintetiza un par de osciladores al

@@ -16,10 +16,13 @@
 
 use crate::boss::DEFAULT_BOSS_RONS;
 use crate::hash::Fnv1a;
-use crate::{InputFrame, World};
+use crate::{InputFrame, Mode, World};
 
 /// Cabecera del formato. El ultimo digito es la version.
-const MAGIC: &[u8; 8] = b"VALSRPL1";
+/// Cabecera del formato. El ultimo digito es la version; subio a 2 al anadir
+/// el modo de juego, porque un replay de plataformas no se puede reproducir
+/// como si fuera de vuelo.
+const MAGIC: &[u8; 8] = b"VALSRPL2";
 
 /// Cada cuantos ticks se guarda una huella de estado.
 ///
@@ -47,6 +50,9 @@ pub struct Replay {
     /// cambiado el jefe, no el motor.
     pub pattern_hash: u64,
     pub checkpoint_every: u32,
+    /// Volando o pisando el suelo. Sin esto, un replay de plataformas se
+    /// reproduciria con las reglas del otro modo y divergeria en el tick uno.
+    pub mode: Mode,
     pub inputs: Vec<InputFrame>,
     pub checkpoints: Vec<Checkpoint>,
 }
@@ -85,6 +91,7 @@ impl Replay {
         out.extend_from_slice(&self.seed.to_le_bytes());
         out.extend_from_slice(&self.pattern_hash.to_le_bytes());
         out.extend_from_slice(&self.checkpoint_every.to_le_bytes());
+        out.push(self.mode.as_u8());
         out.extend_from_slice(&(self.inputs.len() as u32).to_le_bytes());
         for i in &self.inputs {
             out.extend_from_slice(&i.bits().to_le_bytes());
@@ -106,6 +113,7 @@ impl Replay {
         let seed = c.u64()?;
         let pattern_hash = c.u64()?;
         let checkpoint_every = c.u32()?;
+        let mode = Mode::from_u8(c.u8()?);
 
         let n_inputs = c.u32()? as usize;
         // Se comprueba que los bytes existan antes de reservar: sin esto, un
@@ -131,6 +139,7 @@ impl Replay {
             seed,
             pattern_hash,
             checkpoint_every: checkpoint_every.max(1),
+            mode,
             inputs,
             checkpoints,
         })
@@ -149,7 +158,7 @@ impl Replay {
             return Err(VerifyError::NoCheckpoints);
         }
 
-        let mut world = World::new(self.seed);
+        let mut world = World::with_mode(self.seed, self.mode);
         let mut siguiente = 0usize;
 
         for input in self.inputs.iter().copied() {
@@ -246,16 +255,22 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    pub fn new(seed: u64) -> Self {
-        Self::with_interval(seed, DEFAULT_CHECKPOINT_EVERY)
+    pub fn new(seed: u64, mode: Mode) -> Self {
+        Self::with_interval(seed, mode, DEFAULT_CHECKPOINT_EVERY)
     }
 
-    pub fn with_interval(seed: u64, checkpoint_every: u32) -> Self {
+    /// Graba lo que haga falta para reproducir este mundo.
+    pub fn for_world(world: &World) -> Self {
+        Self::new(world.seed(), world.mode)
+    }
+
+    pub fn with_interval(seed: u64, mode: Mode, checkpoint_every: u32) -> Self {
         Self {
             replay: Replay {
                 seed,
                 pattern_hash: default_pattern_hash(),
                 checkpoint_every: checkpoint_every.max(1),
+                mode,
                 inputs: Vec::new(),
                 checkpoints: Vec::new(),
             },
@@ -297,9 +312,14 @@ impl Recorder {
 /// Graba una partida a partir de una lista de inputs, sin jugarla.
 ///
 /// La usan los tests y el generador del replay dorado.
-pub fn record_scripted(seed: u64, inputs: &[InputFrame], checkpoint_every: u32) -> Replay {
-    let mut world = World::new(seed);
-    let mut rec = Recorder::with_interval(seed, checkpoint_every);
+pub fn record_scripted(
+    seed: u64,
+    mode: Mode,
+    inputs: &[InputFrame],
+    checkpoint_every: u32,
+) -> Replay {
+    let mut world = World::with_mode(seed, mode);
+    let mut rec = Recorder::with_interval(seed, mode, checkpoint_every);
     for input in inputs.iter().copied() {
         world.step(input);
         rec.record(input, &world);
@@ -366,6 +386,7 @@ pub fn golden_inputs(ticks: usize) -> Vec<InputFrame> {
 pub fn record_golden() -> Replay {
     record_scripted(
         GOLDEN_SEED,
+        Mode::Flight,
         &golden_inputs(GOLDEN_TICKS),
         DEFAULT_CHECKPOINT_EVERY,
     )
@@ -396,6 +417,10 @@ impl<'a> Cursor<'a> {
         Ok(s)
     }
 
+    fn u8(&mut self) -> Result<u8, ReplayError> {
+        Ok(self.take(1)?[0])
+    }
+
     fn u16(&mut self) -> Result<u16, ReplayError> {
         Ok(u16::from_le_bytes(self.take(2)?.try_into().unwrap()))
     }
@@ -423,7 +448,7 @@ mod tests {
     }
 
     fn replay_de_prueba(ticks: usize) -> Replay {
-        record_scripted(0x5641_4C53, &inputs_de_prueba(11, ticks), 30)
+        record_scripted(0x5641_4C53, Mode::Flight, &inputs_de_prueba(11, ticks), 30)
     }
 
     #[test]
@@ -443,6 +468,7 @@ mod tests {
         assert_eq!(vuelta.seed, r.seed);
         assert_eq!(vuelta.pattern_hash, r.pattern_hash);
         assert_eq!(vuelta.checkpoint_every, r.checkpoint_every);
+        assert_eq!(vuelta.mode, r.mode);
         assert_eq!(vuelta.inputs.len(), r.inputs.len());
         assert_eq!(vuelta.checkpoints, r.checkpoints);
         vuelta.verify().expect("y verificar igual");
@@ -516,6 +542,7 @@ mod tests {
         bytes.extend_from_slice(&0u64.to_le_bytes()); // seed
         bytes.extend_from_slice(&0u64.to_le_bytes()); // pattern_hash
         bytes.extend_from_slice(&60u32.to_le_bytes()); // checkpoint_every
+        bytes.push(0); // modo
         bytes.extend_from_slice(&u32::MAX.to_le_bytes()); // n_inputs
         assert_eq!(Replay::from_bytes(&bytes), Err(ReplayError::Truncated));
     }
@@ -523,8 +550,8 @@ mod tests {
     #[test]
     fn dos_grabaciones_de_los_mismos_inputs_son_identicas() {
         let inputs = inputs_de_prueba(3, 400);
-        let a = record_scripted(7, &inputs, 60).to_bytes();
-        let b = record_scripted(7, &inputs, 60).to_bytes();
+        let a = record_scripted(7, Mode::Flight, &inputs, 60).to_bytes();
+        let b = record_scripted(7, Mode::Flight, &inputs, 60).to_bytes();
         assert_eq!(a, b, "el formato tambien tiene que ser determinista");
     }
 
@@ -549,6 +576,30 @@ mod tests {
                  replay_tool -- record-golden"
             ),
         }
+    }
+
+    #[test]
+    fn un_replay_de_plataformas_se_reproduce_como_tal() {
+        let inputs = inputs_de_prueba(5, 300);
+        let r = record_scripted(3, Mode::Platform, &inputs, 30);
+        assert_eq!(r.mode, Mode::Platform);
+        r.verify().expect("deberia verificar en su propio modo");
+
+        // Y el formato conserva el modo al ir y volver.
+        let vuelta = Replay::from_bytes(&r.to_bytes()).unwrap();
+        assert_eq!(vuelta.mode, Mode::Platform);
+        vuelta.verify().expect("y tras pasar por bytes tambien");
+    }
+
+    #[test]
+    fn los_dos_modos_no_producen_la_misma_partida() {
+        let inputs = inputs_de_prueba(9, 200);
+        let vuelo = record_scripted(4, Mode::Flight, &inputs, 30);
+        let plataformas = record_scripted(4, Mode::Platform, &inputs, 30);
+        assert_ne!(
+            vuelo.checkpoints, plataformas.checkpoints,
+            "con gravedad la partida tiene que ser otra"
+        );
     }
 
     #[test]
@@ -601,7 +652,7 @@ mod tests {
     #[test]
     fn el_recorder_lleva_la_cuenta() {
         let mut world = World::new(1);
-        let mut rec = Recorder::new(1);
+        let mut rec = Recorder::new(1, Mode::Flight);
         assert!(rec.is_empty());
         for _ in 0..90 {
             world.step(InputFrame::NONE);

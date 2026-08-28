@@ -6,7 +6,7 @@
 use macroquad::prelude::*;
 use vals_core::bench::Stress;
 use vals_core::replay::{GOLDEN_REPLAY, Replay};
-use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Recorder, World};
+use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
 
 mod audio;
 mod bullet_renderer;
@@ -66,8 +66,11 @@ fn nuevo_renderer() -> Option<BulletRenderer> {
     (!legacy_render()).then(|| BulletRenderer::new(MAX_BULLETS))
 }
 
-/// En que modo arranca la app.
-enum Mode {
+/// Como arranca la app desde la linea de comandos.
+///
+/// Se llama `Arranque` y no `Mode` para no chocar con `vals_core::Mode`, que es
+/// el modo de juego (vuelo o plataformas) y es el concepto de dominio.
+enum Arranque {
     Game,
     /// Escena de stress. `frames` mide y sale, para que las cifras de PERF.md
     /// salgan de un comando repetible.
@@ -79,7 +82,7 @@ enum Mode {
     Replay(String),
 }
 
-fn parse_mode() -> Mode {
+fn parse_mode() -> Arranque {
     let args: Vec<String> = std::env::args().collect();
     let valor = |flag: &str| -> Option<&String> {
         let i = args.iter().position(|a| a == flag)?;
@@ -87,10 +90,10 @@ fn parse_mode() -> Mode {
     };
 
     if let Some(p) = valor("--replay") {
-        return Mode::Replay(p.clone());
+        return Arranque::Replay(p.clone());
     }
     if let Some(i) = args.iter().position(|a| a == "--bench-scene") {
-        return Mode::Bench {
+        return Arranque::Bench {
             target: args
                 .get(i + 1)
                 .and_then(|s| s.parse().ok())
@@ -98,15 +101,15 @@ fn parse_mode() -> Mode {
             frames: valor("--frames").and_then(|s| s.parse().ok()),
         };
     }
-    Mode::Game
+    Arranque::Game
 }
 
 #[macroquad::main(window_conf)]
 async fn main() {
     match parse_mode() {
-        Mode::Game => run_game().await,
-        Mode::Bench { target, frames } => run_bench(target, frames).await,
-        Mode::Replay(path) => run_replay(path).await,
+        Arranque::Game => run_game().await,
+        Arranque::Bench { target, frames } => run_bench(target, frames).await,
+        Arranque::Replay(path) => run_replay(path).await,
     }
 }
 
@@ -150,7 +153,7 @@ async fn run_game() {
     // Se graba siempre. Cuesta dos bytes por tick, asi que no hay ningun motivo
     // para pedirlo: cuando pasa algo digno de guardar, ya es tarde para
     // haberle dado a grabar.
-    let mut recorder = Recorder::new(SEED);
+    let mut recorder = Recorder::for_world(&world);
     let mut stats = FrameStats::new();
     let mut accumulator = 0.0f32;
     let mut show_debug = true;
@@ -170,7 +173,7 @@ async fn run_game() {
         {
             world.reload_bosses(defs);
             // El replay en curso ya no reproduce nada: el jefe ha cambiado.
-            recorder = Recorder::new(SEED);
+            recorder = Recorder::for_world(&world);
         }
 
         let frame_dt = get_frame_time().min(MAX_FRAME_DT);
@@ -180,8 +183,14 @@ async fn run_game() {
             show_debug = !show_debug;
         }
         if is_key_pressed(KeyCode::R) && !en_menu {
-            world = World::new(SEED);
-            recorder = Recorder::new(SEED);
+            // Tras perder se reintenta **este** jefe con las vidas llenas; en
+            // cualquier otro momento, partida nueva desde el principio.
+            if world.defeat {
+                world.retry_current_boss();
+            } else {
+                world = World::with_mode(SEED, world.mode);
+            }
+            recorder = Recorder::for_world(&world);
             accumulator = 0.0;
             intentos += 1;
         }
@@ -191,13 +200,22 @@ async fn run_game() {
         if is_key_pressed(KeyCode::M) {
             audio.muted = !audio.muted;
         }
-        if is_key_pressed(KeyCode::Z) && en_menu {
-            audio.play(Sfx::Empezar, 1.0);
-            en_menu = false;
-            world = World::new(SEED);
-            recorder = Recorder::new(SEED);
-            accumulator = 0.0;
-            intentos += 1;
+        if en_menu {
+            let modo = if is_key_pressed(KeyCode::Z) {
+                Some(Mode::Flight)
+            } else if is_key_pressed(KeyCode::X) {
+                Some(Mode::Platform)
+            } else {
+                None
+            };
+            if let Some(modo) = modo {
+                audio.play(Sfx::Empezar, 1.0);
+                en_menu = false;
+                world = World::with_mode(SEED, modo);
+                recorder = Recorder::for_world(&world);
+                accumulator = 0.0;
+                intentos += 1;
+            }
         }
         if is_key_pressed(KeyCode::F2) {
             aviso = Some(match guardar_replay(&recorder) {
@@ -483,6 +501,12 @@ fn read_input() -> InputFrame {
     f.set(
         InputFrame::FOCUS,
         is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift),
+    );
+    // El salto reutiliza arriba: en el modo con gravedad el eje vertical no
+    // mueve, asi que la tecla queda libre para lo que toca en un plataformas.
+    f.set(
+        InputFrame::JUMP,
+        is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) || is_key_down(KeyCode::K),
     );
     f.set(InputFrame::SHOOT, is_key_down(KeyCode::Z));
     f.set(InputFrame::DASH, is_key_down(KeyCode::X));

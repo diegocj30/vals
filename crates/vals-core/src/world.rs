@@ -12,6 +12,44 @@ use crate::player::{
 };
 use crate::{ARENA_H, ARENA_W, DT, InputFrame, Pcg32, Player};
 
+/// Como se juega: volando por la arena o pisando el suelo.
+///
+/// El modo vuelo es el danmaku clasico. El modo plataformas anade gravedad y
+/// salto, y es el que se parece a Cuphead.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Mode {
+    #[default]
+    Flight,
+    Platform,
+}
+
+impl Mode {
+    pub fn gravity(self) -> bool {
+        self == Mode::Platform
+    }
+
+    pub fn nombre(self) -> &'static str {
+        match self {
+            Mode::Flight => "vuelo",
+            Mode::Platform => "plataformas",
+        }
+    }
+
+    pub(crate) fn as_u8(self) -> u8 {
+        match self {
+            Mode::Flight => 0,
+            Mode::Platform => 1,
+        }
+    }
+
+    pub fn from_u8(v: u8) -> Self {
+        match v {
+            1 => Mode::Platform,
+            _ => Mode::Flight,
+        }
+    }
+}
+
 /// Vidas con las que empieza una partida.
 ///
 /// Tres. Es lo que convierte el boss-rush en una carrera con tension: sin un
@@ -46,6 +84,8 @@ pub struct World {
     pub victory: bool,
     /// Se pone a `true` al quedarse sin vidas.
     pub defeat: bool,
+    /// Volando o pisando el suelo.
+    pub mode: Mode,
     /// Lo que ha pasado en el ultimo tick. Lo lee la capa de presentacion para
     /// saber que sonido tocar. No entra en el hash: es informacion derivada.
     pub events: Events,
@@ -67,7 +107,7 @@ impl World {
         Self {
             tick: 0,
             rng: Pcg32::new(seed),
-            player: Player::new(Self::spawn_pos()),
+            player: Player::new(Self::spawn_pos_for(Mode::Flight)),
             bullets: Bullets::default(),
             player_shots: Bullets::with_capacity(PLAYER_SHOT_CAPACITY),
             boss: Boss::from_def(&defs[0]),
@@ -75,6 +115,7 @@ impl World {
             lives: STARTING_LIVES,
             victory: false,
             defeat: false,
+            mode: Mode::Flight,
             events: Events::default(),
             boss_defs: defs,
             prev_input: InputFrame::NONE,
@@ -83,7 +124,40 @@ impl World {
         }
     }
 
-    /// Mundo sin nada disparando.
+    /// Partida en modo plataformas: con gravedad y salto.
+    pub fn platformer(seed: u64) -> Self {
+        Self {
+            mode: Mode::Platform,
+            ..Self::new(seed)
+        }
+    }
+
+    /// Partida en el modo indicado.
+    pub fn with_mode(seed: u64, mode: Mode) -> Self {
+        Self {
+            mode,
+            ..Self::new(seed)
+        }
+    }
+
+    /// Vuelve a empezar **el jefe actual**, con las vidas llenas.
+    ///
+    /// Es la diferencia entre un juego que se aprende y un muro: en un
+    /// boss-rush, mandar al jugador al primer jefe cada vez que muere en el
+    /// tercero convierte practicar en un peaje. Cuphead te deja reintentar el
+    /// jefe, no la carrera entera.
+    pub fn retry_current_boss(&mut self) {
+        self.boss = Boss::from_def(&self.boss_defs[self.boss_index]);
+        self.player = Player::new(Self::spawn_pos_for(self.mode));
+        self.bullets.clear();
+        self.player_shots.clear();
+        self.lives = STARTING_LIVES;
+        self.defeat = false;
+        self.victory = false;
+        self.events = Events::default();
+    }
+
+    /// Mundo con el jefe quieto.
     ///
     /// Sirve para los tests de movimiento —que si no acabarian peleandose con
     /// el jefe en vez de probando lo suyo— y es la base del modo entrenamiento
@@ -143,7 +217,15 @@ impl World {
 
     /// Donde aparece y reaparece el jugador.
     pub fn spawn_pos() -> Vec2 {
-        Vec2::new(ARENA_W * 0.5, ARENA_H * 0.78)
+        Self::spawn_pos_for(Mode::Flight)
+    }
+
+    /// Punto de aparicion segun el modo: en plataformas, sobre el suelo.
+    pub fn spawn_pos_for(mode: Mode) -> Vec2 {
+        match mode {
+            Mode::Flight => Vec2::new(ARENA_W * 0.5, ARENA_H * 0.78),
+            Mode::Platform => Vec2::new(ARENA_W * 0.5, crate::player::GROUND_Y),
+        }
     }
 
     /// Avanza la simulacion exactamente un tick.
@@ -152,7 +234,8 @@ impl World {
     /// nada del entorno: mismo estado + mismo input = mismo resultado, siempre.
     pub fn step(&mut self, input: InputFrame) {
         self.events = Events::default();
-        self.player.update(input, self.prev_input);
+        self.player
+            .update(input, self.prev_input, self.mode.gravity());
         self.player_shoot(input);
 
         if self.boss_enabled && !self.is_over() {
@@ -272,7 +355,7 @@ impl World {
                 self.defeat = true;
                 self.events.defeat = true;
             }
-            self.player.die(Self::spawn_pos());
+            self.player.die(Self::spawn_pos_for(self.mode));
             // Limpiar la pantalla al morir es lo canonico del genero: sin esto
             // reaparecerias dentro de la misma pared de balas que acaba de
             // matarte.
@@ -321,6 +404,7 @@ impl World {
         h.write_u64(u64::from(self.boss_enabled));
         h.write_u64(u64::from(self.victory));
         h.write_u64(u64::from(self.defeat));
+        h.write_u64(u64::from(self.mode.as_u8()));
         h.write_u64(self.boss_index as u64);
         h.write_u64(u64::from(self.lives));
         self.boss.hash_into(&mut h);
@@ -1213,5 +1297,171 @@ mod tests {
             .filter(|b| b.flags & crate::bullets::FLAG_PARRYABLE != 0)
             .count();
         assert!(rosas > 0, "sin balas rosas el parry no tendria a que jugar");
+    }
+    // --- Modo plataformas ---
+
+    const SALTO: InputFrame = InputFrame::from_bits(InputFrame::JUMP);
+
+    fn plataformas() -> World {
+        let mut w = World::platformer(0);
+        w.boss_enabled = false; // aqui se prueba la fisica, no al jefe
+        w
+    }
+
+    #[test]
+    fn con_gravedad_el_jugador_cae_hasta_el_suelo() {
+        let mut w = plataformas();
+        w.player.pos.y = 200.0;
+        correr(&mut w, NADA, 120);
+        assert!(
+            (w.player.pos.y - GROUND_Y).abs() < 0.001,
+            "{}",
+            w.player.pos.y
+        );
+        assert!(w.player.on_ground);
+        assert_eq!(w.player.vel.y, 0.0);
+    }
+
+    #[test]
+    fn saltar_sube_y_vuelve_al_suelo() {
+        let mut w = plataformas();
+        correr(&mut w, NADA, 30); // aterrizar
+        let suelo = w.player.pos.y;
+
+        w.step(SALTO);
+        correr(&mut w, SALTO, 12);
+        assert!(w.player.pos.y < suelo - 80.0, "deberia haber subido");
+        assert!(!w.player.on_ground);
+
+        correr(&mut w, NADA, 120);
+        assert!(w.player.on_ground, "y volver al suelo");
+    }
+
+    #[test]
+    fn soltar_el_boton_corta_el_salto() {
+        // Altura variable: un toque salta menos que mantener pulsado.
+        let mut corto = plataformas();
+        let mut largo = plataformas();
+        correr(&mut corto, NADA, 30);
+        correr(&mut largo, NADA, 30);
+
+        corto.step(SALTO);
+        correr(&mut corto, NADA, 24);
+        largo.step(SALTO);
+        correr(&mut largo, SALTO, 24);
+
+        assert!(
+            largo.player.pos.y < corto.player.pos.y - 20.0,
+            "mantener deberia saltar bastante mas alto: {} vs {}",
+            largo.player.pos.y,
+            corto.player.pos.y
+        );
+    }
+
+    #[test]
+    fn el_salto_se_recuerda_si_se_pulsa_un_poco_antes_de_aterrizar() {
+        let mut w = plataformas();
+        correr(&mut w, NADA, 30);
+        w.step(SALTO);
+        correr(&mut w, SALTO, 10);
+        assert!(!w.player.on_ground);
+
+        // Pulsar en el aire, cayendo, y soltar: al tocar suelo deberia saltar.
+        let mut pulsado = false;
+        for _ in 0..90 {
+            let cerca = w.player.pos.y > GROUND_Y - 60.0 && w.player.vel.y > 0.0;
+            if cerca && !pulsado {
+                w.step(SALTO);
+                pulsado = true;
+            } else {
+                w.step(NADA);
+            }
+            if pulsado && w.player.vel.y < -100.0 {
+                return; // ha vuelto a saltar: el buffer funciono
+            }
+        }
+        panic!("el salto pulsado antes de aterrizar se perdio");
+    }
+
+    #[test]
+    fn pisar_el_suelo_recarga_el_coyote() {
+        let mut w = plataformas();
+        correr(&mut w, NADA, 30);
+        assert!(w.player.on_ground);
+        assert_eq!(w.player.coyote, COYOTE_TICKS);
+
+        w.step(SALTO);
+        correr(&mut w, SALTO, 10);
+        assert_eq!(w.player.coyote, 0, "en el aire se agota");
+    }
+
+    #[test]
+    fn con_gravedad_no_se_sale_de_la_arena() {
+        let mut w = plataformas();
+        correr(&mut w, pulsar(InputFrame::LEFT), 300);
+        assert!(w.player.pos.x >= PLAYER_SPRITE_RADIUS - 0.001);
+        correr(&mut w, pulsar(InputFrame::RIGHT), 300);
+        assert!(w.player.pos.x <= ARENA_W - PLAYER_SPRITE_RADIUS + 0.001);
+        assert!(w.player.pos.y <= GROUND_Y + 0.001);
+    }
+
+    #[test]
+    fn el_dash_con_gravedad_es_horizontal() {
+        let mut w = plataformas();
+        correr(&mut w, NADA, 30);
+        let y = w.player.pos.y;
+        w.step(pulsar(InputFrame::RIGHT | InputFrame::DASH));
+        correr(&mut w, pulsar(InputFrame::RIGHT), 5);
+        assert!(
+            w.player.pos.x > ARENA_W * 0.5 + 40.0,
+            "deberia haber avanzado"
+        );
+        assert!(
+            (w.player.pos.y - y).abs() < 1.0,
+            "y no despegarse del suelo"
+        );
+    }
+
+    #[test]
+    fn el_modo_vuelo_no_tiene_gravedad() {
+        let mut w = mundo(0);
+        let y = w.player.pos.y;
+        correr(&mut w, NADA, 120);
+        assert!((w.player.pos.y - y).abs() < 0.001, "no deberia caer");
+        assert!(!w.player.on_ground);
+    }
+
+    // --- Reintentar el jefe actual ---
+
+    #[test]
+    fn reintentar_conserva_el_jefe_y_devuelve_las_vidas() {
+        let mut w = mundo(0);
+        // Pasar al segundo jefe.
+        w.boss.phase = w.boss.phase_count() - 1;
+        w.boss.hp = 1;
+        w.player.pos = w.boss.pos + Vec2::new(0.0, 300.0);
+        for _ in 0..300 {
+            w.step(DISPARAR);
+            if w.boss_index == 1 {
+                break;
+            }
+        }
+        assert_eq!(w.boss_index, 1);
+
+        // Perder todas las vidas.
+        for _ in 0..STARTING_LIVES {
+            w.player.iframes = 0;
+            bala_encima(&mut w);
+            w.step(NADA);
+        }
+        assert!(w.defeat);
+
+        w.retry_current_boss();
+
+        assert_eq!(w.boss_index, 1, "se reintenta ESTE jefe, no la carrera");
+        assert_eq!(w.lives, STARTING_LIVES);
+        assert!(!w.defeat);
+        assert_eq!(w.boss.phase, 0, "y el jefe empieza entero");
+        assert_eq!(w.bullets.live_count(), 0);
     }
 }

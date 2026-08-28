@@ -27,6 +27,8 @@ impl InputFrame {
     pub const PARRY: u16 = 1 << 7;
     /// Descarga el medidor que llenan el parry y el graze.
     pub const SUPER: u16 = 1 << 8;
+    /// Salto. Solo hace algo en el modo con gravedad.
+    pub const JUMP: u16 = 1 << 9;
 
     /// Input vacio.
     pub const NONE: Self = Self(0);
@@ -92,7 +94,7 @@ mod tests {
     }
 
     #[test]
-    fn los_nueve_botones_son_bits_distintos() {
+    fn los_botones_son_bits_distintos() {
         let todos = [
             InputFrame::UP,
             InputFrame::DOWN,
@@ -103,12 +105,13 @@ mod tests {
             InputFrame::DASH,
             InputFrame::PARRY,
             InputFrame::SUPER,
+            InputFrame::JUMP,
         ];
         let mut vistos = 0u16;
         for b in todos {
             assert_eq!(vistos & b, 0, "bit repetido: {b:#b}");
             vistos |= b;
         }
-        assert_eq!(vistos.count_ones(), 9);
+        assert_eq!(vistos.count_ones(), 10);
     }
 }

@@ -4,7 +4,7 @@
 
 use macroquad::prelude::*;
 use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
-use vals_core::{ARENA_H, ARENA_W, World, player};
+use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bullet_renderer::BulletRenderer;
 use crate::stats::FrameStats;
@@ -51,6 +51,8 @@ const METER_BG: Color = color_u8!(24, 40, 40, 255);
 const VEIL: Color = color_u8!(6, 6, 12, 200);
 const TITLE: Color = color_u8!(200, 245, 255, 255);
 const DEFEAT: Color = color_u8!(255, 110, 150, 255);
+
+const GROUND: Color = color_u8!(80, 120, 190, 255);
 
 const TEXT: Color = color_u8!(150, 210, 235, 255);
 const TEXT_DIM: Color = color_u8!(90, 120, 145, 255);
@@ -117,6 +119,9 @@ fn fade(c: Color, a: f32) -> Color {
 pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mut BulletRenderer>) {
     clear_background(BG);
     draw_arena(layout);
+    if world.mode == Mode::Platform {
+        draw_ground(layout);
+    }
     draw_boss(world, alpha, layout);
     draw_player_shots(world, layout);
     draw_trail(world, layout);
@@ -131,6 +136,33 @@ pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mu
     draw_hp_bar(world, layout);
     draw_meter(world, layout);
     draw_hud(world, layout);
+    draw_super_flash(world, layout);
+}
+
+/// El suelo del modo plataformas.
+fn draw_ground(l: &Layout) {
+    let o = l.to_screen(0.0, player::GROUND_Y + player::PLAYER_SPRITE_RADIUS);
+    let w = l.len(ARENA_W);
+    let alto = l.to_screen(0.0, ARENA_H).y - o.y;
+    draw_rectangle(o.x, o.y, w, alto, ARENA_BG);
+    draw_line(o.x, o.y, o.x + w, o.y, 2.0, GROUND);
+}
+
+/// Fogonazo del super. Es la unica cosa que ocupa la pantalla entera, y por eso
+/// se lee como "ha pasado algo gordo" sin necesidad de explicarlo.
+fn draw_super_flash(world: &World, l: &Layout) {
+    if world.player.super_ticks == 0 {
+        return;
+    }
+    let k = world.player.super_ticks as f32 / player::SUPER_TICKS as f32;
+    let o = l.to_screen(0.0, 0.0);
+    draw_rectangle(
+        o.x,
+        o.y,
+        l.len(ARENA_W),
+        l.len(ARENA_H),
+        fade(METER, k * k * 0.5),
+    );
 }
 
 /// Nombre del jefe, cual de cuantos es, y las vidas que quedan.
@@ -184,20 +216,24 @@ fn draw_cartel(l: &Layout, titulo: &str, color: Color, lineas: &[&str]) {
 
 /// Menu. De fondo corre el replay dorado, que es el modo atractor.
 pub fn menu(l: &Layout, intentos: u32) {
-    let sub = if intentos == 0 {
-        "Z para empezar".to_owned()
+    let cola = if intentos == 0 {
+        String::new()
     } else {
-        format!("Z para volver a intentarlo   ({intentos} intentos)")
+        format!("   ({intentos} intentos)")
     };
     draw_cartel(
         l,
         "VALS",
         TITLE,
         &[
-            &sub,
+            &format!("Z   volar{cola}"),
+            "X   plataformas (con salto)",
             "",
-            "flechas mover   Z disparar   X dash",
-            "C parry   ESPACIO super   SHIFT focus",
+            "flechas mover    Z disparar    X dash",
+            "C parry    SHIFT focus    M mudo",
+            "",
+            "Parriar las balas ROSAS llena la barra SUPER.",
+            "Llena, ESPACIO limpia la pantalla y hace mucho dano.",
         ],
     );
 }
@@ -208,15 +244,27 @@ pub fn fin_de_partida(l: &Layout, world: &World) {
             l,
             "FIN DEL VALS",
             VICTORY,
-            &["los tres han caido", "", "R reiniciar   ESC al menu"],
+            &["los tres han caido", "", "R otra partida    ESC al menu"],
         );
     } else {
-        let m = format!("caiste ante {}", world.boss.name);
+        let quien = format!(
+            "caiste ante {}  ({}/{})",
+            world.boss.name,
+            world.boss_index + 1,
+            world.boss_count()
+        );
         draw_cartel(
             l,
             "SE ACABO",
             DEFEAT,
-            &[&m, "", "R reiniciar   ESC al menu"],
+            &[
+                &quien,
+                "",
+                // Volver al primer jefe cada vez convertia practicar en un
+                // peaje. Se reintenta ESTE.
+                "R reintentar este jefe",
+                "ESC al menu",
+            ],
         );
     }
 }
@@ -456,8 +504,29 @@ fn draw_meter(world: &World, l: &Layout) {
     let color = if lleno { METER_FULL } else { METER };
     draw_rectangle(o.x, y, w * world.player.meter_ratio(), alto, color);
 
+    // La barra no lleva etiqueta desde H4, y en las primeras partidas de
+    // verdad el jugador no supo nunca para que servia. Una palabra lo arregla.
+    draw_text(
+        "SUPER",
+        o.x,
+        y - 6.0,
+        16.0,
+        if lleno { METER_FULL } else { TEXT_DIM },
+    );
+
     if lleno {
         draw_rectangle_lines(o.x, y, w, alto, 2.0, METER_FULL);
+        // Latido y aviso explicito de la tecla: si no lo dice, no existe.
+        let t = (get_time() as f32 * 6.0).sin() * 0.5 + 0.5;
+        let aviso = "ESPACIO";
+        let m = measure_text(aviso, None, 20, 1.0);
+        draw_text(
+            aviso,
+            o.x + w - m.width,
+            y - 6.0,
+            20.0,
+            fade(METER_FULL, 0.55 + 0.45 * t),
+        );
     }
 }
 
@@ -554,6 +623,11 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
         &mut y,
     );
     put(&format!("vidas   {}", world.lives), TEXT_DIM, &mut y);
+    put(
+        &format!("modo    {}", world.mode.nombre()),
+        TEXT_DIM,
+        &mut y,
+    );
     put(
         &format!("balas   {}", world.bullets.live_count()),
         TEXT_DIM,

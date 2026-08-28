@@ -78,7 +78,11 @@ pub const SHOT_EVERY: u32 = 4;
 pub const SHOT_SPEED: f32 = 900.0;
 
 /// Dano por bala.
-pub const SHOT_DAMAGE: i32 = 1;
+///
+/// Subido de 1 a 2 tras las primeras partidas de verdad: el tiempo hasta
+/// tumbar a un jefe era tan largo que se moria de agotamiento antes que por un
+/// error, y el segundo y el tercer jefe no los veia nadie.
+pub const SHOT_DAMAGE: i32 = 2;
 
 /// Separacion entre los dos chorros, a cada lado del personaje.
 pub const SHOT_SPREAD: f32 = 9.0;
@@ -116,10 +120,47 @@ pub const GRAZE_METER: f32 = 0.6;
 pub const METER_MAX: f32 = 100.0;
 
 /// Dano del super.
-pub const SUPER_DAMAGE: i32 = 60;
+///
+/// Una cuarta parte larga de una fase. Tiene que **notarse**: un super que
+/// apenas mueve la barra no se siente como la recompensa de haberte metido
+/// entre las balas a parriar.
+pub const SUPER_DAMAGE: i32 = 120;
 
 /// Ticks de fogonazo e invulnerabilidad del super.
 pub const SUPER_TICKS: u32 = 20;
+
+// --- Modo con gravedad (plataformas) ---
+
+/// Aceleracion de caida, en unidades por segundo al cuadrado.
+///
+/// Altisima comparada con la gravedad real. Es lo normal en plataformas: una
+/// gravedad "realista" se siente flotante y lenta, y aqui hace falta poder
+/// reaccionar a una bala en el aire.
+pub const GRAVITY: f32 = 2600.0;
+
+/// Impulso inicial del salto.
+pub const JUMP_SPEED: f32 = 900.0;
+
+/// Multiplicador de gravedad al soltar el boton de salto.
+///
+/// Es el truco que da **altura de salto variable**: un toque salta poco, mantener
+/// salta alto. Sin esto el salto se siente de una pieza y no se puede afinar.
+pub const JUMP_CUT: f32 = 2.6;
+
+/// Ticks de gracia para saltar despues de haberse ido del borde.
+///
+/// El "coyote time" de toda la vida. El jugador cree que aun estaba en el suelo,
+/// y tiene razon: lo estaba hace tres frames.
+pub const COYOTE_TICKS: u32 = 6;
+
+/// Ventana para recordar un salto pulsado un poco antes de tocar el suelo.
+pub const JUMP_BUFFER_TICKS: u32 = 7;
+
+/// Cuanto control se conserva en el aire, sobre el del suelo.
+pub const AIR_CONTROL: f32 = 0.65;
+
+/// Altura del suelo en el modo con gravedad.
+pub const GROUND_Y: f32 = ARENA_H - 70.0;
 
 /// Puntos que guarda la estela.
 pub const TRAIL_LEN: usize = 20;
@@ -232,6 +273,12 @@ pub struct Player {
     pub meter: f32,
     pub parries: u32,
     pub grazes: u32,
+    /// Solo en el modo con gravedad.
+    pub on_ground: bool,
+    /// Ticks de gracia que quedan para saltar tras dejar el suelo.
+    pub coyote: u32,
+    /// Ticks que le quedan de vida a un salto pulsado pronto.
+    pub jump_buffer: u32,
     /// Ticks hasta el siguiente disparo.
     pub shot_cooldown: u32,
     pub dash: Dash,
@@ -255,6 +302,9 @@ impl Player {
             meter: 0.0,
             parries: 0,
             grazes: 0,
+            on_ground: false,
+            coyote: 0,
+            jump_buffer: 0,
             shot_cooldown: 0,
             dash: Dash::default(),
             trail: Trail::new(pos),
@@ -329,6 +379,9 @@ impl Player {
         self.prev_pos = respawn;
         self.vel = Vec2::ZERO;
         self.dash = Dash::default();
+        self.on_ground = false;
+        self.coyote = 0;
+        self.jump_buffer = 0;
         self.shot_cooldown = 0;
         self.parry_window = 0;
         self.parry_cooldown = 0;
@@ -344,7 +397,9 @@ impl Player {
     ///
     /// `prev` es el input del tick anterior, y hace falta para detectar
     /// flancos: el dash reacciona a la pulsacion, no a mantener la tecla.
-    pub(crate) fn update(&mut self, input: InputFrame, prev: InputFrame) {
+    ///
+    /// `gravity` decide si se juega volando por la arena o pisando el suelo.
+    pub(crate) fn update(&mut self, input: InputFrame, prev: InputFrame, gravity: bool) {
         self.prev_pos = self.pos;
 
         // Los contadores bajan al PRINCIPIO del tick, antes de poder arrancar
@@ -399,6 +454,12 @@ impl Player {
             self.dash.dir = if dir != Vec2::ZERO { dir } else { self.facing };
         }
 
+        if gravity {
+            self.update_gravity(input, prev, dir);
+            self.trail.push(self.pos, self.is_dashing());
+            return;
+        }
+
         let dashing = self.is_dashing();
         if dashing {
             // Durante el dash el input no manda: la direccion se fijo al
@@ -422,6 +483,86 @@ impl Player {
         self.trail.push(self.pos, dashing);
     }
 
+    /// Fisica de plataformas: gravedad, salto y suelo.
+    fn update_gravity(&mut self, input: InputFrame, prev: InputFrame, dir: Vec2) {
+        self.coyote = self.coyote.saturating_sub(1);
+        self.jump_buffer = self.jump_buffer.saturating_sub(1);
+
+        // El salto se recuerda aunque se pulse un poco antes de aterrizar. Sin
+        // esto, saltar justo al caer "no responde" y la culpa parece del
+        // jugador.
+        if input.is_down(InputFrame::JUMP) && !prev.is_down(InputFrame::JUMP) {
+            self.jump_buffer = JUMP_BUFFER_TICKS;
+        }
+
+        if self.is_dashing() {
+            // El dash ignora la gravedad y va en horizontal: es un
+            // desplazamiento, no un vuelo.
+            let d = if self.dash.dir.x.abs() < 0.01 {
+                Vec2::new(self.facing.x.signum(), 0.0)
+            } else {
+                Vec2::new(self.dash.dir.x.signum(), 0.0)
+            };
+            self.vel = d * DASH_SPEED;
+        } else {
+            // Horizontal: menos control en el aire, que es lo que hace que
+            // comprometerse con un salto tenga peso.
+            let speed = if self.focused {
+                PLAYER_FOCUS_SPEED
+            } else {
+                PLAYER_SPEED
+            };
+            let rate = if self.on_ground {
+                ACCEL
+            } else {
+                ACCEL * AIR_CONTROL
+            };
+            let objetivo = dir.x.signum() * speed * dir.x.abs().min(1.0);
+            let rate = if dir.x == 0.0 { DECEL } else { rate };
+            self.vel.x = mover_hacia(self.vel.x, objetivo, rate * DT);
+
+            if self.jump_buffer > 0 && (self.on_ground || self.coyote > 0) {
+                self.vel.y = -JUMP_SPEED;
+                self.jump_buffer = 0;
+                self.coyote = 0;
+                self.on_ground = false;
+            }
+
+            // Altura de salto variable: al soltar el boton, se cae antes.
+            let subiendo_sin_pulsar = self.vel.y < 0.0 && !input.is_down(InputFrame::JUMP);
+            let g = if subiendo_sin_pulsar {
+                GRAVITY * JUMP_CUT
+            } else {
+                GRAVITY
+            };
+            self.vel.y += g * DT;
+        }
+
+        self.pos += self.vel * DT;
+
+        let m = PLAYER_SPRITE_RADIUS;
+        self.pos.x = self.pos.x.clamp(m, ARENA_W - m);
+        if self.pos.x <= m || self.pos.x >= ARENA_W - m {
+            self.vel.x = 0.0;
+        }
+
+        if self.pos.y >= GROUND_Y {
+            self.pos.y = GROUND_Y;
+            if !self.is_dashing() {
+                self.vel.y = 0.0;
+            }
+            self.on_ground = true;
+            self.coyote = COYOTE_TICKS;
+        } else {
+            self.on_ground = false;
+            // Techo: rebotar seria raro, simplemente se para.
+            if self.pos.y < m {
+                self.pos.y = m;
+                self.vel.y = 0.0;
+            }
+        }
+    }
+
     fn clamp_to_arena(&mut self) {
         let m = PLAYER_SPRITE_RADIUS;
         let clamped_x = self.pos.x.clamp(m, ARENA_W - m);
@@ -437,6 +578,16 @@ impl Player {
             self.vel.y = 0.0;
         }
         self.pos = Vec2::new(clamped_x, clamped_y);
+    }
+}
+
+/// Version escalar de `move_towards`, para el eje horizontal con gravedad.
+fn mover_hacia(current: f32, target: f32, max_delta: f32) -> f32 {
+    let d = target - current;
+    if d.abs() <= max_delta {
+        target
+    } else {
+        current + d.signum() * max_delta
     }
 }
 
