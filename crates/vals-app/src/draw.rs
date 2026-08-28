@@ -7,7 +7,7 @@ use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bullet_renderer::BulletRenderer;
-use crate::skeleton::{self, HUESOS, Pose};
+use crate::skeleton::{self, HUESOS, N_FALDA, Pose, REMATES};
 use crate::stats::FrameStats;
 
 // Paleta neon. El arte del juego es procedural: no se dibuja nada a mano.
@@ -54,6 +54,9 @@ const TITLE: Color = color_u8!(200, 245, 255, 255);
 const DEFEAT: Color = color_u8!(255, 110, 150, 255);
 
 const GROUND: Color = color_u8!(80, 120, 190, 255);
+/// La falda va mas fria que el cuerpo: separa la tela de la piel sin necesidad
+/// de dibujar ni una linea de detalle.
+const FALDA: Color = color_u8!(120, 180, 255, 255);
 
 const TEXT: Color = color_u8!(150, 210, 235, 255);
 const TEXT_DIM: Color = color_u8!(90, 120, 145, 255);
@@ -443,8 +446,15 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
     // El halo se queda: es lo que la separa del fondo cuando la pantalla se
     // llena. Lo que cambia es lo que hay dentro.
     draw_circle(s.x, s.y, sprite_r * 2.2, fade(PLAYER_GLOW, body_alpha));
-    let figura = skeleton::pose(&world.player, t, world.mode == Mode::Platform);
-    draw_figura(&figura, s, l, fade(PLAYER_BODY, body_alpha));
+    // La gracia sube con cada jefe caido: la bailarina baila mejor segun
+    // avanza. Es solo cosmetico, pero de un vistazo dice por donde vas.
+    let gracia = if world.boss_count() > 1 {
+        world.boss_index as f32 / (world.boss_count() - 1) as f32
+    } else {
+        0.0
+    };
+    let figura = skeleton::pose(&world.player, t, world.mode == Mode::Platform, gracia);
+    draw_figura(&figura, s, l, body_alpha);
 
     // Anillo de focus: se cierra sobre la hitbox conforme entras en modo lento.
     let ft = world.player.focus_t;
@@ -495,32 +505,79 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
     );
 }
 
-/// Dibuja el esqueleto: huesos como lineas con las articulaciones redondeadas,
-/// y la cabeza como un circulo.
+/// Dibuja la figura: falda, huesos con grosor variable, remates y cabeza.
 ///
-/// Se pinta dos veces, una gruesa y tenue y otra fina y viva. Es un truco
-/// barato que da el contorno de neon sin post-proceso ni una segunda pasada de
-/// render.
-fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, color: Color) {
+/// Cada trazo se pinta dos veces, una gruesa y tenue y otra fina y viva. Es un
+/// truco barato que da el contorno de neon sin post-proceso ni una segunda
+/// pasada de render.
+fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, alfa: f32) {
     let punto = |j: Vec2| centro + vec2(j.x, j.y) * l.scale();
-    let grosor_base = (l.len(1.9)).max(1.2);
 
-    for (grosor, alfa) in [(grosor_base * 2.4, 0.22), (grosor_base, 1.0)] {
-        let c = fade(color, alfa);
-        for (a, b) in HUESOS {
-            let (pa, pb) = (punto(p.joints[a]), punto(p.joints[b]));
-            draw_line(pa.x, pa.y, pb.x, pb.y, grosor, c);
-            // Redondear las uniones: sin esto los huesos se ven descosidos en
-            // los angulos cerrados.
-            draw_circle(pb.x, pb.y, grosor * 0.5, c);
+    // --- Falda ---
+    // Un abanico de triangulos desde la cadera hasta el bajo. Se dibuja antes
+    // que el cuerpo para que las piernas se vean por encima de la tela.
+    let cadera = punto(p.joints[skeleton::CADERA]);
+    for i in 0..N_FALDA - 1 {
+        let (a, b) = (punto(p.falda[i]), punto(p.falda[i + 1]));
+        draw_triangle(cadera, a, b, fade(FALDA, alfa * 0.22));
+    }
+    for i in 0..N_FALDA - 1 {
+        let (a, b) = (punto(p.falda[i]), punto(p.falda[i + 1]));
+        draw_line(
+            a.x,
+            a.y,
+            b.x,
+            b.y,
+            l.len(0.9).max(1.0),
+            fade(FALDA, alfa * 0.85),
+        );
+    }
+
+    // --- Cuerpo ---
+    for (grosor, halo) in [(1.9, 0.20), (1.0, 1.0)] {
+        let c = fade(PLAYER_BODY, alfa * halo);
+        for (a, b, r0, r1) in HUESOS {
+            hueso(
+                punto(p.joints[a]),
+                punto(p.joints[b]),
+                r0 * grosor,
+                r1 * grosor,
+                l,
+                c,
+            );
+        }
+        for (j, r) in REMATES {
+            let q = punto(p.joints[j]);
+            draw_circle(q.x, q.y, l.len(r * grosor), c);
         }
         let cabeza = punto(p.joints[skeleton::CABEZA]);
         draw_circle(
             cabeza.x,
             cabeza.y,
-            l.len(skeleton::RADIO_CABEZA) + grosor * 0.3,
+            l.len(skeleton::RADIO_CABEZA * grosor.min(1.25)),
             c,
         );
+        let mono = punto(p.mono);
+        draw_circle(
+            mono.x,
+            mono.y,
+            l.len(skeleton::RADIO_MONO * grosor.min(1.3)),
+            c,
+        );
+    }
+}
+
+/// Un hueso que se estrecha hacia la punta.
+///
+/// Se traza con circulos solapados en vez de con un poligono: a este tamano se
+/// ve igual, las uniones salen redondeadas gratis y son cuatro lineas.
+fn hueso(a: Vec2, b: Vec2, r0: f32, r1: f32, l: &Layout, color: Color) {
+    const PASOS: usize = 7;
+    for i in 0..=PASOS {
+        let t = i as f32 / PASOS as f32;
+        let p = a.lerp(b, t);
+        let r = l.len(r0 + (r1 - r0) * t).max(0.6);
+        draw_circle(p.x, p.y, r, color);
     }
 }
 

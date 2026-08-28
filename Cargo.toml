@@ -3,7 +3,10 @@ resolver = "3"
 members = ["crates/vals-core", "crates/vals-app"]
 
 [workspace.package]
-version = "0.1.0"
+# v1.0.0 es el juego terminado (etiqueta en git, commit de H8). A partir de
+# ahi el proyecto crece: bailes, tienda e historia. La version del manifiesto
+# empieza a mantenerse aqui.
+version = "2.0.0-dev"
 edition = "2024"
 license = "MIT"
 
