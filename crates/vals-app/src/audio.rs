@@ -205,8 +205,10 @@ impl Audio {
         let cargados = sonidos.iter().filter(|s| s.is_some()).count();
 
         let mut musica = Vec::with_capacity(BAILES.len());
+        let mut bytes_musica = 0usize;
         for b in BAILES {
             let bytes = wav(&render_len(&music::tema(b), music::duracion(b)));
+            bytes_musica += bytes.len();
             match load_sound_from_bytes(&bytes).await {
                 Ok(s) => musica.push(Some(s)),
                 Err(e) => {
@@ -217,9 +219,10 @@ impl Audio {
         }
         let temas = musica.iter().filter(|s| s.is_some()).count();
         println!(
-            "[audio] {cargados}/{} sonidos y {temas}/{} temas sintetizados",
+            "[audio] {cargados}/{} sonidos y {temas}/{} temas sintetizados ({:.1} MB de musica)",
             TODOS.len(),
-            BAILES.len()
+            BAILES.len(),
+            bytes_musica as f32 / (1024.0 * 1024.0)
         );
 
         Self {

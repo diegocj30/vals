@@ -51,7 +51,11 @@ Al perder se reintenta **ese** jefe, no la carrera entera.
 No hay ni un asset en el repositorio. Las balas las dibuja un shader a partir de
 la distancia al centro, el personaje es un esqueleto de articulaciones animado
 por codigo, y **el sonido y la musica se sintetizan al arrancar**: cada jefe
-tiene su vals, en 3/4 y con su tempo, su tonalidad y su progresion.
+tiene su vals. El Vals baila El Danubio azul (Strauss II, 1866) y La Coda baila
+Sobre las olas (Juventino Rosas, 1888), las dos de dominio publico y transcritas
+a una tabla de notas. El Espejo no toca una tercera pieza: toca **el Danubio
+reflejado**, con cada intervalo invertido alrededor de la tonica y leido en
+menor. Mismo ritmo, todo lo demas del reves.
 
 ## Disenar un jefe
 

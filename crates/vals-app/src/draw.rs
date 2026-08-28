@@ -7,6 +7,7 @@ use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bullet_renderer::BulletRenderer;
+use crate::music::Baile;
 use crate::skeleton::{self, HUESOS, N_CINTA, N_FALDA, Pose, REMATES};
 use crate::stats::FrameStats;
 
@@ -188,6 +189,18 @@ fn draw_hud(world: &World, l: &Layout) {
             o.y + 34.0,
             18.0,
             TEXT_DIM,
+        );
+
+        // Y debajo, que vals suena. "Cada jefe es un baile" se entiende mejor
+        // si el baile tiene nombre y autor.
+        let baile = Baile::del_jefe(world.boss_index).titulo();
+        let m = measure_text(baile, None, 14, 1.0);
+        draw_text(
+            baile,
+            o.x + w - m.width - 8.0,
+            o.y + 52.0,
+            14.0,
+            fade(TEXT_DIM, 0.7),
         );
     }
 
