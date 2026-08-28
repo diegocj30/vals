@@ -2,3 +2,9 @@
 # Sin esto, CI en Linux puede pelearse con `cargo fmt --check`.
 * text=auto eol=lf
 *.ps1 text eol=crlf
+
+# Los replays son binarios. Sin esto git lo decide con una heuristica (busca
+# bytes nulos) y acierta hoy por casualidad; un replay que no tuviera ninguno
+# se corromperia al normalizar finales de linea, y el fallo apareceria como una
+# divergencia imposible de entender.
+*.valsrpl binary
