@@ -4,7 +4,7 @@
 
 use macroquad::prelude::*;
 use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
-use vals_core::pista::{Nodo, Pista};
+use vals_core::pista::{Miron, Nodo, Pista};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bullet_renderer::BulletRenderer;
@@ -250,7 +250,7 @@ fn draw_cartel(l: &Layout, titulo: &str, color: Color, lineas: &[&str]) {
 }
 
 /// Menu. De fondo corre el replay dorado, que es el modo atractor.
-pub fn menu(l: &Layout, intentos: u32) {
+pub fn menu(l: &Layout, intentos: u32, mando: bool) {
     let cola = if intentos == 0 {
         String::new()
     } else {
@@ -269,6 +269,14 @@ pub fn menu(l: &Layout, intentos: u32) {
             "",
             "Parriar las balas ROSAS llena la barra SUPER.",
             "Llena, ESPACIO limpia la pantalla y hace mucho dano.",
+            "",
+            // Decirlo aqui ahorra la pregunta de si el mando esta llegando o
+            // no, que sin esto solo se puede averiguar probando a ciegas.
+            if mando {
+                "mando conectado:  A disparar   X dash   B parry   Y super"
+            } else {
+                "(sin mando: teclado)"
+            },
         ],
     );
 }
@@ -977,6 +985,28 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, t: f32) {
     );
 }
 
+/// Alguien mirando desde un lado.
+///
+/// Todo lo que cambia con el respeto va por el mismo numero: se vuelve hacia
+/// ti, se mueve mas, baila mejor y se ve mas. Cuatro canales para un solo dato
+/// es lo que hace que se lea sin explicarlo.
+fn dibujar_miron(l: &Layout, p: &Pista, m: &Miron, respeto: f32, t: f32) {
+    let (s, escala) = suelo(l, m.pos.x, m.pos.y);
+    // Parados casi no se mueven; segun te respetan, se van soltando.
+    let ritmo = 0.30 + 0.70 * respeto;
+    // Nunca bailan tan bien como tu: la pista es tuya.
+    let pose = skeleton::pose(
+        &p.figura_de(m),
+        t * ritmo + m.desfase * 60.0,
+        false,
+        respeto * 0.75,
+    );
+    let ls = l.escalado(escala * m.talla * 0.82);
+    let pie = pose.joints.iter().map(|j| j.y).fold(f32::MIN, f32::max);
+    let alfa = 0.30 + 0.45 * respeto;
+    draw_figura(&pose, s - vec2(0.0, pie * ls.scale()), &ls, alfa);
+}
+
 /// El mapa entero.
 pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
     clear_background(BG);
@@ -985,12 +1015,25 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
     dibujar_tarima(l);
 
     let t = p.tick as f32 + alpha;
+    let respeto = p.respeto();
 
-    // De fondo a frente, para que lo cercano tape a lo lejano.
-    let mut orden: Vec<usize> = (0..p.nodos.len()).collect();
-    orden.sort_by(|a, b| p.nodos[*a].pos.y.total_cmp(&p.nodos[*b].pos.y));
-    for i in orden {
-        dibujar_nodo(l, &p.nodos[i], t);
+    // Todo lo que esta de pie en el suelo se ordena junto, de fondo a frente,
+    // para que lo cercano tape a lo lejano. Mezclar publico y bailes en la
+    // misma lista es lo que evita que un miron de delante quede detras de un
+    // baile del fondo.
+    enum Cosa<'a> {
+        Baile(&'a Nodo),
+        Miron(&'a Miron),
+    }
+    let mut cosas: Vec<(f32, Cosa)> = Vec::with_capacity(p.nodos.len() + p.publico.len());
+    cosas.extend(p.nodos.iter().map(|n| (n.pos.y, Cosa::Baile(n))));
+    cosas.extend(p.publico.iter().map(|m| (m.pos.y, Cosa::Miron(m))));
+    cosas.sort_by(|a, b| a.0.total_cmp(&b.0));
+    for (_, cosa) in &cosas {
+        match cosa {
+            Cosa::Baile(n) => dibujar_nodo(l, n, t),
+            Cosa::Miron(m) => dibujar_miron(l, p, m, respeto, t),
+        }
     }
 
     // --- La bailarina ---
@@ -999,7 +1042,9 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
     // elegancia porque aqui no esta esquivando nada.
     let pos = p.render_pos(alpha);
     let (s, escala) = suelo(l, pos.x, pos.y);
-    let pose = skeleton::pose(&p.figura(), t, false, 1.0);
+    // Bailas mejor cuanto mas llevas hecho. Es el mismo numero que mueve al
+    // publico: la sala y tu subis juntas.
+    let pose = skeleton::pose(&p.figura(), t, false, respeto);
     let ls = l.escalado(escala);
 
     // Los pies van justo donde pisa, no el centro del cuerpo: si no, la
@@ -1027,6 +1072,11 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
         34.0,
         fade(TITLE, 0.9),
     );
+
+    let hechos = p.nodos.iter().filter(|n| n.vencido).count();
+    let cuenta = format!("{hechos} / {} bailes", p.nodos.len());
+    let m = measure_text(&cuenta, None, 16, 1.0);
+    draw_text(&cuenta, cx - m.width * 0.5, o.y + 66.0, 16.0, TEXT_DIM);
 
     let pie_y = l.to_screen(0.0, ARENA_H).y - 16.0;
     let aviso = match p.nodo_cerca() {

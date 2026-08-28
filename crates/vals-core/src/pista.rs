@@ -19,6 +19,7 @@ use glam::{Vec2, vec2};
 
 use crate::input::InputFrame;
 use crate::math::{TAU, sin_cos};
+use crate::rng::Pcg32;
 use crate::{ARENA_H, ARENA_W, DT};
 
 /// Lo que corre la bailarina por la pista. Mas lento que en combate: aqui no
@@ -33,6 +34,25 @@ pub const MARGEN: f32 = 46.0;
 
 /// Donde empieza la bailarina: delante del todo, mirando a la pista.
 pub const ENTRADA: Vec2 = vec2(ARENA_W * 0.5, ARENA_H - 110.0);
+
+/// Cuanta gente hay mirando. Numero par: se reparten a los dos lados.
+pub const N_PUBLICO: usize = 14;
+
+/// Alguien de pie en la pista, mirando.
+///
+/// No hace nada: es decorado que reacciona. Pero es el decorado que cuenta lo
+/// unico que la pista no sabia decir —cuanto llevas hecho—, y lo cuenta sin
+/// numeros ni barras.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Miron {
+    pub pos: Vec2,
+    /// Desfase de su vaiven, para que no se muevan todos a la vez como un
+    /// cuerpo de baile. Es lo unico que separa a un corro de gente de una fila
+    /// de clones.
+    pub desfase: f32,
+    /// Lo alto que es, alrededor de 1.
+    pub talla: f32,
+}
 
 /// Un baile plantado en la pista.
 #[derive(Clone, Debug, PartialEq)]
@@ -52,6 +72,7 @@ pub struct Pista {
     pub prev: Vec2,
     pub vel: Vec2,
     pub nodos: Vec<Nodo>,
+    pub publico: Vec<Miron>,
     pub tick: u64,
 }
 
@@ -73,8 +94,23 @@ impl Pista {
             prev: ENTRADA,
             vel: Vec2::ZERO,
             nodos,
+            publico: publico(),
             tick: 0,
         }
+    }
+
+    /// Cuanto te respeta la sala, en `[0, 1]`: la fraccion de bailes sacados.
+    ///
+    /// De aqui sale todo lo que cambia en la pista segun avanzas —lo bien que
+    /// bailas tu y lo que te miran los demas—, para que sea **un solo numero**
+    /// y no tres reglas que acaben contradiciendose. Sin bailes es 0: una sala
+    /// vacia no respeta a nadie.
+    pub fn respeto(&self) -> f32 {
+        if self.nodos.is_empty() {
+            return 0.0;
+        }
+        let hechos = self.nodos.iter().filter(|n| n.vencido).count();
+        hechos as f32 / self.nodos.len() as f32
     }
 
     /// Un tick de andar. Mismo paso fijo que el combate.
@@ -135,10 +171,47 @@ impl Pista {
         f
     }
 
+    /// Un miron como `Player`, para posarlo con el mismo esqueleto.
+    ///
+    /// La velocidad aqui no es que ande: es **hacia donde se inclina**. El
+    /// esqueleto ya sabe inclinar el cuerpo en la direccion en que va, asi que
+    /// darle un empujon hacia la bailarina es, gratis, girarse a mirarla. A
+    /// respeto cero no se inclina nada: ni te mira.
+    pub fn figura_de(&self, m: &Miron) -> crate::Player {
+        let mut f = crate::Player::new(m.pos);
+        f.vel = (self.bailarina - m.pos).normalize_or_zero() * (95.0 * self.respeto());
+        f
+    }
+
     /// Posicion para dibujar, interpolada entre el tick anterior y este.
     pub fn render_pos(&self, alpha: f32) -> Vec2 {
         self.prev.lerp(self.bailarina, alpha)
     }
+}
+
+/// La gente que mira, repartida a los dos lados de la pista.
+///
+/// A los lados y no en corro por algo practico: por el centro se anda, y ver a
+/// la bailarina atravesar a alguien rompe la escena entera. Asi son dos filas
+/// y el pasillo queda libre.
+fn publico() -> Vec<Miron> {
+    let mut rng = Pcg32::new(0x5641_4C53_5055_424C);
+    let por_lado = N_PUBLICO / 2;
+    (0..N_PUBLICO)
+        .map(|i| {
+            let lado = if i % 2 == 0 { -1.0 } else { 1.0 };
+            let t = (i / 2) as f32 / (por_lado.max(2) - 1) as f32;
+            // El desorden es generoso a proposito: con poco, las dos filas se
+            // leen como una rejilla en vez de como gente de pie.
+            let x = ARENA_W * 0.5 + lado * (ARENA_W * 0.38 + rng.next_f32() * 54.0);
+            let y = ARENA_H * (0.10 + 0.80 * t) + (rng.next_f32() - 0.5) * 90.0;
+            Miron {
+                pos: vec2(x, y),
+                desfase: rng.next_f32() * TAU,
+                talla: 0.86 + rng.next_f32() * 0.28,
+            }
+        })
+        .collect()
 }
 
 /// Mueve `v` hacia `objetivo` como mucho `paso` en cada eje.
@@ -271,6 +344,60 @@ mod tests {
         let p = Pista::new(Vec::new());
         assert!(!p.todo_vencido());
         assert_eq!(p.nodo_cerca(), None);
+    }
+
+    #[test]
+    fn el_respeto_va_de_cero_a_uno_segun_lo_bailado() {
+        let mut p = pista_de(4);
+        assert_eq!(p.respeto(), 0.0, "nadie te ha visto bailar todavia");
+        p.marcar_vencido(0);
+        p.marcar_vencido(1);
+        assert!((p.respeto() - 0.5).abs() < 1e-6);
+        p.marcar_vencido(2);
+        p.marcar_vencido(3);
+        assert_eq!(p.respeto(), 1.0);
+        // Una pista sin bailes no puede dar respeto, ni dividir por cero.
+        assert_eq!(Pista::new(Vec::new()).respeto(), 0.0);
+    }
+
+    #[test]
+    fn el_publico_se_vuelve_hacia_ti_cuando_te_respeta() {
+        let mut p = pista_de(1);
+        let m = p.publico[0].clone();
+        assert_eq!(p.figura_de(&m).vel, Vec2::ZERO, "sin respeto no te mira");
+
+        p.marcar_vencido(0);
+        let vel = p.figura_de(&m).vel;
+        assert!(vel.length() > 1.0, "deberia haberse vuelto");
+        // Y vuelto hacia ella, no hacia cualquier lado.
+        let hacia = (p.bailarina - m.pos).normalize_or_zero();
+        assert!(vel.normalize_or_zero().dot(hacia) > 0.99);
+    }
+
+    #[test]
+    fn el_publico_se_queda_a_los_lados() {
+        // Si alguien se planta en el pasillo, la bailarina lo atraviesa al
+        // andar hacia el fondo y se rompe la escena.
+        let p = pista_de(1);
+        assert_eq!(p.publico.len(), N_PUBLICO);
+        for (i, m) in p.publico.iter().enumerate() {
+            let desvio = (m.pos.x - ARENA_W * 0.5).abs();
+            assert!(
+                desvio > ARENA_W * 0.35,
+                "el miron {i} esta en medio del paso"
+            );
+            assert!(m.talla > 0.5 && m.talla < 1.5, "talla rara: {}", m.talla);
+        }
+        // Y no todos con el mismo vaiven, que se veria como un cuerpo de baile.
+        let primero = p.publico[0].desfase;
+        assert!(p.publico.iter().any(|m| (m.desfase - primero).abs() > 0.5));
+    }
+
+    #[test]
+    fn la_sala_se_monta_siempre_igual() {
+        // Sale de un generador propio con semilla fija: dos partidas tienen la
+        // misma sala, y las capturas de un dia valen para el siguiente.
+        assert_eq!(pista_de(2).publico, pista_de(2).publico);
     }
 
     #[test]

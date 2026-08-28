@@ -14,6 +14,7 @@ mod audio;
 mod bullet_renderer;
 mod draw;
 mod hot;
+mod mando;
 mod music;
 mod replay_io;
 mod skeleton;
@@ -22,6 +23,7 @@ mod stats;
 use audio::{Audio, Sfx};
 use bullet_renderer::BulletRenderer;
 use hot::HotReload;
+use mando::Mando;
 use music::Baile;
 use stats::FrameStats;
 
@@ -198,9 +200,11 @@ async fn run_game() {
     // que. Se espera a la primera tecla, que ademas es cuando el jugador esta
     // mirando.
     let mut hubo_interaccion = false;
+    let mut mando = Mando::new();
 
     loop {
         frames += 1;
+        mando.actualizar();
         if frames.is_multiple_of(HOT_RELOAD_EVERY)
             && let Some(defs) = hot.poll()
         {
@@ -209,7 +213,7 @@ async fn run_game() {
             recorder = Recorder::for_world(&world);
         }
 
-        hubo_interaccion |= get_last_key_pressed().is_some();
+        hubo_interaccion |= get_last_key_pressed().is_some() || mando.frame().bits() != 0;
         if hubo_interaccion {
             // La musica va por figura, no por jefe: cada fase del vals tiene
             // la suya. El menu y la pista suenan con la primera, que es la que
@@ -226,7 +230,9 @@ async fn run_game() {
         if is_key_pressed(KeyCode::F1) {
             show_debug = !show_debug;
         }
-        if is_key_pressed(KeyCode::R) && escena == Escena::Combate {
+        if (is_key_pressed(KeyCode::R) || mando.pulsado(InputFrame::PARRY) && world.is_over())
+            && escena == Escena::Combate
+        {
             // Tras perder se reintenta **este** jefe con las vidas llenas; en
             // cualquier otro momento, partida nueva desde el principio.
             if world.defeat {
@@ -238,7 +244,10 @@ async fn run_game() {
             accumulator = 0.0;
             intentos += 1;
         }
-        if is_key_pressed(KeyCode::Escape) {
+        // Start/Select del mando hacen de ESC: salir un escalon.
+        if is_key_pressed(KeyCode::Escape)
+            || mando.pulsado(InputFrame::SUPER) && escena != Escena::Combate
+        {
             // Se sale un escalon cada vez: del baile a la pista, de la pista
             // al menu.
             escena = match escena {
@@ -257,7 +266,7 @@ async fn run_game() {
         // se entra lejos de todo, pero deja de ser verdad en cuanto un baile
         // este cerca de la entrada.
         if escena == Escena::Pista
-            && is_key_pressed(KeyCode::Z)
+            && (is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::SHOOT))
             && let Some(i) = pista.nodo_cerca()
         {
             audio.play(Sfx::Empezar, 1.0);
@@ -271,9 +280,9 @@ async fn run_game() {
         }
 
         if escena == Escena::Menu {
-            let elegido = if is_key_pressed(KeyCode::Z) {
+            let elegido = if is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::SHOOT) {
                 Some(Mode::Flight)
-            } else if is_key_pressed(KeyCode::X) {
+            } else if is_key_pressed(KeyCode::X) || mando.pulsado(InputFrame::DASH) {
                 Some(Mode::Platform)
             } else {
                 None
@@ -297,10 +306,12 @@ async fn run_game() {
         // --- Simulacion: paso fijo, desacoplada del render ---
         // En el menu se avanza el modo atractor en vez de la partida; el
         // acumulador es el mismo, asi que el replay va al ritmo correcto.
+        // Teclado y mando se suman en vez de elegir uno: no hay que anunciar
+        // con cual se juega, y soltar el mando a media partida no rompe nada.
         let input = if escena == Escena::Menu {
             InputFrame::NONE
         } else {
-            read_input()
+            InputFrame::from_bits(read_input().bits() | mando.frame().bits())
         };
         let t0 = get_time();
         accumulator += frame_dt;
@@ -358,7 +369,7 @@ async fn run_game() {
             };
             draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut());
             if escena == Escena::Menu {
-                draw::menu(&layout, intentos);
+                draw::menu(&layout, intentos, mando.conectado());
             } else if world.is_over() {
                 draw::fin_de_partida(&layout, &world);
             }

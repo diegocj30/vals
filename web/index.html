@@ -21,6 +21,62 @@
   <script>var register_plugin;</script>
   <script src="mq_js_bundle.js"></script>
   <script>
+    // El mando en web.
+    //
+    // macroquad no trae mandos, asi que lo pone aqui la Gamepad API del
+    // navegador y se pasa a Rust por el mecanismo de plugins de miniquad, el
+    // mismo que usa el audio. Sin wasm-bindgen, que es justo lo que no se
+    // quiso arrastrar al elegir macroquad.
+    //
+    // Los numeros de abajo son los bits de `InputFrame` y estan repetidos a
+    // mano: en `crates/vals-app/src/mando.rs` hay un test que se pone rojo si
+    // alguien los mueve, porque si no el fallo seria silencioso y solo aqui.
+    (function () {
+      var UP = 1, DOWN = 2, LEFT = 4, RIGHT = 8, FOCUS = 16;
+      var SHOOT = 32, DASH = 64, PARRY = 128, SUPER = 256, JUMP = 512;
+      var CONECTADO = 32768;
+      var ZONA_MUERTA = 0.45;
+
+      function pulsado(pad, i) {
+        var b = pad.buttons[i];
+        return b !== undefined && (b.pressed || b.value > 0.5);
+      }
+
+      function leer() {
+        var pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        for (var i = 0; i < pads.length; i++) {
+          var p = pads[i];
+          if (!p || !p.connected) continue;
+
+          var ax = p.axes[0] || 0, ay = p.axes[1] || 0;
+          var bits = CONECTADO;
+          // Ojo con el signo: en la Gamepad API el eje Y crece hacia ABAJO,
+          // al reves que en gilrs. Es el tipo de detalle que sale de probarlo
+          // y no de leerlo.
+          var arriba = ay < -ZONA_MUERTA || pulsado(p, 12);
+          if (arriba) bits |= UP | JUMP;
+          if (ay > ZONA_MUERTA || pulsado(p, 13)) bits |= DOWN;
+          if (ax < -ZONA_MUERTA || pulsado(p, 14)) bits |= LEFT;
+          if (ax > ZONA_MUERTA || pulsado(p, 15)) bits |= RIGHT;
+          if (pulsado(p, 0)) bits |= SHOOT;
+          if (pulsado(p, 2)) bits |= DASH;
+          if (pulsado(p, 1)) bits |= PARRY;
+          if (pulsado(p, 3)) bits |= SUPER;
+          if (pulsado(p, 4) || pulsado(p, 6)) bits |= FOCUS;
+          return bits;
+        }
+        return 0;
+      }
+
+      miniquad_add_plugin({
+        register_plugin: function (importObject) {
+          importObject.env.vals_mando = leer;
+        },
+        version: 1,
+        name: "vals_mando",
+      });
+    })();
+
     // Ojo: el bundle ya declara un `canvas` global con `const`. Redeclararlo
     // aqui seria un SyntaxError que se cargaria todo este script.
     var glcanvas = document.getElementById("glcanvas");

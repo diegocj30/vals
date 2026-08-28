@@ -8,3 +8,9 @@ license.workspace = true
 [dependencies]
 vals-core = { path = "../vals-core" }
 macroquad = { version = "0.4", features = ["audio"] }
+
+# El mando. macroquad no lo trae ("gamepads soon" en su propio modulo de
+# input), asi que hay que ponerlo aparte. Solo en nativo: en web lo da la
+# Gamepad API del navegador desde `web/index.html`, sin dependencias.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+gilrs = "0.11"
