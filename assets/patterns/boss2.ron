@@ -122,13 +122,13 @@
           [
             Forever([
               Fire((
-                count: 14,
+                count: 16,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
                 speed: 210.0,
-                rings: 1,
+                rings: 2,
                 speed_step: 40.0,
-                ring_offset: 0.0,
+                ring_offset: 0.14,
                 accel: -150.0,
                 spin: 0.0,
                 ttl: 30.0,
@@ -136,13 +136,13 @@
                 flags: 0,
               )),
               Turn(0.19),
-              Wait(38),
+              Wait(26),
             ]),
           ],
           [
             Forever([
               Fire((
-                count: 4,
+                count: 7,
                 arc: 6.2831855,
                 aim: Fixed(1.0),
                 speed: 260.0,
@@ -156,7 +156,7 @@
                 flags: 0,
               )),
               Turn(0.83),
-              Wait(9),
+              Wait(8),
             ]),
           ],
           [

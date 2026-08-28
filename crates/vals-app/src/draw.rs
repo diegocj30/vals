@@ -7,7 +7,7 @@ use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bullet_renderer::BulletRenderer;
-use crate::skeleton::{self, HUESOS, N_FALDA, Pose, REMATES};
+use crate::skeleton::{self, HUESOS, N_CINTA, N_FALDA, Pose, REMATES};
 use crate::stats::FrameStats;
 
 // Paleta neon. El arte del juego es procedural: no se dibuja nada a mano.
@@ -446,14 +446,14 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
     // El halo se queda: es lo que la separa del fondo cuando la pantalla se
     // llena. Lo que cambia es lo que hay dentro.
     draw_circle(s.x, s.y, sprite_r * 2.2, fade(PLAYER_GLOW, body_alpha));
-    // La gracia sube con cada jefe caido: la bailarina baila mejor segun
+    // La elegancia sube con cada jefe caido: la bailarina baila mejor segun
     // avanza. Es solo cosmetico, pero de un vistazo dice por donde vas.
-    let gracia = if world.boss_count() > 1 {
+    let elegancia = if world.boss_count() > 1 {
         world.boss_index as f32 / (world.boss_count() - 1) as f32
     } else {
         0.0
     };
-    let figura = skeleton::pose(&world.player, t, world.mode == Mode::Platform, gracia);
+    let figura = skeleton::pose(&world.player, t, world.mode == Mode::Platform, elegancia);
     draw_figura(&figura, s, l, body_alpha);
 
     // Anillo de focus: se cierra sobre la hitbox conforme entras en modo lento.
@@ -513,25 +513,37 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
 fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, alfa: f32) {
     let punto = |j: Vec2| centro + vec2(j.x, j.y) * l.scale();
 
-    // --- Falda ---
-    // Un abanico de triangulos desde la cadera hasta el bajo. Se dibuja antes
-    // que el cuerpo para que las piernas se vean por encima de la tela.
+    // --- Cintas ---
+    // Van detras de todo: son lo mas lejano y lo mas tenue.
+    for cinta in p.cintas {
+        for k in 0..N_CINTA - 1 {
+            let (a, b) = (punto(cinta[k]), punto(cinta[k + 1]));
+            let t = 1.0 - k as f32 / (N_CINTA - 1) as f32;
+            let g = l.len(0.8 * t).max(0.8);
+            draw_line(a.x, a.y, b.x, b.y, g, fade(FALDA, alfa * 0.5 * t));
+        }
+    }
+
+    // --- Falda, en dos capas ---
+    // La de fuera larga y translucida, la de dentro corta y mas solida. Son dos
+    // pasadas del mismo abanico: el volumen sale de la diferencia entre ambas,
+    // no de mas geometria.
     let cadera = punto(p.joints[skeleton::CADERA]);
-    for i in 0..N_FALDA - 1 {
-        let (a, b) = (punto(p.falda[i]), punto(p.falda[i + 1]));
-        draw_triangle(cadera, a, b, fade(FALDA, alfa * 0.22));
+    for (escala, relleno, borde) in [(1.0, 0.18, 0.70), (0.62, 0.30, 0.95)] {
+        for i in 0..N_FALDA - 1 {
+            let a = cadera + (punto(p.falda[i]) - cadera) * escala;
+            let b = cadera + (punto(p.falda[i + 1]) - cadera) * escala;
+            draw_triangle(cadera, a, b, fade(FALDA, alfa * relleno));
+            let g = l.len(0.85).max(1.0);
+            draw_line(a.x, a.y, b.x, b.y, g, fade(FALDA, alfa * borde));
+        }
     }
-    for i in 0..N_FALDA - 1 {
-        let (a, b) = (punto(p.falda[i]), punto(p.falda[i + 1]));
-        draw_line(
-            a.x,
-            a.y,
-            b.x,
-            b.y,
-            l.len(0.9).max(1.0),
-            fade(FALDA, alfa * 0.85),
-        );
-    }
+
+    // --- Corpino ---
+    // El torso deja de ser una linea y pasa a tener silueta.
+    let c: Vec<Vec2> = p.corpino.iter().map(|q| punto(*q)).collect();
+    draw_triangle(c[0], c[1], c[2], fade(PLAYER_BODY, alfa * 0.85));
+    draw_triangle(c[0], c[2], c[3], fade(PLAYER_BODY, alfa * 0.85));
 
     // --- Cuerpo ---
     for (grosor, halo) in [(1.9, 0.20), (1.0, 1.0)] {

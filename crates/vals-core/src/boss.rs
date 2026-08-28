@@ -274,6 +274,51 @@ mod tests {
         );
     }
 
+    /// Cuantas balas dispara una fase en `ticks`, sin dejarlas morir.
+    ///
+    /// Se ejecuta el patron sin llamar a `bullets.update()`: nada se mueve ni
+    /// caduca, asi que las vivas al final son exactamente las disparadas.
+    fn balas_de_la_fase(fase: &PhaseDef, ticks: usize) -> usize {
+        use crate::pattern::{Pattern, PatternRunner, RunCtx};
+        let mut runner = PatternRunner::new(Pattern::compile(&fase.steps));
+        let mut bullets = Bullets::with_capacity(crate::MAX_BULLETS);
+        let mut origen = Vec2::new(320.0, 140.0);
+        for _ in 0..ticks {
+            let mut ctx = RunCtx {
+                bullets: &mut bullets,
+                origin: &mut origen,
+                player: Vec2::new(320.0, 620.0),
+            };
+            runner.tick(&mut ctx);
+        }
+        bullets.live_count()
+    }
+
+    #[test]
+    fn la_ultima_fase_de_cada_jefe_es_la_mas_densa() {
+        // Dos veces seguidas, jugando, la fase final resulto ser la mas facil:
+        // en El Espejo porque disparaba la MITAD que la primera, y en La Coda
+        // porque eran dos espirales limpias. Subir la vida de una fase no la
+        // hace mas dificil; esto vigila que el climax lo sea de verdad.
+        //
+        // Es una condicion necesaria, no suficiente: la legibilidad importa
+        // tanto como la densidad, y eso no lo mide un test.
+        for def in BossDef::default_bosses() {
+            let densidad: Vec<usize> = def
+                .phases
+                .iter()
+                .map(|f| balas_de_la_fase(f, 600))
+                .collect();
+            let maxima = *densidad.iter().max().unwrap();
+            assert_eq!(
+                *densidad.last().unwrap(),
+                maxima,
+                "la ultima fase de {} no es la mas densa: {densidad:?}",
+                def.name
+            );
+        }
+    }
+
     #[test]
     fn los_jefes_se_ponen_mas_duros() {
         let vidas: Vec<i32> = BossDef::default_bosses()

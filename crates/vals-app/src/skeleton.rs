@@ -5,17 +5,21 @@
 //! una formula en vez de con una textura. Un personaje nuevo son unas
 //! longitudes y una funcion de pose.
 //!
-//! La pose es **funcion pura del tick, del estado del jugador y de la gracia**.
+//! La pose es **funcion pura del tick, del estado del jugador y de la elegancia**.
 //! No hay estado de animacion que mantener, ni maquina de estados que
 //! sincronizar, ni riesgo de que la animacion y la simulacion se desfasen. Y
 //! por eso se muestrea en ticks y no en frames: la figura se mueve igual a 60
 //! que a 144 Hz, como la estela.
 //!
-//! La **gracia** es lo que hace que baile mejor segun caen los jefes. Es un
-//! solo numero en `[0, 1]` que recorre toda la funcion: mas altura de brazos,
-//! mas apertura de piernas, mas punta de pie, mas porte. Es puramente
-//! cosmetico, asi que no hay nada que balancear — y solo sale barato porque la
-//! figura es codigo: con sprites serian tres juegos de arte.
+//! La **elegancia** es lo que hace que baile mejor segun caen los jefes: sube
+//! el porte, levanta los brazos, abre mas las piernas y estira la punta del
+//! pie. Es un solo numero en `[0, 1]` que recorre toda la funcion.
+//!
+//! (Se llamaba "gracia", que en castellano se lee antes como *lo gracioso*. Si
+//! el nombre confunde a quien es dueño del codigo, el nombre esta mal.)
+//!
+//! Es puramente cosmetico, asi que no hay nada que balancear — y solo sale
+//! barato porque la figura es codigo: con sprites serian tres juegos de arte.
 
 use macroquad::prelude::*;
 use vals_core::math::{PI, sin_cos};
@@ -66,6 +70,14 @@ const ANTEBRAZO: f32 = 5.5;
 const MUSLO: f32 = 7.0;
 const PANTORRILLA: f32 = 6.5;
 
+/// Ancho del corpino a la altura de los hombros y de la cintura.
+const ANCHO_HOMBROS: f32 = 3.4;
+const ANCHO_CINTURA: f32 = 2.2;
+
+/// Puntos de cada cinta, contando la mano.
+pub const N_CINTA: usize = 4;
+const CINTA_LARGO: f32 = 7.5;
+
 /// Puntos del bajo de la falda.
 pub const N_FALDA: usize = 9;
 const FALDA_LARGO: f32 = 9.0;
@@ -82,6 +94,11 @@ pub struct Pose {
     pub falda: [Vec2; N_FALDA],
     /// Centro del mono.
     pub mono: Vec2,
+    /// El corpino, en orden: hombro izquierdo, derecho, cadera derecha,
+    /// izquierda. Relleno, para que el torso sea un cuerpo y no una linea.
+    pub corpino: [Vec2; 4],
+    /// Cintas que salen de cada mano y se quedan atras.
+    pub cintas: [[Vec2; N_CINTA]; 2],
 }
 
 fn desde(p: Vec2, ang: f32, largo: f32) -> Vec2 {
@@ -92,9 +109,9 @@ fn desde(p: Vec2, ang: f32, largo: f32) -> Vec2 {
 /// Calcula la pose para este instante.
 ///
 /// `phase` es `tick + alpha`: continuo, en ticks, para que la animacion vaya al
-/// ritmo de la simulacion y no al de los fotogramas. `gracia` va de 0 a 1.
-pub fn pose(p: &Player, phase: f32, gravity: bool, gracia: f32) -> Pose {
-    let g = gracia.clamp(0.0, 1.0);
+/// ritmo de la simulacion y no al de los fotogramas. `elegancia` va de 0 a 1.
+pub fn pose(p: &Player, phase: f32, gravity: bool, elegancia: f32) -> Pose {
+    let e = elegancia.clamp(0.0, 1.0);
     let (bal_s, _) = sin_cos(phase * 0.075);
     let (paso_s, paso_c) = sin_cos(phase * 0.28);
 
@@ -106,12 +123,12 @@ pub fn pose(p: &Player, phase: f32, gravity: bool, gracia: f32) -> Pose {
     // Inclinarse hacia donde se va. Es el gesto que mas hace que una figura
     // parezca que se mueve, por encima de mover los pies.
     let mut lean = (-vel_x * 0.30).clamp(-0.5, 0.5);
-    // Vaiven de vals al estar parada: 3/4 lento, y mas amplio con la gracia.
-    lean += bal_s * (0.10 + 0.06 * g) * quieto;
+    // Vaiven de vals al estar parada: 3/4 lento, y mas amplio con la elegancia.
+    lean += bal_s * (0.10 + 0.06 * e) * quieto;
 
-    // Con gracia se yergue: la cadera sube un poco y el porte cambia entero.
-    let cadera = vec2(0.0, 2.0 - g * 1.2 + bal_s * (0.7 + 0.4 * g) * quieto);
-    let pecho = desde(cadera, ARRIBA + lean, TORSO + g * 0.6);
+    // Con elegancia se yergue: la cadera sube un poco y el porte cambia entero.
+    let cadera = vec2(0.0, 2.0 - e * 1.2 + bal_s * (0.7 + 0.4 * e) * quieto);
+    let pecho = desde(cadera, ARRIBA + lean, TORSO + e * 0.6);
     let cabeza = desde(pecho, ARRIBA + lean * 1.4, CUELLO);
     let mono = desde(cabeza, ARRIBA + lean * 1.4, RADIO_CABEZA + RADIO_MONO * 0.7);
 
@@ -126,15 +143,15 @@ pub fn pose(p: &Player, phase: f32, gravity: bool, gracia: f32) -> Pose {
         (0.62, 1.10)
     } else {
         (
-            1.05 - focus * 0.75 - g * 0.18,
-            0.25 + focus * 0.55 + g * 0.30,
+            1.05 - focus * 0.75 - e * 0.18,
+            0.25 + focus * 0.55 + e * 0.30,
         )
     };
 
     let hombro_i = ARRIBA + apertura + lean;
     let hombro_d = ARRIBA - apertura + lean;
-    let codo_extra = 0.55 - g * 0.20;
-    let onda_brazo = bal_s * (0.10 + 0.08 * g) * quieto;
+    let codo_extra = 0.55 - e * 0.20;
+    let onda_brazo = bal_s * (0.10 + 0.08 * e) * quieto;
 
     let codo_i = desde(pecho, hombro_i + onda_brazo, BRAZO);
     let mano_i = desde(codo_i, hombro_i + codo_extra - alzado, ANTEBRAZO);
@@ -144,14 +161,14 @@ pub fn pose(p: &Player, phase: f32, gravity: bool, gracia: f32) -> Pose {
     // --- Piernas ---
     let (ang_i, ang_d, flex_i, flex_d) = if gravity && !p.on_ground {
         // En el aire: una recogida y otra estirada. Se lee al vuelo si subes o
-        // caes. Con gracia, mas cerca de un grand jete.
+        // caes. Con elegancia, mas cerca de un grand jete.
         if p.vel.y < 0.0 {
-            (0.55 + g * 0.25, -0.15 - g * 0.25, 0.95 - g * 0.35, 0.15)
+            (0.55 + e * 0.25, -0.15 - e * 0.25, 0.95 - e * 0.35, 0.15)
         } else {
-            (0.30, -0.35 - g * 0.20, 0.35, 0.55 - g * 0.25)
+            (0.30, -0.35 - e * 0.20, 0.35, 0.55 - e * 0.25)
         }
     } else if rapidez > 0.15 {
-        let amp = (0.55 + g * 0.20) * rapidez.min(1.0);
+        let amp = (0.55 + e * 0.20) * rapidez.min(1.0);
         (
             paso_s * amp,
             -paso_s * amp,
@@ -159,18 +176,18 @@ pub fn pose(p: &Player, phase: f32, gravity: bool, gracia: f32) -> Pose {
             0.30,
         )
     } else {
-        // Parada: en punta y con la apertura que da la gracia.
-        (0.26 + g * 0.22, -0.30 - g * 0.22, 0.10, 0.05)
+        // Parada: en punta y con la apertura que da la elegancia.
+        (0.26 + e * 0.22, -0.30 - e * 0.22, 0.10, 0.05)
     };
 
     let cadera_i = ARRIBA + PI + ang_i + lean * 0.5;
     let cadera_d = ARRIBA + PI + ang_d + lean * 0.5;
     let rodilla_i = desde(cadera, cadera_i, MUSLO);
-    // La punta del pie se estira con la gracia: es el detalle que mas dice
+    // La punta del pie se estira con la elegancia: es el detalle que mas dice
     // "esto es baile" y no "esto camina".
-    let pie_i = desde(rodilla_i, cadera_i - flex_i + g * 0.30, PANTORRILLA);
+    let pie_i = desde(rodilla_i, cadera_i - flex_i + e * 0.30, PANTORRILLA);
     let rodilla_d = desde(cadera, cadera_d, MUSLO);
-    let pie_d = desde(rodilla_d, cadera_d - flex_d - g * 0.30, PANTORRILLA);
+    let pie_d = desde(rodilla_d, cadera_d - flex_d - e * 0.30, PANTORRILLA);
 
     let mut joints = [Vec2::ZERO; N_JOINTS];
     joints[CADERA] = cadera;
@@ -185,7 +202,7 @@ pub fn pose(p: &Player, phase: f32, gravity: bool, gracia: f32) -> Pose {
     joints[RODILLA_D] = rodilla_d;
     joints[PIE_D] = pie_d;
 
-    // --- Falda ---
+    // --- Falda y cintas ---
     // El arrastre se saca de la velocidad actual, no de un historial: asi la
     // pose sigue siendo una funcion pura y no hay estado de tela que mantener.
     // Conversion explicita: `p.vel` viene del core (glam 0.33) y aqui se
@@ -200,11 +217,40 @@ pub fn pose(p: &Player, phase: f32, gravity: bool, gracia: f32) -> Pose {
         let ang = PI * (0.13 + 0.74 * t);
         // Mas larga por el centro, como cae la tela.
         let (forma, _) = sin_cos(t * PI);
-        let largo = FALDA_LARGO * (0.72 + 0.28 * forma) * (1.0 + g * 0.22);
+        let largo = FALDA_LARGO * (0.72 + 0.28 * forma) * (1.0 + e * 0.22);
         let (onda, _) = sin_cos(phase * 0.20 + t * 3.1);
         *punto = desde(cadera, ang, largo)
             + arrastre * (0.35 + 0.65 * forma)
             + vec2(0.0, onda * (0.5 + 0.5 * quieto));
+    }
+
+    // --- Corpino ---
+    // Perpendicular al torso, mas ancho arriba que en la cintura.
+    let eje = (pecho - cadera).normalize_or_zero();
+    let perp = vec2(-eje.y, eje.x);
+    let corpino = [
+        pecho + perp * ANCHO_HOMBROS,
+        pecho - perp * ANCHO_HOMBROS,
+        cadera - perp * ANCHO_CINTURA,
+        cadera + perp * ANCHO_CINTURA,
+    ];
+
+    // --- Cintas ---
+    // Salen de las manos y se quedan atras, con la misma idea que la falda: la
+    // direccion sale de la velocidad, no de un historial.
+    let dir_cinta = if modulo > 20.0 {
+        -(v / modulo)
+    } else {
+        vec2(0.0, 1.0) // paradas, cuelgan
+    };
+    let mut cintas = [[Vec2::ZERO; N_CINTA]; 2];
+    for (lado, mano) in [(0usize, mano_i), (1usize, mano_d)] {
+        for (k, punto) in cintas[lado].iter_mut().enumerate() {
+            let t = k as f32 / (N_CINTA - 1) as f32;
+            let (onda, _) = sin_cos(phase * 0.26 + t * 2.6 + lado as f32 * 1.7);
+            let largo = CINTA_LARGO * (1.0 + e * 0.35) * t;
+            *punto = mano + dir_cinta * largo + perp * onda * largo * 0.22;
+        }
     }
 
     // Durante el dash la figura se estira en la direccion del movimiento. No es
@@ -231,6 +277,8 @@ pub fn pose(p: &Player, phase: f32, gravity: bool, gracia: f32) -> Pose {
         joints,
         falda,
         mono,
+        corpino,
+        cintas,
     }
 }
 
@@ -278,8 +326,8 @@ mod tests {
         for i in 0..400 {
             w.step(InputFrame::from_bits((i * 53 % 512) as u16));
             for gravity in [false, true] {
-                for gracia in [0.0, 0.5, 1.0] {
-                    let p = pose(&w.player, i as f32, gravity, gracia);
+                for elegancia in [0.0, 0.5, 1.0] {
+                    let p = pose(&w.player, i as f32, gravity, elegancia);
                     for j in p.joints.iter().chain(p.falda.iter()) {
                         assert!(j.length() < 45.0, "articulacion disparada a {j}");
                         assert!(j.is_finite(), "articulacion no finita: {j}");
@@ -350,7 +398,7 @@ mod tests {
     // --- Gracia ---
 
     #[test]
-    fn con_gracia_se_yergue_y_abre_mas() {
+    fn con_elegancia_se_yergue_y_abre_mas() {
         let p = jugador();
         let torpe = pose(&p, 0.0, false, 0.0);
         let elegante = pose(&p, 0.0, false, 1.0);
@@ -358,7 +406,7 @@ mod tests {
         // Mas porte: la cabeza queda mas alta.
         assert!(
             elegante.joints[CABEZA].y < torpe.joints[CABEZA].y - 1.5,
-            "con gracia deberia erguirse: {} vs {}",
+            "con elegancia deberia erguirse: {} vs {}",
             elegante.joints[CABEZA].y,
             torpe.joints[CABEZA].y
         );
@@ -367,26 +415,26 @@ mod tests {
         let apertura = |q: &Pose| (q.joints[PIE_I].x - q.joints[PIE_D].x).abs();
         assert!(
             apertura(&elegante) > apertura(&torpe) + 1.0,
-            "con gracia deberian abrirse mas los pies"
+            "con elegancia deberian abrirse mas los pies"
         );
     }
 
     #[test]
-    fn la_gracia_no_rompe_los_huesos() {
-        // Cambiar de gracia mueve las poses, pero los huesos siguen midiendo
+    fn la_elegancia_no_rompe_los_huesos() {
+        // Cambiar de elegancia mueve las poses, pero los huesos siguen midiendo
         // lo mismo: es lo unico que no puede ceder.
         let p = jugador();
         let a = pose(&p, 0.0, false, 0.0);
-        for gracia in [0.25, 0.5, 0.75, 1.0] {
-            let b = pose(&p, 0.0, false, gracia);
+        for elegancia in [0.25, 0.5, 0.75, 1.0] {
+            let b = pose(&p, 0.0, false, elegancia);
             for h in HUESOS {
-                // El torso crece a proposito con la gracia; el resto, no.
+                // El torso crece a proposito con la elegancia; el resto, no.
                 if (h.0, h.1) == (CADERA, PECHO) {
                     continue;
                 }
                 assert!(
                     (largo(&b, h.0, h.1) - largo(&a, h.0, h.1)).abs() < 0.01,
-                    "la gracia {gracia} deformo un hueso"
+                    "la elegancia {elegancia} deformo un hueso"
                 );
             }
         }
@@ -408,6 +456,36 @@ mod tests {
             centro(&corriendo),
             centro(&quieta)
         );
+    }
+
+    #[test]
+    fn el_corpino_envuelve_el_torso() {
+        let p = pose(&jugador(), 0.0, false, 0.0);
+        // Los hombros van mas anchos que la cintura: es lo que da silueta.
+        let hombros = (p.corpino[0] - p.corpino[1]).length();
+        let cintura = (p.corpino[2] - p.corpino[3]).length();
+        assert!(hombros > cintura, "{hombros} vs {cintura}");
+        // Y el pecho queda dentro, entre los dos hombros.
+        let centro = (p.corpino[0] + p.corpino[1]) * 0.5;
+        assert!((centro - p.joints[PECHO]).length() < 0.01);
+    }
+
+    #[test]
+    fn las_cintas_salen_de_las_manos_y_se_quedan_atras() {
+        let mut w = World::sandbox(0);
+        for _ in 0..20 {
+            w.step(InputFrame::from_bits(InputFrame::RIGHT));
+        }
+        let p = pose(&w.player, 20.0, false, 0.0);
+        for (lado, mano) in [(0usize, MANO_I), (1usize, MANO_D)] {
+            // El primer punto es la mano.
+            assert!((p.cintas[lado][0] - p.joints[mano]).length() < 0.01);
+            // Y la punta se queda a la izquierda si vamos a la derecha.
+            assert!(
+                p.cintas[lado][N_CINTA - 1].x < p.joints[mano].x - 1.0,
+                "la cinta {lado} no se queda atras"
+            );
+        }
     }
 
     #[test]
