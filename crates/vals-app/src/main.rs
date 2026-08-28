@@ -239,5 +239,9 @@ fn read_input() -> InputFrame {
     f.set(InputFrame::SHOOT, is_key_down(KeyCode::Z));
     f.set(InputFrame::DASH, is_key_down(KeyCode::X));
     f.set(InputFrame::PARRY, is_key_down(KeyCode::C));
+    f.set(
+        InputFrame::SUPER,
+        is_key_down(KeyCode::Space) || is_key_down(KeyCode::V),
+    );
     f
 }

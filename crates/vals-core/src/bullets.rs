@@ -59,9 +59,12 @@ pub const KIND_MEDIUM: u8 = 1;
 pub const KIND_LARGE: u8 = 2;
 pub const KIND_NEEDLE: u8 = 3;
 
-/// Se puede desviar con el parry. Lo usara H4.
+/// Se puede neutralizar con el parry.
+///
+/// Estas son las balas que invierten el juego: en vez de esquivarlas te
+/// conviene ir a por ellas. Es lo que separa esto de un "esquiva y ya".
 pub const FLAG_PARRYABLE: u8 = 1 << 0;
-/// Ya se rozo, para no puntuar el graze dos veces. Lo usara H4.
+/// Ya se rozo, para no cobrar el graze dos veces por la misma bala.
 pub const FLAG_GRAZED: u8 = 1 << 1;
 
 /// Parametros para crear una bala.
@@ -315,6 +318,53 @@ impl Bullets {
         n
     }
 
+    /// Neutraliza las balas parryables dentro del circulo. Devuelve cuantas.
+    ///
+    /// Solo toca las marcadas con [`FLAG_PARRYABLE`]: el parry es una lectura
+    /// del patron, no un boton de limpiar pantalla.
+    pub fn parry_circle(&mut self, p: Vec2, r: f32) -> u32 {
+        let mut n = 0;
+        for i in 0..self.high_water {
+            if !self.alive[i] || self.flags[i] & FLAG_PARRYABLE == 0 {
+                continue;
+            }
+            let dx = self.pos_x[i] - p.x;
+            let dy = self.pos_y[i] - p.y;
+            let rad = BULLET_KINDS[self.kind[i] as usize].radius + r;
+            if dx * dx + dy * dy <= rad * rad {
+                self.alive[i] = false;
+                self.free.push(i as u32);
+                self.live -= 1;
+                n += 1;
+            }
+        }
+        n
+    }
+
+    /// Marca como rozadas las balas dentro del circulo y devuelve cuantas son
+    /// nuevas.
+    ///
+    /// La marca es permanente para esa bala: rozar la misma diez veces mientras
+    /// pasa a tu lado tiene que pagar una, no diez. Si no, el graze premiaria
+    /// quedarse quieto pegado a una bala lenta, que es lo contrario de lo que
+    /// se busca.
+    pub fn graze_circle(&mut self, p: Vec2, r: f32) -> u32 {
+        let mut n = 0;
+        for i in 0..self.high_water {
+            if !self.alive[i] || self.flags[i] & FLAG_GRAZED != 0 {
+                continue;
+            }
+            let dx = self.pos_x[i] - p.x;
+            let dy = self.pos_y[i] - p.y;
+            let rad = BULLET_KINDS[self.kind[i] as usize].radius + r;
+            if dx * dx + dy * dy <= rad * rad {
+                self.flags[i] |= FLAG_GRAZED;
+                n += 1;
+            }
+        }
+        n
+    }
+
     pub fn get(&self, i: u32) -> BulletView {
         let i = i as usize;
         BulletView {
@@ -557,6 +607,57 @@ mod tests {
         assert_eq!(b.damage_circle(p, 5.0), 3);
         assert_eq!(b.live_count(), 2, "las lejanas siguen vivas");
         assert_eq!(b.damage_circle(p, 5.0), 0, "no se cobran dos veces");
+    }
+
+    #[test]
+    fn el_parry_solo_toca_las_parryables() {
+        let mut b = Bullets::with_capacity(32);
+        let p = centro();
+        b.spawn(Spawn {
+            pos: p,
+            flags: FLAG_PARRYABLE,
+            ..Default::default()
+        });
+        b.spawn(en(p)); // normal, no parryable
+        assert_eq!(b.parry_circle(p, 30.0), 1);
+        assert_eq!(b.live_count(), 1, "la normal sigue ahi");
+    }
+
+    #[test]
+    fn el_parry_no_alcanza_lo_que_esta_lejos() {
+        let mut b = Bullets::with_capacity(16);
+        let p = centro();
+        b.spawn(Spawn {
+            pos: p + Vec2::new(200.0, 0.0),
+            flags: FLAG_PARRYABLE,
+            ..Default::default()
+        });
+        assert_eq!(b.parry_circle(p, 30.0), 0);
+        assert_eq!(b.live_count(), 1);
+    }
+
+    #[test]
+    fn el_graze_solo_se_cobra_una_vez_por_bala() {
+        let mut b = Bullets::with_capacity(16);
+        let p = centro();
+        b.spawn(en(p));
+        assert_eq!(b.graze_circle(p, 30.0), 1);
+        assert_eq!(
+            b.graze_circle(p, 30.0),
+            0,
+            "la misma bala no paga dos veces"
+        );
+        assert_eq!(b.live_count(), 1, "rozar no mata la bala");
+    }
+
+    #[test]
+    fn el_graze_cuenta_cada_bala_nueva() {
+        let mut b = Bullets::with_capacity(32);
+        let p = centro();
+        for i in 0..5 {
+            b.spawn(en(p + Vec2::new(i as f32 * 2.0, 0.0)));
+        }
+        assert_eq!(b.graze_circle(p, 30.0), 5);
     }
 
     #[test]

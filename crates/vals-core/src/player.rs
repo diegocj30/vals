@@ -83,6 +83,44 @@ pub const SHOT_DAMAGE: i32 = 1;
 /// Separacion entre los dos chorros, a cada lado del personaje.
 pub const SHOT_SPREAD: f32 = 9.0;
 
+/// Radio del parry.
+///
+/// Muy generoso comparado con la hitbox (2,5). El parry es una decision
+/// deliberada con enfriamiento, no una lectura de precision: lo dificil tiene
+/// que ser *decidir* meterse, no acertar al pixel.
+pub const PARRY_RADIUS: f32 = 46.0;
+
+/// Ticks que dura la ventana de parry tras pulsar.
+pub const PARRY_WINDOW_TICKS: u32 = 7;
+
+/// Enfriamiento del parry. Falla y te quedas vendido un rato.
+pub const PARRY_COOLDOWN_TICKS: u32 = 20;
+
+/// Invulnerabilidad que regala un parry acertado.
+///
+/// Existe porque el parry te empuja a meterte donde hay balas. Si acertar te
+/// dejase igual de expuesto, la jugada correcta seria no usarlo nunca.
+pub const PARRY_IFRAME_TICKS: u32 = 14;
+
+/// Medidor que da cada bala neutralizada con el parry.
+pub const PARRY_METER: f32 = 14.0;
+
+/// Radio de roce. Entre la hitbox y el parry: premia pasar cerca.
+pub const GRAZE_RADIUS: f32 = 26.0;
+
+/// Medidor por bala rozada. Diminuto a proposito: el graze es el goteo, el
+/// parry es el chorro.
+pub const GRAZE_METER: f32 = 0.6;
+
+/// Medidor lleno.
+pub const METER_MAX: f32 = 100.0;
+
+/// Dano del super.
+pub const SUPER_DAMAGE: i32 = 60;
+
+/// Ticks de fogonazo e invulnerabilidad del super.
+pub const SUPER_TICKS: u32 = 20;
+
 /// Puntos que guarda la estela.
 pub const TRAIL_LEN: usize = 20;
 
@@ -185,6 +223,15 @@ pub struct Player {
     /// coinciden.
     pub iframes: u32,
     pub deaths: u32,
+    /// Ticks que queda abierta la ventana de parry.
+    pub parry_window: u32,
+    pub parry_cooldown: u32,
+    /// Ticks de fogonazo del super en curso.
+    pub super_ticks: u32,
+    /// Medidor en `[0, METER_MAX]`. Lo llenan el parry y el graze.
+    pub meter: f32,
+    pub parries: u32,
+    pub grazes: u32,
     /// Ticks hasta el siguiente disparo.
     pub shot_cooldown: u32,
     pub dash: Dash,
@@ -202,6 +249,12 @@ impl Player {
             focus_t: 0.0,
             iframes: 0,
             deaths: 0,
+            parry_window: 0,
+            parry_cooldown: 0,
+            super_ticks: 0,
+            meter: 0.0,
+            parries: 0,
+            grazes: 0,
             shot_cooldown: 0,
             dash: Dash::default(),
             trail: Trail::new(pos),
@@ -225,6 +278,47 @@ impl Player {
         self.iframes > 0
     }
 
+    /// Si la ventana de parry esta abierta.
+    pub fn is_parrying(&self) -> bool {
+        self.parry_window > 0
+    }
+
+    /// Medidor en `[0, 1]`, que es lo que dibuja la barra.
+    pub fn meter_ratio(&self) -> f32 {
+        (self.meter / METER_MAX).clamp(0.0, 1.0)
+    }
+
+    pub fn meter_full(&self) -> bool {
+        self.meter >= METER_MAX
+    }
+
+    pub(crate) fn add_meter(&mut self, amount: f32) {
+        self.meter = (self.meter + amount).min(METER_MAX);
+    }
+
+    /// Gasta el medidor entero. Devuelve `false` si no estaba lleno.
+    ///
+    /// Todo o nada: un super a medias no se siente como un super.
+    pub(crate) fn spend_meter(&mut self) -> bool {
+        if !self.meter_full() {
+            return false;
+        }
+        self.meter = 0.0;
+        self.super_ticks = SUPER_TICKS;
+        self.iframes = self.iframes.max(SUPER_TICKS);
+        true
+    }
+
+    /// Registra un parry acertado.
+    pub(crate) fn on_parry(&mut self, bullets: u32) {
+        self.parries += bullets;
+        self.add_meter(bullets as f32 * PARRY_METER);
+        self.iframes = self.iframes.max(PARRY_IFRAME_TICKS);
+        // La ventana se consume al acertar: un parry es un golpe, no una
+        // escoba que va barriendo mientras dura.
+        self.parry_window = 0;
+    }
+
     /// Mata al jugador y lo devuelve a `respawn` con invulnerabilidad larga.
     ///
     /// Se cancela el dash en curso: reaparecer y salir disparado por inercia
@@ -236,6 +330,12 @@ impl Player {
         self.vel = Vec2::ZERO;
         self.dash = Dash::default();
         self.shot_cooldown = 0;
+        self.parry_window = 0;
+        self.parry_cooldown = 0;
+        self.super_ticks = 0;
+        // El medidor se pierde al morir. Es la penalizacion de verdad: sin
+        // ella, morir seria casi gratis porque la pantalla ademas se limpia.
+        self.meter = 0.0;
         self.iframes = RESPAWN_IFRAME_TICKS;
         self.trail = Trail::new(respawn);
     }
@@ -255,6 +355,9 @@ impl Player {
         self.dash.cooldown = self.dash.cooldown.saturating_sub(1);
         self.iframes = self.iframes.saturating_sub(1);
         self.shot_cooldown = self.shot_cooldown.saturating_sub(1);
+        self.parry_window = self.parry_window.saturating_sub(1);
+        self.parry_cooldown = self.parry_cooldown.saturating_sub(1);
+        self.super_ticks = self.super_ticks.saturating_sub(1);
         self.dash.buffer = self.dash.buffer.saturating_sub(1);
 
         self.focused = input.is_down(InputFrame::FOCUS);
@@ -271,6 +374,16 @@ impl Player {
         let dir = Vec2::new(ax, ay).normalize_or_zero();
         if dir != Vec2::ZERO {
             self.facing = dir;
+        }
+
+        // El parry, como el dash, reacciona al flanco: mantener pulsado no
+        // puede convertirse en un escudo permanente.
+        if input.is_down(InputFrame::PARRY)
+            && !prev.is_down(InputFrame::PARRY)
+            && self.parry_cooldown == 0
+        {
+            self.parry_window = PARRY_WINDOW_TICKS;
+            self.parry_cooldown = PARRY_COOLDOWN_TICKS;
         }
 
         if input.is_down(InputFrame::DASH) && !prev.is_down(InputFrame::DASH) {

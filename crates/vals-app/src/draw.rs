@@ -3,7 +3,7 @@
 //! miniquad puro o wgpu sin tocar `vals-core`.
 
 use macroquad::prelude::*;
-use vals_core::bullets::{BULLET_KINDS, Bullets};
+use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
 use vals_core::{ARENA_H, ARENA_W, World, player};
 
 use crate::stats::FrameStats;
@@ -38,6 +38,15 @@ const HP_BAR_BG: Color = color_u8!(40, 26, 48, 255);
 const SHOT: Color = color_u8!(180, 255, 240, 255);
 const VICTORY: Color = color_u8!(180, 255, 220, 255);
 
+// Las parryables. Rosa brillante y con un anillo que late: tienen que gritar
+// "ven a por mi" desde el otro lado de la pantalla, porque en eso consiste el
+// juego que anaden.
+const PARRYABLE: Color = color_u8!(255, 145, 210, 255);
+const PARRY_RING: Color = color_u8!(255, 255, 255, 255);
+const METER: Color = color_u8!(120, 255, 200, 255);
+const METER_FULL: Color = color_u8!(255, 235, 140, 255);
+const METER_BG: Color = color_u8!(24, 40, 40, 255);
+
 const TEXT: Color = color_u8!(150, 210, 235, 255);
 const TEXT_DIM: Color = color_u8!(90, 120, 145, 255);
 
@@ -53,7 +62,13 @@ pub struct Layout {
 
 impl Layout {
     pub fn compute() -> Self {
-        let scale = ((screen_height() - 24.0) / ARENA_H).max(0.05);
+        // Se ajusta por el eje mas apretado, no solo por el alto: en una
+        // ventana estrecha —o en el navegador de un movil en vertical— escalar
+        // solo por la altura saca la arena por los lados y recorta el campo de
+        // juego, que en un danmaku es directamente injugable.
+        let scale = ((screen_height() - 24.0) / ARENA_H)
+            .min((screen_width() - 24.0) / ARENA_W)
+            .max(0.05);
         let size = vec2(ARENA_W * scale, ARENA_H * scale);
         let origin = ((vec2(screen_width(), screen_height()) - size) * 0.5).round();
         Self { origin, scale }
@@ -80,9 +95,10 @@ pub fn frame(world: &World, alpha: f32, layout: &Layout) {
     draw_trail(world, layout);
     // Las balas van encima del jefe pero debajo del jugador: taparte tu propia
     // hitbox seria exactamente lo contrario de lo que hace falta.
-    draw_bullets(&world.bullets, layout);
+    draw_bullets_at(&world.bullets, layout, world.tick as f32 + alpha);
     draw_player(world, alpha, layout);
     draw_hp_bar(world, layout);
+    draw_meter(world, layout);
     if world.victory {
         draw_victory(layout);
     }
@@ -164,12 +180,36 @@ fn draw_player_shots(world: &World, l: &Layout) {
 /// macroquad. Es a proposito la version lenta: H6 la sustituye por un unico
 /// draw call instanciado, y esto es el "antes" con el que se comparara.
 pub fn draw_bullets(bullets: &Bullets, l: &Layout) {
+    draw_bullets_at(bullets, l, 0.0)
+}
+
+/// `phase` anima el latido de las parryables. La escena de stress pasa 0.
+pub fn draw_bullets_at(bullets: &Bullets, l: &Layout, phase: f32) {
+    let latido = 0.5 + 0.5 * (phase * 0.18).sin();
     for b in bullets.iter_live() {
-        let color = BULLET_COLORS[b.kind as usize];
-        let r = l.len(BULLET_KINDS[b.kind as usize].draw_radius);
         let s = l.to_screen(b.pos.x, b.pos.y);
+        let parryable = b.flags & FLAG_PARRYABLE != 0;
+        let color = if parryable {
+            PARRYABLE
+        } else {
+            BULLET_COLORS[b.kind as usize]
+        };
+        let r = l.len(BULLET_KINDS[b.kind as usize].draw_radius);
+
         draw_circle(s.x, s.y, r * 1.9, fade(color, 0.18));
         draw_circle(s.x, s.y, r, color);
+
+        if parryable {
+            // El anillo es lo que de verdad las distingue del resto a simple
+            // vista, mas que el color: se mueve.
+            draw_circle_lines(
+                s.x,
+                s.y,
+                r * (1.45 + 0.35 * latido),
+                1.5,
+                fade(PARRY_RING, 0.35 + 0.45 * latido),
+            );
+        }
     }
 }
 
@@ -236,6 +276,38 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
         draw_circle_lines(s.x, s.y, r, 1.5, fade(HITBOX, ft * 0.9));
     }
 
+    // Radio de roce, visible solo en focus: es informacion util al aprender,
+    // pero pintarla siempre ensuciaria la pantalla justo cuando mas limpia
+    // tiene que estar.
+    if ft > 0.0 {
+        draw_circle_lines(
+            s.x,
+            s.y,
+            l.len(player::GRAZE_RADIUS),
+            1.0,
+            fade(METER, ft * 0.25),
+        );
+    }
+
+    // La ventana de parry abierta. Se dibuja el alcance real, ni mas ni menos:
+    // que el jugador pueda aprender la distancia mirando.
+    if world.player.is_parrying() {
+        let r = l.len(player::PARRY_RADIUS);
+        draw_circle(s.x, s.y, r, fade(PARRYABLE, 0.10));
+        draw_circle_lines(s.x, s.y, r, 2.0, fade(PARRY_RING, 0.75));
+    }
+
+    // Fogonazo del super.
+    if world.player.super_ticks > 0 {
+        let k = world.player.super_ticks as f32 / player::SUPER_TICKS as f32;
+        draw_circle(
+            s.x,
+            s.y,
+            sprite_r * (3.0 + 28.0 * (1.0 - k)),
+            fade(METER, k * 0.35),
+        );
+    }
+
     // La hitbox real. Siempre visible: aprender que casi todo el personaje es
     // decorativo es parte de aprender el juego.
     draw_circle(
@@ -244,6 +316,24 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
         l.len(player::PLAYER_HITBOX_RADIUS) * (1.0 + 0.6 * ft),
         HITBOX,
     );
+}
+
+/// Medidor del super, abajo. Simetrico con la vida del jefe, que va arriba:
+/// lo suyo arriba, lo tuyo abajo.
+fn draw_meter(world: &World, l: &Layout) {
+    let o = l.to_screen(0.0, ARENA_H);
+    let w = l.len(ARENA_W);
+    let alto = 6.0;
+    let y = o.y - alto - 8.0;
+    let lleno = world.player.meter_full();
+
+    draw_rectangle(o.x, y, w, alto, METER_BG);
+    let color = if lleno { METER_FULL } else { METER };
+    draw_rectangle(o.x, y, w * world.player.meter_ratio(), alto, color);
+
+    if lleno {
+        draw_rectangle_lines(o.x, y, w, alto, 2.0, METER_FULL);
+    }
 }
 
 const X: f32 = 14.0;
@@ -325,6 +415,25 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
         &mut y,
     );
 
+    y += 6.0;
+    put(
+        &format!("medidor {:>3.0}%", world.player.meter_ratio() * 100.0),
+        if world.player.meter_full() {
+            METER_FULL
+        } else {
+            TEXT_DIM
+        },
+        &mut y,
+    );
+    put(
+        &format!(
+            "parry {}  graze {}",
+            world.player.parries, world.player.grazes
+        ),
+        TEXT_DIM,
+        &mut y,
+    );
+
     // Frame data del dash: es lo que hay que mirar para afinar el feel.
     y += 6.0;
     let d = &world.player.dash;
@@ -351,7 +460,7 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
         &mut y,
     );
 
-    let help = "F1 debug   R reset   SHIFT focus   X dash";
+    let help = "Z disparar   X dash   C parry   ESPACIO super   SHIFT focus   F1   R";
     draw_text(help, X, screen_height() - 14.0, 16.0, TEXT_DIM);
 }
 

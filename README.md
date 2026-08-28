@@ -23,9 +23,20 @@ cargo run -p vals-app --profile fast   # nativo, optimizado, compila rapido
 cargo test                       # tests, incluido el de determinismo
 ```
 
-Controles: flechas o WASD para moverse, `Z` dispara, `X` es el dash con
-i-frames y `SHIFT` el modo focus (lento, con la hitbox marcada). `F1` alterna el
-overlay de debug y `R` reinicia.
+Controles:
+
+| Tecla | |
+|---|---|
+| Flechas / WASD | mover |
+| `Z` | disparar |
+| `X` | dash con i-frames |
+| `C` | **parry**: neutraliza las balas rosas que tengas cerca y llena el medidor |
+| `ESPACIO` | **super**: con el medidor lleno, limpia la pantalla y pega fuerte |
+| `SHIFT` | focus: lento, con la hitbox y el radio de roce marcados |
+| `F1` / `R` | overlay de debug / reiniciar |
+
+Rozar balas sin que te den tambien llena el medidor, poco a poco. La idea es
+que acercarse compense.
 
 ## Disenar un jefe
 

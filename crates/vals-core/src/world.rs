@@ -5,7 +5,10 @@ use glam::Vec2;
 use crate::boss::{Boss, BossDef};
 use crate::bullets::{Bullets, KIND_NEEDLE, Spawn};
 use crate::hash::Fnv1a;
-use crate::player::{PLAYER_HITBOX_RADIUS, SHOT_DAMAGE, SHOT_EVERY, SHOT_SPEED, SHOT_SPREAD};
+use crate::player::{
+    GRAZE_METER, GRAZE_RADIUS, PARRY_RADIUS, PLAYER_HITBOX_RADIUS, SHOT_DAMAGE, SHOT_EVERY,
+    SHOT_SPEED, SHOT_SPREAD, SUPER_DAMAGE,
+};
 use crate::{ARENA_H, ARENA_W, DT, InputFrame, Pcg32, Player};
 
 /// Capacidad del pool de disparos del jugador.
@@ -102,6 +105,9 @@ impl World {
         self.bullets.update(DT);
         self.player_shots.update(DT);
 
+        self.resolve_parry();
+        self.resolve_graze();
+        self.resolve_super(input);
         self.resolve_player_shots();
         self.resolve_player_hit();
 
@@ -124,6 +130,43 @@ impl World {
                 kind: KIND_NEEDLE,
                 ..Default::default()
             });
+        }
+    }
+
+    fn resolve_parry(&mut self) {
+        if !self.player.is_parrying() {
+            return;
+        }
+        let n = self.bullets.parry_circle(self.player.pos, PARRY_RADIUS);
+        if n > 0 {
+            self.player.on_parry(n);
+        }
+    }
+
+    fn resolve_graze(&mut self) {
+        // Va antes de la comprobacion de muerte: si una bala te roza y te mata
+        // en el mismo tick, al menos te has llevado el roce.
+        let n = self.bullets.graze_circle(self.player.pos, GRAZE_RADIUS);
+        if n > 0 {
+            self.player.grazes += n;
+            self.player.add_meter(n as f32 * GRAZE_METER);
+        }
+    }
+
+    fn resolve_super(&mut self, input: InputFrame) {
+        let pulsado =
+            input.is_down(InputFrame::SUPER) && !self.prev_input.is_down(InputFrame::SUPER);
+        if !pulsado || !self.player.spend_meter() {
+            return;
+        }
+        // Limpia la pantalla y pega fuerte. Es la descarga de todo lo que has
+        // arriesgado acercandote, asi que tiene que notarse.
+        self.bullets.clear();
+        if !self.boss.defeated && self.boss.damage(SUPER_DAMAGE) {
+            self.bullets.clear();
+            if self.boss.defeated {
+                self.victory = true;
+            }
         }
     }
 
@@ -199,6 +242,12 @@ impl World {
         h.write_vec2(p.dash.dir);
         h.write_u64(u64::from(p.iframes));
         h.write_u64(u64::from(p.deaths));
+        h.write_u64(u64::from(p.parry_window));
+        h.write_u64(u64::from(p.parry_cooldown));
+        h.write_u64(u64::from(p.super_ticks));
+        h.write_f32(p.meter);
+        h.write_u64(u64::from(p.parries));
+        h.write_u64(u64::from(p.grazes));
 
         h.write_u64(u64::from(self.boss_enabled));
         h.write_u64(u64::from(self.victory));
@@ -223,7 +272,7 @@ mod tests {
         World::sandbox(seed)
     }
 
-    fn pulsar(bits: u8) -> InputFrame {
+    fn pulsar(bits: u16) -> InputFrame {
         InputFrame::from_bits(bits)
     }
 
@@ -238,7 +287,7 @@ mod tests {
     fn inputs_de_prueba(seed: u64, n: usize) -> Vec<InputFrame> {
         let mut r = Pcg32::new(seed);
         (0..n)
-            .map(|_| InputFrame::from_bits((r.next_u32() & 0xFF) as u8))
+            .map(|_| InputFrame::from_bits((r.next_u32() & 0x1FF) as u16))
             .collect()
     }
 
@@ -743,5 +792,211 @@ mod tests {
         correr(&mut w, NADA, 300);
         assert_eq!(w.bullets.live_count(), 0);
         assert_eq!(w.boss.pos, pos, "ni dispara ni se mueve");
+    }
+    // --- Parry, graze y super ---
+
+    const PARRY: InputFrame = InputFrame::from_bits(InputFrame::PARRY);
+    const SUPER: InputFrame = InputFrame::from_bits(InputFrame::SUPER);
+
+    /// Pone una bala parryable justo al lado del jugador.
+    fn bala_rosa(w: &mut World, dist: f32) {
+        let pos = w.player.pos + Vec2::new(dist, 0.0);
+        w.bullets
+            .spawn(crate::bullets::Spawn {
+                pos,
+                flags: crate::bullets::FLAG_PARRYABLE,
+                ..Default::default()
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn el_parry_neutraliza_las_rosas_y_llena_el_medidor() {
+        let mut w = mundo(0);
+        bala_rosa(&mut w, 20.0);
+        assert_eq!(w.player.meter, 0.0);
+
+        w.step(PARRY);
+
+        assert_eq!(
+            w.bullets.live_count(),
+            0,
+            "la bala rosa deberia desaparecer"
+        );
+        assert_eq!(w.player.parries, 1);
+        assert!((w.player.meter - PARRY_METER).abs() < 1e-3);
+    }
+
+    #[test]
+    fn el_parry_no_toca_las_balas_normales() {
+        let mut w = mundo(0);
+        // Normal, sin FLAG_PARRYABLE.
+        let pos = w.player.pos + Vec2::new(20.0, 0.0);
+        w.bullets
+            .spawn(crate::bullets::Spawn {
+                pos,
+                ..Default::default()
+            })
+            .unwrap();
+
+        w.step(PARRY);
+
+        assert_eq!(
+            w.bullets.live_count(),
+            1,
+            "el parry no es un limpiapantallas"
+        );
+        assert_eq!(w.player.parries, 0);
+    }
+
+    #[test]
+    fn el_parry_no_alcanza_lo_que_esta_lejos() {
+        let mut w = mundo(0);
+        bala_rosa(&mut w, PARRY_RADIUS + 40.0);
+        w.step(PARRY);
+        assert_eq!(w.bullets.live_count(), 1);
+        assert_eq!(w.player.parries, 0);
+    }
+
+    #[test]
+    fn un_parry_acertado_da_invulnerabilidad() {
+        let mut w = mundo(0);
+        bala_rosa(&mut w, 20.0);
+        w.step(PARRY);
+        assert!(
+            w.player.is_invulnerable(),
+            "meterse a parriar tiene que protegerte, o nunca compensa"
+        );
+    }
+
+    #[test]
+    fn mantener_el_boton_de_parry_no_lo_encadena() {
+        let mut w = mundo(0);
+        // Mantener pulsado mucho mas que el enfriamiento.
+        correr(&mut w, PARRY, PARRY_COOLDOWN_TICKS as usize * 3);
+        bala_rosa(&mut w, 20.0);
+        correr(&mut w, PARRY, 10);
+        assert_eq!(
+            w.player.parries, 0,
+            "el parry reacciona al flanco, no a mantener la tecla"
+        );
+    }
+
+    #[test]
+    fn el_parry_respeta_su_enfriamiento() {
+        let mut w = mundo(0);
+        w.step(PARRY); // falla, no habia nada que parriar
+
+        // Esperar a que cierre la ventana, pero no a que acabe el enfriamiento.
+        correr(&mut w, NADA, PARRY_WINDOW_TICKS as usize + 2);
+        assert!(
+            !w.player.is_parrying(),
+            "la ventana ya deberia estar cerrada"
+        );
+        assert!(w.player.parry_cooldown > 0, "pero el enfriamiento sigue");
+
+        bala_rosa(&mut w, 20.0);
+        w.step(PARRY);
+        assert_eq!(w.player.parries, 0, "fallar el parry te deja vendido");
+
+        correr(&mut w, NADA, PARRY_COOLDOWN_TICKS as usize);
+        w.step(PARRY);
+        assert_eq!(w.player.parries, 1, "y luego vuelve a estar listo");
+    }
+
+    #[test]
+    fn el_graze_llena_el_medidor_a_goteo() {
+        let mut w = mundo(0);
+        let pos = w.player.pos + Vec2::new(GRAZE_RADIUS * 0.5, 0.0);
+        w.bullets
+            .spawn(crate::bullets::Spawn {
+                pos,
+                ..Default::default()
+            })
+            .unwrap();
+
+        w.step(NADA);
+        assert_eq!(w.player.grazes, 1);
+        assert!((w.player.meter - GRAZE_METER).abs() < 1e-3);
+
+        // La misma bala quieta no vuelve a pagar.
+        correr(&mut w, NADA, 10);
+        assert_eq!(w.player.grazes, 1);
+    }
+
+    #[test]
+    fn el_graze_no_llega_a_lo_que_pasa_lejos() {
+        let mut w = mundo(0);
+        let pos = w.player.pos + Vec2::new(GRAZE_RADIUS + 60.0, 0.0);
+        w.bullets
+            .spawn(crate::bullets::Spawn {
+                pos,
+                ..Default::default()
+            })
+            .unwrap();
+        correr(&mut w, NADA, 5);
+        assert_eq!(w.player.grazes, 0);
+        assert_eq!(w.player.meter, 0.0);
+    }
+
+    #[test]
+    fn el_super_necesita_el_medidor_lleno() {
+        let mut w = mundo(0);
+        w.boss.hp = 500;
+        let vida = w.boss.hp;
+        w.player.meter = METER_MAX - 1.0;
+
+        w.step(SUPER);
+        assert_eq!(w.boss.hp, vida, "sin medidor lleno no sale");
+        assert!(w.player.meter > 0.0, "y no se gasta");
+    }
+
+    #[test]
+    fn el_super_limpia_la_pantalla_y_pega_fuerte() {
+        let mut w = mundo(0);
+        w.boss.hp = 500;
+        for i in 0..30 {
+            w.bullets
+                .spawn(crate::bullets::Spawn {
+                    pos: Vec2::new(60.0 + i as f32 * 4.0, 300.0),
+                    ..Default::default()
+                })
+                .unwrap();
+        }
+        w.player.meter = METER_MAX;
+        let vida = w.boss.hp;
+
+        w.step(SUPER);
+
+        assert_eq!(w.bullets.live_count(), 0);
+        assert_eq!(w.boss.hp, vida - SUPER_DAMAGE);
+        assert_eq!(w.player.meter, 0.0, "todo o nada");
+        assert!(w.player.is_invulnerable(), "y protege mientras dura");
+    }
+
+    #[test]
+    fn morir_vacia_el_medidor() {
+        let mut w = mundo(0);
+        w.player.meter = METER_MAX;
+        bala_encima(&mut w);
+        w.step(NADA);
+        assert_eq!(
+            w.player.meter, 0.0,
+            "si morir no costase el medidor, seria casi gratis"
+        );
+    }
+
+    #[test]
+    fn el_jefe_dispara_balas_parryables() {
+        let mut w = World::new(0);
+        // El patron mete rosas cada tanto; hay que darle tiempo a la rafaga
+        // apuntada, que es la que las lanza.
+        correr(&mut w, NADA, 200);
+        let rosas = w
+            .bullets
+            .iter_live()
+            .filter(|b| b.flags & crate::bullets::FLAG_PARRYABLE != 0)
+            .count();
+        assert!(rosas > 0, "sin balas rosas el parry no tendria a que jugar");
     }
 }
