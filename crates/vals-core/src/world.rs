@@ -163,8 +163,16 @@ impl World {
     /// el jefe en vez de probando lo suyo— y es la base del modo entrenamiento
     /// que tarde o temprano querra existir.
     pub fn sandbox(seed: u64) -> Self {
+        Self::sandbox_with_mode(seed, Mode::Flight)
+    }
+
+    /// Lo mismo, en el modo que se pida. Para probar la fisica de plataformas
+    /// sin que el jefe se meta por medio.
+    pub fn sandbox_with_mode(seed: u64, mode: Mode) -> Self {
         Self {
             boss_enabled: false,
+            mode,
+            player: Player::new(Self::spawn_pos_for(mode)),
             ..Self::new(seed)
         }
     }

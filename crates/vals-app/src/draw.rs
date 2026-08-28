@@ -7,6 +7,7 @@ use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bullet_renderer::BulletRenderer;
+use crate::skeleton::{self, HUESOS, Pose};
 use crate::stats::FrameStats;
 
 // Paleta neon. El arte del juego es procedural: no se dibuja nada a mano.
@@ -439,8 +440,11 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
         1.0
     };
 
+    // El halo se queda: es lo que la separa del fondo cuando la pantalla se
+    // llena. Lo que cambia es lo que hay dentro.
     draw_circle(s.x, s.y, sprite_r * 2.2, fade(PLAYER_GLOW, body_alpha));
-    draw_circle(s.x, s.y, sprite_r, fade(PLAYER_BODY, body_alpha));
+    let figura = skeleton::pose(&world.player, t, world.mode == Mode::Platform);
+    draw_figura(&figura, s, l, fade(PLAYER_BODY, body_alpha));
 
     // Anillo de focus: se cierra sobre la hitbox conforme entras en modo lento.
     let ft = world.player.focus_t;
@@ -489,6 +493,35 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
         l.len(player::PLAYER_HITBOX_RADIUS) * (1.0 + 0.6 * ft),
         HITBOX,
     );
+}
+
+/// Dibuja el esqueleto: huesos como lineas con las articulaciones redondeadas,
+/// y la cabeza como un circulo.
+///
+/// Se pinta dos veces, una gruesa y tenue y otra fina y viva. Es un truco
+/// barato que da el contorno de neon sin post-proceso ni una segunda pasada de
+/// render.
+fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, color: Color) {
+    let punto = |j: Vec2| centro + vec2(j.x, j.y) * l.scale();
+    let grosor_base = (l.len(1.9)).max(1.2);
+
+    for (grosor, alfa) in [(grosor_base * 2.4, 0.22), (grosor_base, 1.0)] {
+        let c = fade(color, alfa);
+        for (a, b) in HUESOS {
+            let (pa, pb) = (punto(p.joints[a]), punto(p.joints[b]));
+            draw_line(pa.x, pa.y, pb.x, pb.y, grosor, c);
+            // Redondear las uniones: sin esto los huesos se ven descosidos en
+            // los angulos cerrados.
+            draw_circle(pb.x, pb.y, grosor * 0.5, c);
+        }
+        let cabeza = punto(p.joints[skeleton::CABEZA]);
+        draw_circle(
+            cabeza.x,
+            cabeza.y,
+            l.len(skeleton::RADIO_CABEZA) + grosor * 0.3,
+            c,
+        );
+    }
 }
 
 /// Medidor del super, abajo. Simetrico con la vida del jefe, que va arriba:

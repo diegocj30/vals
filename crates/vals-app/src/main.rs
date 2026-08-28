@@ -13,6 +13,7 @@ mod bullet_renderer;
 mod draw;
 mod hot;
 mod replay_io;
+mod skeleton;
 mod stats;
 
 use audio::{Audio, Sfx};
