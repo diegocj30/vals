@@ -5,10 +5,12 @@
 
 use macroquad::prelude::*;
 use vals_core::bench::Stress;
-use vals_core::{DT, InputFrame, World};
+use vals_core::replay::Replay;
+use vals_core::{DT, InputFrame, Recorder, World};
 
 mod draw;
 mod hot;
+mod replay_io;
 mod stats;
 
 use hot::HotReload;
@@ -47,51 +49,62 @@ fn window_conf() -> Conf {
     }
 }
 
-#[macroquad::main(window_conf)]
-async fn main() {
-    match Args::parse() {
-        Some(args) => run_bench(args).await,
-        None => run_game().await,
+/// En que modo arranca la app.
+enum Mode {
+    Game,
+    /// Escena de stress. `frames` mide y sale, para que las cifras de PERF.md
+    /// salgan de un comando repetible.
+    Bench {
+        target: usize,
+        frames: Option<u32>,
+    },
+    /// Reproduce un replay guardado.
+    Replay(String),
+}
+
+fn parse_mode() -> Mode {
+    let args: Vec<String> = std::env::args().collect();
+    let valor = |flag: &str| -> Option<&String> {
+        let i = args.iter().position(|a| a == flag)?;
+        args.get(i + 1)
+    };
+
+    if let Some(p) = valor("--replay") {
+        return Mode::Replay(p.clone());
     }
-}
-
-/// Configuracion de la escena de stress.
-struct Args {
-    target: usize,
-    /// Si se indica, se mide ese numero de frames, se imprime el resumen y se
-    /// sale. Es lo que hace que las filas de `docs/PERF.md` salgan de un
-    /// comando repetible y no de mirar el overlay a ojo.
-    frames: Option<u32>,
-}
-
-impl Args {
-    /// Lee `--bench-scene [n] [--frames n]`.
-    ///
-    /// En web no hay argumentos, asi que alli siempre se juega.
-    fn parse() -> Option<Self> {
-        let args: Vec<String> = std::env::args().collect();
-        let i = args.iter().position(|a| a == "--bench-scene")?;
-        let valor = |flag: &str| -> Option<usize> {
-            let j = args.iter().position(|a| a == flag)?;
-            args.get(j + 1)?.parse().ok()
-        };
-        Some(Self {
+    if let Some(i) = args.iter().position(|a| a == "--bench-scene") {
+        return Mode::Bench {
             target: args
                 .get(i + 1)
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(BENCH_DEFAULT),
-            frames: valor("--frames").map(|n| n as u32),
-        })
+            frames: valor("--frames").and_then(|s| s.parse().ok()),
+        };
+    }
+    Mode::Game
+}
+
+#[macroquad::main(window_conf)]
+async fn main() {
+    match parse_mode() {
+        Mode::Game => run_game().await,
+        Mode::Bench { target, frames } => run_bench(target, frames).await,
+        Mode::Replay(path) => run_replay(path).await,
     }
 }
 
 async fn run_game() {
     let mut world = World::new(SEED);
+    // Se graba siempre. Cuesta dos bytes por tick, asi que no hay ningun motivo
+    // para pedirlo: cuando pasa algo digno de guardar, ya es tarde para
+    // haberle dado a grabar.
+    let mut recorder = Recorder::new(SEED);
     let mut stats = FrameStats::new();
     let mut accumulator = 0.0f32;
     let mut show_debug = true;
     let mut hot = HotReload::new();
     let mut frames: u32 = 0;
+    let mut aviso: Option<(String, bool, u32)> = None;
 
     loop {
         frames += 1;
@@ -99,6 +112,8 @@ async fn run_game() {
             && let Some(def) = hot.poll()
         {
             world.reload_boss(&def);
+            // El replay en curso ya no reproduce nada: el jefe ha cambiado.
+            recorder = Recorder::new(SEED);
         }
 
         let frame_dt = get_frame_time().min(MAX_FRAME_DT);
@@ -109,7 +124,14 @@ async fn run_game() {
         }
         if is_key_pressed(KeyCode::R) {
             world = World::new(SEED);
+            recorder = Recorder::new(SEED);
             accumulator = 0.0;
+        }
+        if is_key_pressed(KeyCode::F2) {
+            aviso = Some(match guardar_replay(&recorder) {
+                Ok(m) => (m, false, 240),
+                Err(m) => (m, true, 240),
+            });
         }
 
         // --- Simulacion: paso fijo, desacoplada del render ---
@@ -119,6 +141,7 @@ async fn run_game() {
         let mut steps = 0;
         while accumulator >= DT {
             world.step(input);
+            recorder.record(input, &world);
             accumulator -= DT;
             steps += 1;
             if steps >= MAX_STEPS_PER_FRAME {
@@ -138,10 +161,111 @@ async fn run_game() {
         draw::frame(&world, alpha, &layout);
         if show_debug {
             draw::debug_overlay(&world, &stats, steps);
+            draw::recording_badge(recorder.ticks());
         }
         if let Some((msg, error)) = hot.aviso() {
-            draw::hot_reload_banner(msg, error);
+            draw::banner(msg, error);
+        } else if let Some((msg, error, restantes)) = &mut aviso {
+            draw::banner(msg, *error);
+            *restantes = restantes.saturating_sub(1);
+            if *restantes == 0 {
+                aviso = None;
+            }
         }
+        stats.push_render((get_time() - t1) as f32);
+
+        next_frame().await;
+    }
+}
+
+fn guardar_replay(recorder: &Recorder) -> Result<String, String> {
+    if recorder.is_empty() {
+        return Err("todavia no hay nada grabado".to_owned());
+    }
+    let bytes = recorder.replay().to_bytes();
+    replay_io::save(&bytes).map(|ruta| format!("replay guardado en {ruta} ({} bytes)", bytes.len()))
+}
+
+/// Reproduce un replay guardado.
+///
+/// Ademas de verlo, comprueba las huellas sobre la marcha: si la simulacion se
+/// sale del guion, se dice en pantalla y en que tick. Es la version visual de
+/// lo que hace el test del replay dorado.
+async fn run_replay(path: String) {
+    let replay = match replay_io::load(&path)
+        .and_then(|b| Replay::from_bytes(&b).map_err(|e| format!("{path}: {e}")))
+    {
+        Ok(r) => r,
+        Err(e) => {
+            println!("{e}");
+            // Sin replay no hay nada que ensenar; se sale en vez de dejar una
+            // ventana negra sin explicacion.
+            std::process::exit(1);
+        }
+    };
+
+    println!(
+        "reproduciendo {path}: {} ticks ({:.1} s), semilla {:#018x}",
+        replay.ticks(),
+        replay.seconds(),
+        replay.seed
+    );
+
+    let mut world = World::new(replay.seed);
+    let mut stats = FrameStats::new();
+    let mut accumulator = 0.0f32;
+    let mut cursor = 0usize;
+    let mut siguiente_huella = 0usize;
+    let mut divergencia: Option<u64> = None;
+
+    loop {
+        let frame_dt = get_frame_time().min(MAX_FRAME_DT);
+        stats.push_frame(frame_dt);
+
+        if is_key_pressed(KeyCode::R) {
+            world = World::new(replay.seed);
+            cursor = 0;
+            siguiente_huella = 0;
+            divergencia = None;
+            accumulator = 0.0;
+        }
+
+        let t0 = get_time();
+        accumulator += frame_dt;
+        let mut steps = 0;
+        while accumulator >= DT {
+            match replay.inputs.get(cursor) {
+                Some(input) => {
+                    world.step(*input);
+                    cursor += 1;
+                    if let Some(cp) = replay.checkpoints.get(siguiente_huella)
+                        && cp.tick == world.tick
+                    {
+                        if world.state_hash() != cp.hash && divergencia.is_none() {
+                            divergencia = Some(world.tick);
+                            println!("DIVERGENCIA en el tick {}", world.tick);
+                        }
+                        siguiente_huella += 1;
+                    }
+                }
+                // Se acabo el replay: se congela en el ultimo frame.
+                None => accumulator = 0.0,
+            }
+            accumulator -= DT;
+            steps += 1;
+            if steps >= MAX_STEPS_PER_FRAME {
+                accumulator = 0.0;
+                break;
+            }
+        }
+        stats.push_sim((get_time() - t0) as f32);
+        let alpha = (accumulator / DT).clamp(0.0, 1.0);
+
+        let t1 = get_time();
+        let layout = draw::Layout::compute();
+        draw::frame(&world, alpha, &layout);
+        draw::debug_overlay(&world, &stats, steps);
+        draw::replay_badge(cursor, replay.inputs.len(), divergencia);
         stats.push_render((get_time() - t1) as f32);
 
         next_frame().await;
@@ -152,8 +276,7 @@ async fn run_game() {
 ///
 /// No hay jugador ni input. Sirve para ver a ojo cuanto aguanta el render y
 /// para sacar las cifras que van a `docs/PERF.md`.
-async fn run_bench(args: Args) {
-    let target = args.target;
+async fn run_bench(target: usize, limite: Option<u32>) {
     let mut stress = Stress::new(target);
     let mut stats = FrameStats::new();
     let mut accumulator = 0.0f32;
@@ -188,7 +311,7 @@ async fn run_bench(args: Args) {
         stats.push_render((get_time() - t1) as f32);
 
         frames += 1;
-        if let Some(limite) = args.frames
+        if let Some(limite) = limite
             && frames >= limite + calentamiento
         {
             println!("balas={} objetivo={target}", stress.live_count());

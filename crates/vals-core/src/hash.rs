@@ -30,6 +30,13 @@ impl Fnv1a {
         self.write_u64(u64::from(v.to_bits()));
     }
 
+    pub(crate) fn write_str(&mut self, s: &str) {
+        for b in s.bytes() {
+            self.0 ^= u64::from(b);
+            self.0 = self.0.wrapping_mul(Self::PRIME);
+        }
+    }
+
     pub(crate) fn write_vec2(&mut self, v: Vec2) {
         self.write_f32(v.x);
         self.write_f32(v.y);

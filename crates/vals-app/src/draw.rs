@@ -464,9 +464,40 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
     draw_text(help, X, screen_height() - 14.0, 16.0, TEXT_DIM);
 }
 
-/// Aviso de recarga del patron. Verde si entro, rojo si el RON esta roto.
-pub fn hot_reload_banner(msg: &str, error: bool) {
+/// Aviso de una linea. Verde si fue bien, rojo si no.
+pub fn banner(msg: &str, error: bool) {
     let color = if error { HITBOX } else { VICTORY };
-    let y = screen_height() - 38.0;
-    draw_text(msg, X, y, 18.0, color);
+    draw_text(msg, X, screen_height() - 38.0, 18.0, color);
+}
+
+/// Chivato de grabacion. Se graba siempre, asi que conviene que se vea.
+pub fn recording_badge(ticks: u64) {
+    let texto = format!("REC {:>5}t   F2 guardar", ticks);
+    let m = measure_text(&texto, None, 16, 1.0);
+    draw_circle(screen_width() - m.width - 26.0, 20.0, 4.0, HITBOX);
+    draw_text(
+        &texto,
+        screen_width() - m.width - 16.0,
+        25.0,
+        16.0,
+        TEXT_DIM,
+    );
+}
+
+/// Estado de la reproduccion de un replay.
+pub fn replay_badge(tick: usize, total: usize, divergencia: Option<u64>) {
+    let acabado = tick >= total;
+    let texto = if acabado {
+        format!("REPLAY  fin ({total}t)   R repetir")
+    } else {
+        format!("REPLAY  {tick}/{total}")
+    };
+    let m = measure_text(&texto, None, 18, 1.0);
+    draw_text(&texto, screen_width() - m.width - 16.0, 25.0, 18.0, VICTORY);
+
+    if let Some(t) = divergencia {
+        let aviso = format!("DIVERGENCIA en el tick {t}");
+        let m = measure_text(&aviso, None, 20, 1.0);
+        draw_text(&aviso, screen_width() - m.width - 16.0, 48.0, 20.0, HITBOX);
+    }
 }

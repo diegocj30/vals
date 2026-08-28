@@ -48,6 +48,29 @@ Con el juego abierto en nativo hay **hot-reload**: guarda el RON y el cambio
 entra sin recompilar. Si el fichero tiene un error de sintaxis se avisa y se
 sigue jugando con la ultima version buena.
 
+## Replays
+
+Un replay es **una semilla mas la lista de inputs**: como la simulacion es
+determinista, con eso se recrea la partida entera. Treinta segundos ocupan
+4 KB.
+
+Se graba siempre mientras juegas; `F2` guarda la partida en `replays/`.
+
+```bash
+cargo run -p vals-app -- --replay replays/1234567890.valsrpl   # reproducir
+cargo run -p vals-core --example replay_tool -- verify <fichero>
+cargo run -p vals-core --example replay_tool -- info <fichero>
+```
+
+`assets/replays/golden.valsrpl` es el **replay dorado**: 30 segundos versionados
+que el CI reproduce en cada push comparando huellas de estado. Es la red que
+permite reescribir el bucle caliente demostrando que el comportamiento no
+cambia. Si tocas la jugabilidad a proposito, falla — y hay que regrabarlo:
+
+```bash
+cargo run -p vals-core --example replay_tool -- record-golden
+```
+
 ## Medir
 
 ```bash

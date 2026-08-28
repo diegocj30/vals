@@ -18,12 +18,14 @@ mod hash;
 pub mod input;
 pub mod pattern;
 pub mod player;
+pub mod replay;
 pub mod rng;
 pub mod world;
 
 pub use bullets::{Bullets, MAX_BULLETS};
 pub use input::InputFrame;
 pub use player::Player;
+pub use replay::{Recorder, Replay};
 pub use rng::Pcg32;
 pub use world::World;
 

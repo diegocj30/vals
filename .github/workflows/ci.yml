@@ -33,6 +33,13 @@ jobs:
       - name: Tests
         run: cargo test --all
 
+      # El replay dorado: reproduce 30 s de partida grabada y comprueba que
+      # el mundo pasa por las mismas huellas. Si esto falla, la jugabilidad ha
+      # cambiado. Ya lo cubre `cargo test`, pero como paso propio el fallo se
+      # lee de un vistazo en el log en vez de estar enterrado entre 129 tests.
+      - name: Replay dorado
+        run: cargo run -p vals-core --example replay_tool -- verify assets/replays/golden.valsrpl
+
       # El build web se comprueba en cada push a proposito: si solo se mirase
       # al final del proyecto, llevaria meses roto sin que nadie lo supiera.
       - name: Build web
