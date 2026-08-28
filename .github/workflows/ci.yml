@@ -18,11 +18,12 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
 
-      # macroquad necesita estas libs para enlazar en Linux.
+      # macroquad necesita estas libs para enlazar en Linux, y gilrs —el mando
+      # en nativo— necesita libudev, que el runner no trae de serie.
       - name: Dependencias de sistema
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev
+          sudo apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev libudev-dev
 
       - name: Formato
         run: cargo fmt --all --check
