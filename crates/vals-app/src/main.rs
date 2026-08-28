@@ -188,7 +188,13 @@ async fn run_game() {
         if hubo_interaccion {
             // El tema lo decide el jefe que toca. En el menu suena el del
             // primero, que es el que corre de fondo en el atractor.
-            audio.poner_musica(Baile::del_jefe(if en_menu { 0 } else { world.boss_index }));
+            // La musica va por figura, no por jefe: cada fase del vals tiene
+            // la suya, y el menu suena con la primera.
+            audio.poner_musica(Baile::de_la_fase(if en_menu {
+                0
+            } else {
+                world.boss.phase
+            }));
         }
 
         let frame_dt = get_frame_time().min(MAX_FRAME_DT);

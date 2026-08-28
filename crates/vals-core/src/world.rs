@@ -142,10 +142,13 @@ impl World {
 
     /// Vuelve a empezar **el jefe actual**, con las vidas llenas.
     ///
-    /// Es la diferencia entre un juego que se aprende y un muro: en un
-    /// boss-rush, mandar al jugador al primer jefe cada vez que muere en el
-    /// tercero convierte practicar en un peaje. Cuphead te deja reintentar el
-    /// jefe, no la carrera entera.
+    /// Hoy que un baile es un jefe, esto reinicia el vals entero. No es un
+    /// retroceso: antes reintentar La Coda costaba 2000 de vida, y el vals
+    /// completo son 2040, con las tres primeras figuras mas suaves que las
+    /// suyas. El bucle de practica mide lo mismo que media.
+    ///
+    /// Vuelve a importar en cuanto haya un segundo baile: mandar al jugador al
+    /// vals cada vez que muere en el tango convertiria practicar en un peaje.
     pub fn retry_current_boss(&mut self) {
         self.boss = Boss::from_def(&self.boss_defs[self.boss_index]);
         self.player = Player::new(Self::spawn_pos_for(self.mode));
@@ -769,7 +772,8 @@ mod tests {
             }
         }
         assert!(w.events.boss_down);
-        assert!(!w.events.victory, "aun quedan jefes");
+        // Con un solo baile, tumbar la ultima figura es ademas ganar.
+        assert!(w.events.victory);
     }
 
     #[test]
@@ -953,22 +957,31 @@ mod tests {
         }
     }
 
+    /// Cada figura caida da paso a la siguiente, y en orden.
+    ///
+    /// Es el test que sostiene el diseno entero: un baile es un jefe y sus
+    /// fases son figuras suyas. Si alguien vuelve a partir el vals en tres
+    /// jefes, esto se cae.
     #[test]
-    fn caer_el_primer_jefe_da_paso_al_segundo() {
+    fn cada_figura_derrotada_da_paso_a_la_siguiente() {
         let mut w = mundo(0);
-        assert_eq!(w.boss_index, 0);
-        let primero = w.boss.name.clone();
-
-        rematar_jefe(&mut w);
-
-        assert_eq!(w.boss_index, 1, "deberia haber pasado al siguiente");
-        assert!(!w.victory, "aun quedan jefes");
-        assert!(!w.boss.defeated, "el jefe nuevo llega entero");
-        assert_ne!(w.boss.name, primero);
+        let mut vistas = vec![w.boss.phase_name().to_string()];
+        for _ in 1..w.boss.phase_count() {
+            w.player.pos = w.boss.pos + Vec2::new(0.0, 150.0);
+            w.boss.hp = 1;
+            correr(&mut w, DISPARAR, 40);
+            vistas.push(w.boss.phase_name().to_string());
+        }
+        assert_eq!(
+            vistas,
+            vec!["El paso base", "El espejo", "El molinete", "La coda"]
+        );
+        assert!(!w.victory, "aun queda bailar la coda");
+        assert_eq!(w.boss_index, 0, "no hay a donde pasar: el vals es uno");
     }
 
     #[test]
-    fn derrotar_a_los_tres_jefes_da_la_victoria() {
+    fn derrotar_el_vals_entero_da_la_victoria() {
         let mut w = mundo(0);
         for _ in 0..w.boss_count() {
             rematar_jefe(&mut w);
@@ -979,7 +992,13 @@ mod tests {
 
     #[test]
     fn cambiar_de_jefe_limpia_los_disparos_en_vuelo() {
+        // Hoy solo hay un baile, asi que encadenar jefes no llega a pasar en
+        // una partida. El codigo sigue ahi y volvera a hacer falta con el
+        // tango, asi que se prueba con dos copias del vals.
         let mut w = mundo(0);
+        let def = w.boss_defs[0].clone();
+        w.reload_bosses(vec![def.clone(), def]);
+
         // A un solo golpe de caer, y en su ultima fase.
         w.boss.phase = w.boss.phase_count() - 1;
         w.boss.hp = 1;
@@ -1058,7 +1077,10 @@ mod tests {
 
     #[test]
     fn el_jefe_siguiente_entra_disparando() {
+        // Igual que el anterior: dos copias del vals para poder encadenar.
         let mut w = World::new(0);
+        let def = w.boss_defs[0].clone();
+        w.reload_bosses(vec![def.clone(), def]);
         let fases = w.boss.phase_count();
         for _ in 0..fases {
             w.boss.hp = 1;
@@ -1072,7 +1094,7 @@ mod tests {
         }
         assert!(
             w.bullets.live_count() > 0,
-            "el jefe 2 deberia estar disparando"
+            "el jefe siguiente deberia estar disparando"
         );
     }
 
@@ -1444,17 +1466,14 @@ mod tests {
     #[test]
     fn reintentar_conserva_el_jefe_y_devuelve_las_vidas() {
         let mut w = mundo(0);
-        // Pasar al segundo jefe.
-        w.boss.phase = w.boss.phase_count() - 1;
-        w.boss.hp = 1;
-        w.player.pos = w.boss.pos + Vec2::new(0.0, 300.0);
-        for _ in 0..300 {
-            w.step(DISPARAR);
-            if w.boss_index == 1 {
-                break;
-            }
+        // Avanzar un par de figuras, para que reintentar tenga algo que
+        // deshacer.
+        for _ in 0..2 {
+            w.player.pos = w.boss.pos + Vec2::new(0.0, 150.0);
+            w.boss.hp = 1;
+            correr(&mut w, DISPARAR, 40);
         }
-        assert_eq!(w.boss_index, 1);
+        assert_eq!(w.boss.phase, 2);
 
         // Perder todas las vidas.
         for _ in 0..STARTING_LIVES {
@@ -1466,7 +1485,8 @@ mod tests {
 
         w.retry_current_boss();
 
-        assert_eq!(w.boss_index, 1, "se reintenta ESTE jefe, no la carrera");
+        assert_eq!(w.boss_index, 0);
+        assert_eq!(w.boss.phase, 0, "el baile se reintenta desde el paso base");
         assert_eq!(w.lives, STARTING_LIVES);
         assert!(!w.defeat);
         assert_eq!(w.boss.phase, 0, "y el jefe empieza entero");

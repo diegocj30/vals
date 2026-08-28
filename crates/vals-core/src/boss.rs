@@ -21,11 +21,12 @@ use crate::pattern::{Pattern, PatternRunner, RunCtx, Step};
 ///
 /// **Anadir un jefe es anadir un fichero y una linea aqui.** Ni una linea de
 /// codigo mas: esa era toda la razon de ser del interprete de patrones.
-pub const DEFAULT_BOSS_RONS: [&str; 3] = [
-    include_str!("../../../assets/patterns/boss1.ron"),
-    include_str!("../../../assets/patterns/boss2.ron"),
-    include_str!("../../../assets/patterns/boss3.ron"),
-];
+/// Los jefes de la partida.
+///
+/// Hay uno solo, y es a proposito: **un baile es un jefe**. El vals entero cabe
+/// en `boss1.ron`, con una fase por figura. Cuando llegue el tango sera un
+/// fichero mas aqui, no cuatro.
+pub const DEFAULT_BOSS_RONS: [&str; 1] = [include_str!("../../../assets/patterns/boss1.ron")];
 
 /// El primer jefe. Se conserva por comodidad y para los tests.
 pub const DEFAULT_BOSS_RON: &str = DEFAULT_BOSS_RONS[0];
@@ -36,6 +37,14 @@ const HIT_FLASH_TICKS: u32 = 4;
 /// Una fase, tal y como se escribe en el RON.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PhaseDef {
+    /// La figura del baile que es esta fase.
+    ///
+    /// Un baile es un jefe, y cada fase es una figura suya: el paso base, el
+    /// espejo, el molinete, la coda. El nombre es lo que lo cuenta en pantalla,
+    /// y es lo que impide que las fases se conviertan en "fase 1, fase 2".
+    /// Opcional: un RON viejo sin nombre sigue cargando.
+    #[serde(default)]
+    pub name: String,
     /// Vida de esta fase. Al llegar a cero se pasa a la siguiente.
     pub hp: i32,
     pub steps: Vec<Step>,
@@ -86,6 +95,7 @@ impl BossDef {
 
 #[derive(Clone, Debug)]
 struct CompiledPhase {
+    name: String,
     hp: i32,
     pattern: Pattern,
 }
@@ -115,6 +125,7 @@ impl Boss {
             .phases
             .iter()
             .map(|p| CompiledPhase {
+                name: p.name.clone(),
                 hp: p.hp.max(1),
                 pattern: Pattern::compile(&p.steps),
             })
@@ -147,6 +158,14 @@ impl Boss {
 
     pub fn phase_count(&self) -> usize {
         self.phases.len()
+    }
+
+    /// La figura que se esta bailando ahora mismo.
+    pub fn phase_name(&self) -> &str {
+        self.phases
+            .get(self.phase)
+            .map(|p| p.name.as_str())
+            .unwrap_or("")
     }
 
     pub fn phase_max_hp(&self) -> i32 {
@@ -231,6 +250,7 @@ mod tests {
             radius: 30.0,
             phases: vec![
                 PhaseDef {
+                    name: "Primera".into(),
                     hp: 10,
                     steps: vec![Step::Forever(vec![
                         Step::Fire(crate::emitter::EmitterSpec::ring(4, 100.0)),
@@ -238,6 +258,7 @@ mod tests {
                     ])],
                 },
                 PhaseDef {
+                    name: "Segunda".into(),
                     hp: 20,
                     steps: vec![Step::Forever(vec![
                         Step::Fire(crate::emitter::EmitterSpec::ring(8, 120.0)),
@@ -249,9 +270,10 @@ mod tests {
     }
 
     #[test]
-    fn los_tres_jefes_embebidos_son_validos() {
+    fn los_jefes_embebidos_son_validos() {
         let defs = BossDef::default_bosses();
-        assert_eq!(defs.len(), 3);
+        // Uno, y a proposito: un baile es un jefe. El vals entero cabe en el.
+        assert_eq!(defs.len(), 1);
         for (i, d) in defs.iter().enumerate() {
             assert!(!d.name.is_empty(), "el jefe {} no tiene nombre", i + 1);
             assert!(!d.phases.is_empty(), "el jefe {} no tiene fases", i + 1);
@@ -342,8 +364,31 @@ mod tests {
     }
 
     #[test]
-    fn el_ron_embebido_tiene_tres_fases() {
-        assert_eq!(BossDef::default_boss().phases.len(), 3);
+    fn el_vals_tiene_sus_cuatro_figuras() {
+        let def = BossDef::default_boss();
+        assert_eq!(def.phases.len(), 4);
+        let nombres: Vec<&str> = def.phases.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(
+            nombres,
+            vec!["El paso base", "El espejo", "El molinete", "La coda"]
+        );
+    }
+
+    #[test]
+    fn todas_las_fases_tienen_nombre_de_figura() {
+        // Un baile es un jefe y cada fase es una figura suya. Una fase sin
+        // nombre es una fase que ha vuelto a ser "fase 3", que es justo lo que
+        // este diseno no quiere.
+        for def in BossDef::default_bosses() {
+            for (i, f) in def.phases.iter().enumerate() {
+                assert!(
+                    !f.name.is_empty(),
+                    "{}: la fase {} no tiene figura",
+                    def.name,
+                    i + 1
+                );
+            }
+        }
     }
 
     #[test]
@@ -432,7 +477,7 @@ mod tests {
     fn un_ron_con_bom_se_lee_igual() {
         let con_bom = format!("\u{feff}{DEFAULT_BOSS_RON}");
         let def = BossDef::from_ron(&con_bom).expect("el BOM no deberia estorbar");
-        assert_eq!(def.phases.len(), 3);
+        assert_eq!(def.phases.len(), 4);
     }
 
     #[test]

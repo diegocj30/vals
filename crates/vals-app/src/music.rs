@@ -33,41 +33,49 @@
 
 use crate::audio::{Voz, Wave};
 
-/// El baile de cada jefe. Es lo que define compas, tempo y armonia.
+/// La musica de cada **figura** del baile, no de cada jefe.
 ///
-/// De momento los tres son de la familia del vals. Cuando llegue el tango,
-/// sera una variante mas aqui: cambia el compas a 4/4 y el patron de
-/// acompanamiento, y el resto del modulo sirve.
+/// Un baile es un jefe y sus fases son figuras suyas, asi que la musica sigue a
+/// la fase. Las cuatro son valses: tres piezas y una vuelta al tema del
+/// principio, acelerada, que es literalmente lo que es una coda.
+///
+/// Cuando llegue el tango, sera otro juego de variantes aqui: cambia el compas
+/// a 4/4 y el patron de acompanamiento, y el resto del modulo sirve.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Baile {
-    /// El Danubio azul. 3/4, oom-pah-pah, el vals de toda la vida.
-    Vals,
+    /// El Danubio azul entero. 3/4, oom-pah-pah, el vals de toda la vida.
+    PasoBase,
     /// El mismo Danubio, reflejado y en menor. Mas lento y mas oscuro.
-    ValsEspejo,
-    /// Sobre las olas. Rapido y girando: el ultimo.
-    ValsCoda,
+    Espejo,
+    /// Sobre las olas: corriendo en corcheas, donde el Danubio sostenia.
+    Molinete,
+    /// El tema del principio otra vez, un tono mas arriba y a toda velocidad.
+    /// Una coda, en musica, es exactamente eso.
+    Coda,
 }
 
 impl Baile {
-    /// El baile de cada jefe, por orden de aparicion.
-    pub fn del_jefe(indice: usize) -> Self {
-        match indice {
-            0 => Baile::Vals,
-            1 => Baile::ValsEspejo,
-            _ => Baile::ValsCoda,
+    /// La musica de una figura del baile, por orden.
+    pub fn de_la_fase(fase: usize) -> Self {
+        match fase {
+            0 => Baile::PasoBase,
+            1 => Baile::Espejo,
+            2 => Baile::Molinete,
+            _ => Baile::Coda,
         }
     }
 
     pub fn indice(self) -> usize {
         match self {
-            Baile::Vals => 0,
-            Baile::ValsEspejo => 1,
-            Baile::ValsCoda => 2,
+            Baile::PasoBase => 0,
+            Baile::Espejo => 1,
+            Baile::Molinete => 2,
+            Baile::Coda => 3,
         }
     }
 
     pub fn por_indice(i: usize) -> Self {
-        Self::del_jefe(i)
+        Self::de_la_fase(i)
     }
 
     /// Que suena, para poder decirlo en pantalla.
@@ -261,7 +269,7 @@ struct Partitura {
 
 fn partitura(b: Baile) -> Partitura {
     match b {
-        Baile::Vals => Partitura {
+        Baile::PasoBase => Partitura {
             titulo: "El Danubio azul - Johann Strauss II, 1866",
             bpm: 174.0,
             tonica: 15, // do central
@@ -269,7 +277,7 @@ fn partitura(b: Baile) -> Partitura {
             acordes: &DANUBIO_ACORDES,
             espejo: false,
         },
-        Baile::ValsEspejo => Partitura {
+        Baile::Espejo => Partitura {
             titulo: "El Danubio azul, reflejado",
             bpm: 132.0,
             tonica: 12, // la
@@ -277,12 +285,24 @@ fn partitura(b: Baile) -> Partitura {
             acordes: &DANUBIO_ACORDES[16..],
             espejo: true,
         },
-        Baile::ValsCoda => Partitura {
+        Baile::Molinete => Partitura {
             titulo: "Sobre las olas - Juventino Rosas, 1888",
             bpm: 192.0,
             tonica: 22, // sol
             melodia: &OLAS,
             acordes: &OLAS_ACORDES,
+            espejo: false,
+        },
+        // La coda no es una pieza nueva: es la segunda mitad del Danubio otra
+        // vez, un tono mas arriba y disparada. En musica una coda es eso —el
+        // tema del principio, acelerado, para cerrar—, y aqui ademas hace que
+        // la ultima figura suene a que ya has estado ahi antes.
+        Baile::Coda => Partitura {
+            titulo: "El Danubio azul, coda",
+            bpm: 232.0,
+            tonica: 17, // re: un tono por encima del principio
+            melodia: &DANUBIO[DANUBIO_MITAD..],
+            acordes: &DANUBIO_ACORDES[16..],
             espejo: false,
         },
     }
@@ -451,7 +471,7 @@ pub fn tema(b: Baile) -> Vec<Voz> {
 mod tests {
     use super::*;
 
-    const TODOS: [Baile; 3] = [Baile::Vals, Baile::ValsEspejo, Baile::ValsCoda];
+    const TODOS: [Baile; 4] = [Baile::PasoBase, Baile::Espejo, Baile::Molinete, Baile::Coda];
 
     #[test]
     fn la_melodia_y_la_armonia_cuadran() {
@@ -588,7 +608,7 @@ mod tests {
     }
 
     #[test]
-    fn los_tres_bailes_suenan_distinto() {
+    fn cada_figura_suena_distinto() {
         let firma = |b: Baile| {
             tema(b)
                 .iter()
@@ -596,9 +616,28 @@ mod tests {
                 .fold(0u32, |a, x| a.wrapping_mul(17).wrapping_add(x))
         };
         let f: Vec<u32> = TODOS.iter().map(|b| firma(*b)).collect();
-        assert_ne!(f[0], f[1]);
-        assert_ne!(f[1], f[2]);
-        assert_ne!(f[0], f[2]);
+        for i in 0..f.len() {
+            for j in i + 1..f.len() {
+                assert_ne!(f[i], f[j], "{:?} y {:?} suenan igual", TODOS[i], TODOS[j]);
+            }
+        }
+    }
+
+    #[test]
+    fn la_coda_es_el_tema_del_principio_acelerado() {
+        // Mismas notas que la segunda mitad del paso base, mas rapido y mas
+        // arriba. Si alguien la convierte en otra pieza, esto avisa.
+        let base = partitura(Baile::PasoBase);
+        let coda = partitura(Baile::Coda);
+        let mitad: Vec<i32> = base.melodia[DANUBIO_MITAD..]
+            .iter()
+            .map(|n| n.tono)
+            .collect();
+        let suya: Vec<i32> = coda.melodia.iter().map(|n| n.tono).collect();
+        assert_eq!(mitad, suya);
+        assert!(coda.bpm > base.bpm);
+        assert!(coda.tonica > base.tonica);
+        assert!(!coda.espejo);
     }
 
     #[test]

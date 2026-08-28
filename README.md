@@ -4,7 +4,7 @@ Boss-rush danmaku escrito en Rust. Jugable en nativo y en navegador.
 
 Los patrones de balas de este genero son coreografia: de ahi el nombre.
 
-Tres jefes —El Vals, El Espejo y La Coda—, tres vidas, y un parry que te empuja
+Un jefe —El Vals— con cuatro figuras, tres vidas, y un parry que te empuja
 a meterte donde estan las balas en vez de huir de todas.
 
 Dos modos: **volar** por la arena, como el danmaku clasico, o **plataformas**
@@ -51,17 +51,21 @@ Al perder se reintenta **ese** jefe, no la carrera entera.
 No hay ni un asset en el repositorio. Las balas las dibuja un shader a partir de
 la distancia al centro, el personaje es un esqueleto de articulaciones animado
 por codigo, y **el sonido y la musica se sintetizan al arrancar**: cada jefe
-tiene su vals. El Vals baila El Danubio azul (Strauss II, 1866) y La Coda baila
-Sobre las olas (Juventino Rosas, 1888), las dos de dominio publico y transcritas
-a una tabla de notas. El Espejo no toca una tercera pieza: toca **el Danubio
+tiene su vals — y como el jefe es el baile entero, **la musica va por figura**.
+El paso base suena a El Danubio azul (Strauss II, 1866) y el molinete a Sobre
+las olas (Juventino Rosas, 1888), las dos de dominio publico y transcritas a una
+tabla de notas. El espejo no toca una pieza nueva: toca **el Danubio
 reflejado**, con cada intervalo invertido alrededor de la tonica y leido en
-menor. Mismo ritmo, todo lo demas del reves.
+menor. Y la coda tampoco: es el tema del principio otra vez, un tono mas arriba
+y a toda velocidad, que es literalmente lo que una coda es.
 
 ## Disenar un jefe
 
-Los tres jefes se definen en `assets/patterns/boss1.ron`, `boss2.ron` y
-`boss3.ron`, **no en codigo**. Anadir uno nuevo es escribir el fichero y meterlo
-en `DEFAULT_BOSS_RONS`: esa unica linea es toda la logica que hace falta. El fichero
+**Un baile es un jefe, y cada fase suya es una figura de ese baile.** El vals
+entero vive en `assets/patterns/boss1.ron`, **no en codigo**: cuatro fases, con
+su nombre —el paso base, el espejo, el molinete, la coda—. Anadir un baile nuevo
+es escribir el fichero y meterlo en `DEFAULT_BOSS_RONS`: esa unica linea es toda
+la logica que hace falta. El fichero
 lleva en la cabecera la guia de los pasos del lenguaje (`Wait`, `Fire`, `Turn`,
 `Repeat`, `Forever`, `Parallel`, `MoveTo`).
 

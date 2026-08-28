@@ -1,4 +1,20 @@
-// El patron del primer jefe.
+// EL VALS. El unico jefe del juego, y el baile entero.
+//
+// Un baile es un jefe. Este fichero es el vals completo: cada fase es una
+// figura distinta del mismo baile, no un jefe distinto. Antes habia tres jefes
+// —El Vals, El Espejo y La Coda— y los tres eran valses; sus nombres ya decian
+// que eran partes de una pieza y no monstruos. Ahora lo son de verdad.
+//
+// Las cuatro figuras, en orden, con las balas por segundo que echa cada una:
+//
+//   1. El paso base   52 b/s   una espiral y un abanico apuntado. Ensena el 3/4.
+//   2. El espejo     103 b/s   Turn(0.31) y Turn(-0.31): el mismo giro del reves.
+//   3. El molinete   126 b/s   una vuelta lenta y otra rapidisima, a la vez.
+//   4. La coda       232 b/s   el final. Es el muro, y esta puesto a proposito.
+//
+// La suma de vida son 2040, casi lo mismo que costaba antes La Coda sola
+// (2000): reintentar el jefe entero cuesta lo mismo que costaba reintentar el
+// ultimo, y las tres primeras figuras son mas suaves que las suyas.
 //
 // Este fichero es la fuente de verdad: el jefe se disena aqui, no en el codigo.
 // En nativo hay HOT-RELOAD: guarda y el cambio entra sin recompilar. Si el RON
@@ -17,12 +33,15 @@
 // En el emisor: arc 6.28 es un anillo completo, menos es un abanico centrado
 // en la mira. aim: Fixed(rad) o AtPlayer. kind: 0 pequena, 1 media, 2 grande,
 // 3 aguja. accel negativa frena la bala y la hace volver. spin la curva.
+// flags: 1 = parryable (rosa). Solo lo gordo y lento deberia serlo.
 (
   name: "El Vals",
-  pos: (320.0, 140.0),
-  radius: 34.0,
+  pos: (480.0, 150.0),
+  radius: 46.0,
   phases: [
+    // --- El paso base. era la fase 1 de El Vals, intacta.
     (
+      name: "El paso base",
       hp: 240,
       steps: [
         Parallel([
@@ -82,25 +101,22 @@
         ]),
       ],
     ),
+    // --- El espejo. era la fase 1 de El Espejo; vida 600 -> 450.
     (
-      hp: 360,
+      name: "El espejo",
+      hp: 450,
       steps: [
         Parallel([
           [
             Forever([
               MoveTo(
-                pos: (240.0, 120.0),
-                dur: 60,
+                pos: (190.0, 150.0),
+                dur: 100,
                 ease: InOut,
               ),
               MoveTo(
-                pos: (400.0, 175.0),
-                dur: 60,
-                ease: InOut,
-              ),
-              MoveTo(
-                pos: (320.0, 120.0),
-                dur: 60,
+                pos: (450.0, 150.0),
+                dur: 100,
                 ease: InOut,
               ),
             ]),
@@ -108,117 +124,10 @@
           [
             Forever([
               Fire((
-                count: 9,
+                count: 6,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
-                speed: 150.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Turn(0.33),
-              Wait(6),
-            ]),
-          ],
-          [
-            Forever([
-              Fire((
-                count: 9,
-                arc: 6.2831855,
-                aim: Fixed(0.3),
-                speed: 110.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Turn(-0.29),
-              Wait(6),
-            ]),
-          ],
-          [
-            Forever([
-              Wait(140),
-              Repeat(
-                times: 3,
-                body: [
-                  Fire((
-                    count: 3,
-                    arc: 0.35,
-                    aim: AtPlayer,
-                    speed: 240.0,
-                    rings: 1,
-                    speed_step: 40.0,
-                    ring_offset: 0.0,
-                    accel: 0.0,
-                    spin: 0.0,
-                    ttl: 30.0,
-                    kind: 1,
-                    flags: 1,
-                  )),
-                  Wait(10),
-                ],
-              ),
-            ]),
-          ],
-        ]),
-      ],
-    ),
-    (
-      hp: 480,
-      steps: [
-        Parallel([
-          [
-            Forever([
-              MoveTo(
-                pos: (260.0, 130.0),
-                dur: 50,
-                ease: Out,
-              ),
-              MoveTo(
-                pos: (380.0, 130.0),
-                dur: 50,
-                ease: Out,
-              ),
-            ]),
-          ],
-          [
-            Forever([
-              Fire((
-                count: 12,
-                arc: 6.2831855,
-                aim: Fixed(0.0),
-                speed: 120.0,
-                rings: 2,
-                speed_step: 55.0,
-                ring_offset: 0.13,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Turn(0.22),
-              Wait(8),
-            ]),
-          ],
-          [
-            Forever([
-              Wait(55),
-              Fire((
-                count: 7,
-                arc: 0.8,
-                aim: AtPlayer,
-                speed: 330.0,
+                speed: 140.0,
                 rings: 1,
                 speed_step: 40.0,
                 ring_offset: 0.0,
@@ -228,26 +137,241 @@
                 kind: 3,
                 flags: 0,
               )),
+              Turn(0.31),
+              Wait(7),
             ]),
           ],
           [
             Forever([
               Fire((
-                count: 4,
+                count: 6,
                 arc: 6.2831855,
-                aim: Fixed(0.7),
-                speed: 180.0,
+                aim: Fixed(3.14159),
+                speed: 140.0,
                 rings: 1,
                 speed_step: 40.0,
                 ring_offset: 0.0,
-                accel: -120.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              Turn(-0.31),
+              Wait(7),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(110),
+              Fire((
+                count: 3,
+                arc: 0.4,
+                aim: AtPlayer,
+                speed: 210.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 1,
+                flags: 1,
+              )),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+    // --- El molinete. era la fase 2 de El Espejo; vida 700 -> 550.
+    (
+      name: "El molinete",
+      hp: 550,
+      steps: [
+        Parallel([
+          [
+            Forever([
+              MoveTo(
+                pos: (250.0, 130.0),
+                dur: 70,
+                ease: InOut,
+              ),
+              MoveTo(
+                pos: (390.0, 190.0),
+                dur: 70,
+                ease: InOut,
+              ),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 16,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 210.0,
+                rings: 2,
+                speed_step: 40.0,
+                ring_offset: 0.14,
+                accel: -150.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Turn(0.19),
+              Wait(26),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 7,
+                arc: 6.2831855,
+                aim: Fixed(1.0),
+                speed: 260.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              Turn(0.83),
+              Wait(8),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(90),
+              Fire((
+                count: 5,
+                arc: 0.5,
+                aim: AtPlayer,
+                speed: 240.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 1,
+                flags: 1,
+              )),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+    // --- La coda. era la fase 3 de La Coda, intacta.
+    (
+      name: "La coda",
+      hp: 800,
+      steps: [
+        Parallel([
+          [
+            Forever([
+              MoveTo(
+                pos: (210.0, 130.0),
+                dur: 35,
+                ease: Out,
+              ),
+              MoveTo(
+                pos: (430.0, 130.0),
+                dur: 35,
+                ease: Out,
+              ),
+              MoveTo(
+                pos: (320.0, 210.0),
+                dur: 35,
+                ease: Out,
+              ),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 9,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 200.0,
+                rings: 2,
+                speed_step: 40.0,
+                ring_offset: 0.16,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Turn(0.41),
+              Wait(10),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 9,
+                arc: 6.2831855,
+                aim: Fixed(1.7),
+                speed: 150.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              Turn(-0.53),
+              Wait(7),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(100),
+              Repeat(
+                times: 4,
+                body: [
+                  Fire((
+                    count: 7,
+                    arc: 0.9,
+                    aim: AtPlayer,
+                    speed: 330.0,
+                    rings: 1,
+                    speed_step: 40.0,
+                    ring_offset: 0.0,
+                    accel: 0.0,
+                    spin: 0.0,
+                    ttl: 30.0,
+                    kind: 1,
+                    flags: 1,
+                  )),
+                  Wait(9),
+                ],
+              ),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(180),
+              Fire((
+                count: 8,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 90.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: -60.0,
                 spin: 0.0,
                 ttl: 30.0,
                 kind: 2,
                 flags: 1,
               )),
-              Turn(-0.5),
-              Wait(24),
             ]),
           ],
         ]),

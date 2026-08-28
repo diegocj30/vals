@@ -177,10 +177,11 @@ fn draw_hud(world: &World, l: &Layout) {
 
     if !world.boss.defeated {
         let etiqueta = format!(
-            "{}  ({}/{})",
+            "{}  -  {}  ({}/{})",
             world.boss.name,
-            world.boss_index + 1,
-            world.boss_count()
+            world.boss.phase_name(),
+            world.boss.phase + 1,
+            world.boss.phase_count()
         );
         let m = measure_text(&etiqueta, None, 18, 1.0);
         draw_text(
@@ -193,7 +194,7 @@ fn draw_hud(world: &World, l: &Layout) {
 
         // Y debajo, que vals suena. "Cada jefe es un baile" se entiende mejor
         // si el baile tiene nombre y autor.
-        let baile = Baile::del_jefe(world.boss_index).titulo();
+        let baile = Baile::de_la_fase(world.boss.phase).titulo();
         let m = measure_text(baile, None, 14, 1.0);
         draw_text(
             baile,
@@ -261,14 +262,14 @@ pub fn fin_de_partida(l: &Layout, world: &World) {
             l,
             "FIN DEL VALS",
             VICTORY,
-            &["los tres han caido", "", "R otra partida    ESC al menu"],
+            &["el vals entero", "", "R otra partida    ESC al menu"],
         );
     } else {
         let quien = format!(
-            "caiste ante {}  ({}/{})",
-            world.boss.name,
-            world.boss_index + 1,
-            world.boss_count()
+            "caiste bailando {}  ({}/{})",
+            world.boss.phase_name(),
+            world.boss.phase + 1,
+            world.boss.phase_count()
         );
         draw_cartel(
             l,
@@ -459,10 +460,13 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
     // El halo se queda: es lo que la separa del fondo cuando la pantalla se
     // llena. Lo que cambia es lo que hay dentro.
     draw_circle(s.x, s.y, sprite_r * 2.2, fade(PLAYER_GLOW, body_alpha));
-    // La elegancia sube con cada jefe caido: la bailarina baila mejor segun
-    // avanza. Es solo cosmetico, pero de un vistazo dice por donde vas.
-    let elegancia = if world.boss_count() > 1 {
-        world.boss_index as f32 / (world.boss_count() - 1) as f32
+    // La elegancia sube con cada figura superada: la bailarina baila mejor
+    // segun avanza el vals. Es solo cosmetico, pero de un vistazo dice por
+    // donde vas. Antes subia por jefe caido; ahora que el baile es un jefe,
+    // sube por fase, que ademas se nota mas veces por partida.
+    let figuras = world.boss.phase_count();
+    let elegancia = if figuras > 1 {
+        world.boss.phase as f32 / (figuras - 1) as f32
     } else {
         0.0
     };
@@ -733,7 +737,12 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
     y += 6.0;
     put(&format!("tick    {}", world.tick), TEXT_DIM, &mut y);
     put(
-        &format!("jefe    {}/{}", world.boss_index + 1, world.boss_count()),
+        &format!(
+            "figura  {}/{}  {}",
+            world.boss.phase + 1,
+            world.boss.phase_count(),
+            world.boss.phase_name()
+        ),
         TEXT_DIM,
         &mut y,
     );

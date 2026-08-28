@@ -110,7 +110,7 @@ pub enum Sfx {
     Empezar,
 }
 
-const BAILES: [Baile; 3] = [Baile::Vals, Baile::ValsEspejo, Baile::ValsCoda];
+const BAILES: [Baile; 4] = [Baile::PasoBase, Baile::Espejo, Baile::Molinete, Baile::Coda];
 
 const TODOS: [Sfx; 10] = [
     Sfx::Disparo,
