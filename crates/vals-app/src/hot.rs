@@ -35,6 +35,7 @@ const RUTAS: [&str; 3] = [
 ];
 
 /// Cuantos frames se muestra el aviso de recarga.
+#[cfg(not(target_arch = "wasm32"))]
 const AVISO_FRAMES: u32 = 180;
 
 pub struct HotReload {
@@ -125,6 +126,7 @@ impl HotReload {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn set_aviso(&mut self, msg: String, error: bool) {
         // Tambien por consola: el banner se ve mientras juegas, pero al afinar
         // un patron sueles tener la terminal al lado, y ahi queda el historial

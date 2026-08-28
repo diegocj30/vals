@@ -6,14 +6,16 @@
 use macroquad::prelude::*;
 use vals_core::bench::Stress;
 use vals_core::replay::{GOLDEN_REPLAY, Replay};
-use vals_core::{DT, InputFrame, MAX_BULLETS, Recorder, World};
+use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Recorder, World};
 
+mod audio;
 mod bullet_renderer;
 mod draw;
 mod hot;
 mod replay_io;
 mod stats;
 
+use audio::{Audio, Sfx};
 use bullet_renderer::BulletRenderer;
 use hot::HotReload;
 use stats::FrameStats;
@@ -159,6 +161,7 @@ async fn run_game() {
     let mut attract = Attract::new();
     let mut en_menu = true;
     let mut intentos: u32 = 0;
+    let mut audio = Audio::load().await;
 
     loop {
         frames += 1;
@@ -185,7 +188,11 @@ async fn run_game() {
         if is_key_pressed(KeyCode::Escape) && !en_menu {
             en_menu = true;
         }
+        if is_key_pressed(KeyCode::M) {
+            audio.muted = !audio.muted;
+        }
         if is_key_pressed(KeyCode::Z) && en_menu {
+            audio.play(Sfx::Empezar, 1.0);
             en_menu = false;
             world = World::new(SEED);
             recorder = Recorder::new(SEED);
@@ -210,6 +217,9 @@ async fn run_game() {
         let t0 = get_time();
         accumulator += frame_dt;
         let mut steps = 0;
+        // Los sucesos de todos los ticks del frame se juntan: puede haber
+        // varios, y reaccionar solo al ultimo se comeria sonidos.
+        let mut eventos = Events::default();
         while accumulator >= DT {
             if en_menu {
                 if let Some(a) = attract.as_mut() {
@@ -218,6 +228,7 @@ async fn run_game() {
             } else {
                 world.step(input);
                 recorder.record(input, &world);
+                eventos.merge(&world.events);
             }
             accumulator -= DT;
             steps += 1;
@@ -227,6 +238,10 @@ async fn run_game() {
             }
         }
         stats.push_sim((get_time() - t0) as f32);
+        // En el menu no suena nada: el atractor es un fondo, no una partida.
+        if !en_menu {
+            audio.play_events(&eventos);
+        }
 
         // Fraccion de tick pendiente. Es lo que permite que el render vaya a
         // 144 Hz con la simulacion a 60 sin que se vea a saltos.

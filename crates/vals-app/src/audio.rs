@@ -1,0 +1,406 @@
+//! Audio **sintetizado en memoria**. Ni un fichero de sonido en el repo.
+//!
+//! Es la misma decision que con los graficos: en este juego no hay assets, hay
+//! codigo que los genera. Aqui sale ademas especialmente a cuenta, porque
+//! evita buscar sonidos CC0, comprobar licencias y cargar el repositorio con
+//! binarios que luego nadie sabe de donde salieron.
+//!
+//! El camino es: un par de osciladores con envolvente producen muestras, las
+//! muestras se empaquetan como un WAV en un `Vec<u8>`, y ese `Vec` se le pasa a
+//! `macroquad::audio::load_sound_from_bytes` igual que si viniera de disco.
+//!
+//! Ojo con el WAV: el decodificador de macroquad **entra en panico** con una
+//! cabecera mal formada, no devuelve error. Por eso el escritor esta cubierto
+//! por tests.
+
+use macroquad::audio::{PlaySoundParams, Sound, load_sound_from_bytes, play_sound};
+use vals_core::Events;
+
+/// 44.100 Hz para que el mezclador de macroquad no tenga que remuestrear.
+const SAMPLE_RATE: u32 = 44_100;
+
+/// Volumen general. Bajo: son efectos secos y muy repetidos.
+const MASTER: f32 = 0.6;
+
+#[derive(Clone, Copy)]
+enum Wave {
+    Sine,
+    Square,
+    Saw,
+    Noise,
+}
+
+/// Un oscilador con barrido de frecuencia y envolvente.
+#[derive(Clone, Copy)]
+struct Voz {
+    wave: Wave,
+    /// Frecuencia inicial y final: el barrido es lo que da caracter.
+    f0: f32,
+    f1: f32,
+    dur: f32,
+    vol: f32,
+    /// Exponente de la caida. 1 es lineal; mas alto, mas seco.
+    decay: f32,
+    /// Retardo desde el inicio del sonido. Sirve para encadenar notas.
+    delay: f32,
+}
+
+impl Voz {
+    const fn new(wave: Wave, f0: f32, f1: f32, dur: f32, vol: f32, decay: f32) -> Self {
+        Self {
+            wave,
+            f0,
+            f1,
+            dur,
+            vol,
+            decay,
+            delay: 0.0,
+        }
+    }
+
+    const fn tras(mut self, delay: f32) -> Self {
+        self.delay = delay;
+        self
+    }
+}
+
+/// Los sonidos del juego.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Sfx {
+    Disparo,
+    Parry,
+    Graze,
+    Impacto,
+    Fase,
+    Muerte,
+    Super,
+    Victoria,
+    Derrota,
+    Empezar,
+}
+
+const TODOS: [Sfx; 10] = [
+    Sfx::Disparo,
+    Sfx::Parry,
+    Sfx::Graze,
+    Sfx::Impacto,
+    Sfx::Fase,
+    Sfx::Muerte,
+    Sfx::Super,
+    Sfx::Victoria,
+    Sfx::Derrota,
+    Sfx::Empezar,
+];
+
+impl Sfx {
+    fn indice(self) -> usize {
+        TODOS.iter().position(|s| *s == self).unwrap_or(0)
+    }
+
+    /// La receta de cada sonido.
+    ///
+    /// Devuelve un `Vec` y no un slice estatico porque `Voz::new` es una
+    /// llamada a `const fn`, y Rust no promociona esas a `'static`. Da igual:
+    /// esto se construye una vez al cargar, no en el bucle de juego.
+    fn receta(self) -> Vec<Voz> {
+        use Wave::*;
+        match self {
+            // Suena quince veces por segundo: corto y bajito o es insufrible.
+            Sfx::Disparo => vec![Voz::new(Square, 780.0, 520.0, 0.055, 0.10, 3.0)],
+            // Brillante y ascendente: es la recompensa, tiene que apetecer.
+            Sfx::Parry => vec![
+                Voz::new(Sine, 720.0, 1500.0, 0.20, 0.35, 2.2),
+                Voz::new(Sine, 1440.0, 3000.0, 0.18, 0.12, 2.6),
+            ],
+            // Casi un susurro: pasa muchas veces seguidas.
+            Sfx::Graze => vec![Voz::new(Sine, 2200.0, 2600.0, 0.03, 0.06, 4.0)],
+            Sfx::Impacto => vec![Voz::new(Noise, 1.0, 1.0, 0.045, 0.11, 5.0)],
+            Sfx::Fase => vec![
+                Voz::new(Saw, 520.0, 160.0, 0.45, 0.28, 1.6),
+                Voz::new(Square, 260.0, 80.0, 0.40, 0.16, 1.8),
+            ],
+            Sfx::Muerte => vec![
+                Voz::new(Noise, 1.0, 1.0, 0.45, 0.28, 2.0),
+                Voz::new(Square, 320.0, 50.0, 0.50, 0.26, 1.4),
+            ],
+            Sfx::Super => vec![
+                Voz::new(Sine, 220.0, 1400.0, 0.55, 0.32, 0.8),
+                Voz::new(Noise, 1.0, 1.0, 0.30, 0.10, 2.5),
+            ],
+            // Tres notas ascendentes: do, mi, la.
+            Sfx::Victoria => vec![
+                Voz::new(Sine, 523.0, 523.0, 0.18, 0.30, 2.0),
+                Voz::new(Sine, 659.0, 659.0, 0.18, 0.30, 2.0).tras(0.14),
+                Voz::new(Sine, 880.0, 880.0, 0.40, 0.32, 1.4).tras(0.28),
+            ],
+            Sfx::Derrota => vec![
+                Voz::new(Saw, 200.0, 70.0, 0.90, 0.28, 1.2),
+                Voz::new(Sine, 100.0, 40.0, 0.90, 0.20, 1.2),
+            ],
+            Sfx::Empezar => vec![Voz::new(Sine, 440.0, 880.0, 0.15, 0.25, 2.0)],
+        }
+    }
+}
+
+/// Los sonidos ya cargados.
+pub struct Audio {
+    sonidos: Vec<Option<Sound>>,
+    pub muted: bool,
+}
+
+impl Audio {
+    /// Sintetiza y carga todos los sonidos.
+    ///
+    /// Si alguno falla se queda a `None` y el juego sigue sin el: quedarse sin
+    /// audio es un incordio, no un motivo para no poder jugar.
+    pub async fn load() -> Self {
+        let mut sonidos = Vec::with_capacity(TODOS.len());
+        for sfx in TODOS {
+            let bytes = render_wav(&sfx.receta());
+            match load_sound_from_bytes(&bytes).await {
+                Ok(s) => sonidos.push(Some(s)),
+                Err(e) => {
+                    println!("[audio] no se pudo cargar un sonido: {e}");
+                    sonidos.push(None);
+                }
+            }
+        }
+        let cargados = sonidos.iter().filter(|s| s.is_some()).count();
+        println!("[audio] {cargados}/{} sonidos sintetizados", TODOS.len());
+        Self {
+            sonidos,
+            muted: false,
+        }
+    }
+
+    pub fn play(&self, sfx: Sfx, vol: f32) {
+        if self.muted {
+            return;
+        }
+        if let Some(Some(s)) = self.sonidos.get(sfx.indice()) {
+            play_sound(
+                s,
+                PlaySoundParams {
+                    looped: false,
+                    volume: (vol * MASTER).clamp(0.0, 1.0),
+                },
+            );
+        }
+    }
+
+    /// Traduce lo que ha pasado en el tick a sonidos.
+    ///
+    /// Es el unico sitio que junta las dos capas, y va en un solo sentido: el
+    /// core publica lo que ha ocurrido y aqui se decide como suena.
+    pub fn play_events(&self, ev: &Events) {
+        if ev.player_shot {
+            self.play(Sfx::Disparo, 1.0);
+        }
+        if ev.parried > 0 {
+            // Un solo sonido aunque caigan cinco balas de golpe: encadenar
+            // cinco copias solo produce un chasquido saturado.
+            self.play(Sfx::Parry, 1.0);
+        }
+        if ev.grazed > 0 {
+            self.play(Sfx::Graze, 1.0);
+        }
+        if ev.boss_hit {
+            self.play(Sfx::Impacto, 1.0);
+        }
+        if ev.phase_changed {
+            self.play(Sfx::Fase, 1.0);
+        }
+        if ev.boss_down {
+            self.play(Sfx::Fase, 1.3);
+        }
+        if ev.super_fired {
+            self.play(Sfx::Super, 1.0);
+        }
+        if ev.player_died {
+            self.play(Sfx::Muerte, 1.0);
+        }
+        if ev.victory {
+            self.play(Sfx::Victoria, 1.0);
+        }
+        if ev.defeat {
+            self.play(Sfx::Derrota, 1.0);
+        }
+    }
+}
+
+/// Sintetiza las voces y las empaqueta como WAV.
+fn render_wav(voces: &[Voz]) -> Vec<u8> {
+    wav(&render(voces))
+}
+
+/// Mezcla las voces en muestras de 16 bits.
+fn render(voces: &[Voz]) -> Vec<i16> {
+    let total = voces
+        .iter()
+        .map(|v| v.delay + v.dur)
+        .fold(0.0f32, f32::max)
+        .max(0.001);
+    let n = (total * SAMPLE_RATE as f32) as usize;
+    let mut acc = vec![0.0f32; n];
+
+    for v in voces {
+        let inicio = (v.delay * SAMPLE_RATE as f32) as usize;
+        let largo = ((v.dur * SAMPLE_RATE as f32) as usize).max(1);
+        let mut fase = 0.0f32;
+        // Ruido con un generador propio: nada de aleatoriedad del sistema, para
+        // que el mismo sonido salga igual en cada arranque.
+        let mut rnd: u32 = 0x5641_4C53;
+
+        for i in 0..largo {
+            let idx = inicio + i;
+            if idx >= n {
+                break;
+            }
+            let t = i as f32 / largo as f32;
+            let f = v.f0 + (v.f1 - v.f0) * t;
+            fase += f / SAMPLE_RATE as f32;
+            if fase >= 1.0 {
+                fase -= 1.0;
+            }
+
+            let onda = match v.wave {
+                Wave::Sine => vals_core::math::sin(fase * vals_core::math::TAU),
+                Wave::Square => {
+                    if fase < 0.5 {
+                        1.0
+                    } else {
+                        -1.0
+                    }
+                }
+                Wave::Saw => fase * 2.0 - 1.0,
+                Wave::Noise => {
+                    rnd = rnd.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    (rnd >> 8) as f32 / 8_388_608.0 - 1.0
+                }
+            };
+
+            // Ataque muy corto para que no chasquee al empezar, y caida
+            // exponencial: es lo que hace que suene a golpe y no a pitido.
+            let ataque = (t * 60.0).min(1.0);
+            let env = ataque * (1.0 - t).powf(v.decay);
+            acc[idx] += onda * env * v.vol;
+        }
+    }
+
+    acc.iter()
+        .map(|s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+        .collect()
+}
+
+/// Empaqueta muestras mono de 16 bits en un WAV.
+fn wav(samples: &[i16]) -> Vec<u8> {
+    let datos = samples.len() * 2;
+    let mut out = Vec::with_capacity(44 + datos);
+
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + datos as u32).to_le_bytes());
+    out.extend_from_slice(b"WAVE");
+
+    out.extend_from_slice(b"fmt ");
+    out.extend_from_slice(&16u32.to_le_bytes()); // tamano del bloque fmt
+    out.extend_from_slice(&1u16.to_le_bytes()); // PCM sin comprimir
+    out.extend_from_slice(&1u16.to_le_bytes()); // mono
+    out.extend_from_slice(&SAMPLE_RATE.to_le_bytes());
+    out.extend_from_slice(&(SAMPLE_RATE * 2).to_le_bytes()); // bytes por segundo
+    out.extend_from_slice(&2u16.to_le_bytes()); // bytes por muestra
+    out.extend_from_slice(&16u16.to_le_bytes()); // bits por muestra
+
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&(datos as u32).to_le_bytes());
+    for s in samples {
+        out.extend_from_slice(&s.to_le_bytes());
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn u32_en(b: &[u8], i: usize) -> u32 {
+        u32::from_le_bytes(b[i..i + 4].try_into().unwrap())
+    }
+    fn u16_en(b: &[u8], i: usize) -> u16 {
+        u16::from_le_bytes(b[i..i + 2].try_into().unwrap())
+    }
+
+    #[test]
+    fn la_cabecera_wav_esta_bien_formada() {
+        // Importa de verdad: el decodificador de macroquad entra en panico con
+        // una cabecera mala, no devuelve error.
+        let bytes = wav(&[0i16; 100]);
+        assert_eq!(&bytes[0..4], b"RIFF");
+        assert_eq!(&bytes[8..12], b"WAVE");
+        assert_eq!(&bytes[12..16], b"fmt ");
+        assert_eq!(&bytes[36..40], b"data");
+
+        assert_eq!(u32_en(&bytes, 16), 16, "tamano del bloque fmt");
+        assert_eq!(u16_en(&bytes, 20), 1, "PCM");
+        assert_eq!(u16_en(&bytes, 22), 1, "mono");
+        assert_eq!(u32_en(&bytes, 24), SAMPLE_RATE);
+        assert_eq!(u32_en(&bytes, 28), SAMPLE_RATE * 2, "bytes por segundo");
+        assert_eq!(u16_en(&bytes, 32), 2, "bytes por muestra");
+        assert_eq!(u16_en(&bytes, 34), 16, "bits por muestra");
+
+        assert_eq!(u32_en(&bytes, 40), 200, "tamano de los datos");
+        assert_eq!(u32_en(&bytes, 4), 36 + 200, "tamano declarado del RIFF");
+        assert_eq!(bytes.len(), 44 + 200);
+    }
+
+    #[test]
+    fn todos_los_sonidos_producen_un_wav_plausible() {
+        for sfx in TODOS {
+            let bytes = render_wav(&sfx.receta());
+            assert!(bytes.len() > 44, "sonido vacio");
+            assert_eq!(&bytes[0..4], b"RIFF");
+            // Coherencia interna: lo que declara y lo que ocupa.
+            assert_eq!(u32_en(&bytes, 40) as usize, bytes.len() - 44);
+            assert_eq!(u32_en(&bytes, 4) as usize, bytes.len() - 8);
+            // Y que suene a algo: alguna muestra lejos del silencio.
+            let pico = bytes[44..]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| i16::from_le_bytes(*c).unsigned_abs())
+                .max()
+                .unwrap_or(0);
+            assert!(pico > 1000, "el sonido es practicamente silencio: {pico}");
+        }
+    }
+
+    #[test]
+    fn ninguna_muestra_satura() {
+        for sfx in TODOS {
+            let s = render(&sfx.receta());
+            // Se recorta a i16::MAX por construccion; esto vigila que las
+            // recetas no vivan pegadas al techo, que es donde distorsiona.
+            let pico = s.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
+            assert!(
+                pico < i16::MAX as u16,
+                "una receta llega al tope y va a distorsionar"
+            );
+        }
+    }
+
+    #[test]
+    fn las_notas_retrasadas_alargan_el_sonido() {
+        let corta = render(&[Voz::new(Wave::Sine, 440.0, 440.0, 0.1, 0.5, 2.0)]);
+        let larga = render(&[
+            Voz::new(Wave::Sine, 440.0, 440.0, 0.1, 0.5, 2.0),
+            Voz::new(Wave::Sine, 440.0, 440.0, 0.1, 0.5, 2.0).tras(0.2),
+        ]);
+        assert!(larga.len() > corta.len() * 2);
+    }
+
+    #[test]
+    fn la_sintesis_es_reproducible() {
+        // El ruido usa un generador propio, asi que el mismo sonido sale igual
+        // en cada arranque.
+        assert_eq!(render(&Sfx::Muerte.receta()), render(&Sfx::Muerte.receta()));
+    }
+}

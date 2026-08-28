@@ -7,4 +7,4 @@ license.workspace = true
 
 [dependencies]
 vals-core = { path = "../vals-core" }
-macroquad = "0.4"
+macroquad = { version = "0.4", features = ["audio"] }

@@ -614,7 +614,7 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
         &mut y,
     );
 
-    let help = "Z disparar   X dash   C parry   ESPACIO super   SHIFT focus   F1   R";
+    let help = "Z disparar  X dash  C parry  ESPACIO super  SHIFT focus  M mudo  F1  R";
     draw_text(help, X, screen_height() - 14.0, 16.0, TEXT_DIM);
 }
 

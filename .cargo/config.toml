@@ -1,0 +1,7 @@
+# Las funciones de audio (audio_init, audio_play_buffer...) no estan en el
+# binario: las aporta mq_js_bundle.js en tiempo de ejecucion. Sin esta bandera
+# el linker las trata como simbolos indefinidos y el build web no enlaza.
+#
+# Solo afecta al target web; el nativo no la ve.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=--import-undefined"]

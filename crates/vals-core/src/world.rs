@@ -4,6 +4,7 @@ use glam::Vec2;
 
 use crate::boss::{Boss, BossDef};
 use crate::bullets::{Bullets, KIND_NEEDLE, Spawn};
+use crate::events::Events;
 use crate::hash::Fnv1a;
 use crate::player::{
     GRAZE_METER, GRAZE_RADIUS, PARRY_RADIUS, PLAYER_HITBOX_RADIUS, SHOT_DAMAGE, SHOT_EVERY,
@@ -45,6 +46,9 @@ pub struct World {
     pub victory: bool,
     /// Se pone a `true` al quedarse sin vidas.
     pub defeat: bool,
+    /// Lo que ha pasado en el ultimo tick. Lo lee la capa de presentacion para
+    /// saber que sonido tocar. No entra en el hash: es informacion derivada.
+    pub events: Events,
     /// Los jefes de la partida, en orden.
     boss_defs: Vec<BossDef>,
     /// Input del tick anterior. Hace falta para detectar flancos (el dash
@@ -71,6 +75,7 @@ impl World {
             lives: STARTING_LIVES,
             victory: false,
             defeat: false,
+            events: Events::default(),
             boss_defs: defs,
             prev_input: InputFrame::NONE,
             boss_enabled: true,
@@ -118,6 +123,7 @@ impl World {
 
     /// Pasa al jefe siguiente, o declara la victoria si era el ultimo.
     fn advance_boss(&mut self) {
+        self.events.boss_down = true;
         if self.boss_index + 1 < self.boss_defs.len() {
             self.boss_index += 1;
             self.boss = Boss::from_def(&self.boss_defs[self.boss_index]);
@@ -126,6 +132,7 @@ impl World {
             self.player_shots.clear();
         } else {
             self.victory = true;
+            self.events.victory = true;
         }
     }
 
@@ -144,6 +151,7 @@ impl World {
     /// Es la unica puerta de entrada al mundo. No lee reloj, ni ficheros, ni
     /// nada del entorno: mismo estado + mismo input = mismo resultado, siempre.
     pub fn step(&mut self, input: InputFrame) {
+        self.events = Events::default();
         self.player.update(input, self.prev_input);
         self.player_shoot(input);
 
@@ -168,6 +176,7 @@ impl World {
             return;
         }
         self.player.shot_cooldown = SHOT_EVERY;
+        self.events.player_shot = true;
         // Dos chorros paralelos. Uno solo se siente escuchimizado, y dos muy
         // separados obligarian a apuntar, que no es de lo que va este juego.
         for dx in [-SHOT_SPREAD, SHOT_SPREAD] {
@@ -188,6 +197,7 @@ impl World {
         let n = self.bullets.parry_circle(self.player.pos, PARRY_RADIUS);
         if n > 0 {
             self.player.on_parry(n);
+            self.events.parried += n;
         }
     }
 
@@ -198,6 +208,7 @@ impl World {
         if n > 0 {
             self.player.grazes += n;
             self.player.add_meter(n as f32 * GRAZE_METER);
+            self.events.grazed += n;
         }
     }
 
@@ -209,6 +220,7 @@ impl World {
         }
         // Limpia la pantalla y pega fuerte. Es la descarga de todo lo que has
         // arriesgado acercandote, asi que tiene que notarse.
+        self.events.super_fired = true;
         self.bullets.clear();
         if !self.boss.defeated && self.boss.damage(SUPER_DAMAGE) {
             self.bullets.clear();
@@ -228,6 +240,7 @@ impl World {
         if impactos == 0 {
             return;
         }
+        self.events.boss_hit = true;
         if self.boss.damage(impactos as i32 * SHOT_DAMAGE) {
             // Cambio de fase o caida: en ambos casos se limpia la pantalla.
             // Heredar la pared de balas de la fase anterior seria una muerte
@@ -235,6 +248,8 @@ impl World {
             self.bullets.clear();
             if self.boss.defeated {
                 self.advance_boss();
+            } else {
+                self.events.phase_changed = true;
             }
         }
     }
@@ -252,8 +267,10 @@ impl World {
             .is_some()
         {
             self.lives = self.lives.saturating_sub(1);
+            self.events.player_died = true;
             if self.lives == 0 {
                 self.defeat = true;
+                self.events.defeat = true;
             }
             self.player.die(Self::spawn_pos());
             // Limpiar la pantalla al morir es lo canonico del genero: sin esto
@@ -612,8 +629,59 @@ mod tests {
             .unwrap();
     }
 
+    // --- Eventos ---
+
     #[test]
-    fn el_patron_provisional_dispara() {
+    fn disparar_emite_su_evento() {
+        let mut w = mundo(0);
+        w.step(NADA);
+        assert!(!w.events.player_shot);
+        w.step(DISPARAR);
+        assert!(w.events.player_shot);
+    }
+
+    #[test]
+    fn los_eventos_se_vacian_cada_tick() {
+        let mut w = mundo(0);
+        w.step(DISPARAR);
+        assert!(!w.events.is_empty());
+        // Con el enfriamiento activo, el tick siguiente no dispara.
+        w.step(NADA);
+        assert!(w.events.is_empty(), "quedaron eventos del tick anterior");
+    }
+
+    #[test]
+    fn parriar_y_morir_emiten_sus_eventos() {
+        let mut w = mundo(0);
+        bala_rosa(&mut w, 20.0);
+        w.step(PARRY);
+        assert_eq!(w.events.parried, 1);
+
+        let mut w = mundo(0);
+        w.player.iframes = 0;
+        bala_encima(&mut w);
+        w.step(NADA);
+        assert!(w.events.player_died);
+    }
+
+    #[test]
+    fn caer_un_jefe_y_ganar_emiten_sus_eventos() {
+        let mut w = mundo(0);
+        w.boss.phase = w.boss.phase_count() - 1;
+        w.boss.hp = 1;
+        w.player.pos = w.boss.pos + Vec2::new(0.0, 300.0);
+        for _ in 0..300 {
+            w.step(DISPARAR);
+            if w.events.boss_down {
+                break;
+            }
+        }
+        assert!(w.events.boss_down);
+        assert!(!w.events.victory, "aun quedan jefes");
+    }
+
+    #[test]
+    fn el_jefe_dispara_desde_el_arranque() {
         let mut w = World::new(0);
         correr(&mut w, NADA, 30);
         assert!(

@@ -36,10 +36,15 @@ Controles:
 | `C` | **parry**: neutraliza las balas rosas que tengas cerca y llena el medidor |
 | `ESPACIO` | **super**: con el medidor lleno, limpia la pantalla y pega fuerte |
 | `SHIFT` | focus: lento, con la hitbox y el radio de roce marcados |
+| `M` | silenciar |
 | `F1` / `R` | overlay de debug / reiniciar |
 
 Rozar balas sin que te den tambien llena el medidor, poco a poco. La idea es
 que acercarse compense.
+
+No hay ni un asset en el repositorio: los graficos los dibuja un shader a partir
+de la distancia al centro, y los sonidos los sintetiza un par de osciladores al
+arrancar.
 
 ## Disenar un jefe
 

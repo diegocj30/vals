@@ -14,6 +14,7 @@ pub mod bench;
 pub mod boss;
 pub mod bullets;
 pub mod emitter;
+pub mod events;
 mod hash;
 pub mod input;
 pub mod math;
@@ -24,6 +25,7 @@ pub mod rng;
 pub mod world;
 
 pub use bullets::{Bullets, MAX_BULLETS};
+pub use events::Events;
 pub use input::InputFrame;
 pub use player::Player;
 pub use replay::{Recorder, Replay};
