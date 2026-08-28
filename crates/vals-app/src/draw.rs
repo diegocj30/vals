@@ -4,6 +4,7 @@
 
 use macroquad::prelude::*;
 use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
+use vals_core::pista::{Nodo, Pista};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bullet_renderer::BulletRenderer;
@@ -55,6 +56,10 @@ const TITLE: Color = color_u8!(200, 245, 255, 255);
 const DEFEAT: Color = color_u8!(255, 110, 150, 255);
 
 const GROUND: Color = color_u8!(80, 120, 190, 255);
+
+/// La tarima de la pista, y el foco que planta a cada bailarin en el suelo.
+const PISTA_SUELO: Color = color_u8!(18, 18, 34, 255);
+const PISTA_FOCO: Color = color_u8!(150, 200, 255, 60);
 /// La falda va mas fria que el cuerpo: separa la tela de la piel sin necesidad
 /// de dibujar ni una linea de detalle.
 const FALDA: Color = color_u8!(120, 180, 255, 255);
@@ -108,6 +113,18 @@ impl Layout {
 
     fn len(&self, logical: f32) -> f32 {
         logical * self.scale
+    }
+
+    /// Una copia con la escala multiplicada.
+    ///
+    /// La pista la usa para la perspectiva: dibujar una figura al fondo es
+    /// dibujarla con un `Layout` mas pequeno, sin que ni `draw_figura` ni nada
+    /// de lo que llama tenga que enterarse de que existe una perspectiva.
+    fn escalado(&self, k: f32) -> Self {
+        Self {
+            origin: self.origin,
+            scale: self.scale * k,
+        }
     }
 }
 
@@ -244,8 +261,8 @@ pub fn menu(l: &Layout, intentos: u32) {
         "VALS",
         TITLE,
         &[
-            &format!("Z   volar{cola}"),
-            "X   plataformas (con salto)",
+            &format!("Z   entrar a la pista, volando{cola}"),
+            "X   entrar a la pista, con salto",
             "",
             "flechas mover    Z disparar    X dash",
             "C parry    SHIFT focus    M mudo",
@@ -262,7 +279,7 @@ pub fn fin_de_partida(l: &Layout, world: &World) {
             l,
             "FIN DEL VALS",
             VICTORY,
-            &["el vals entero", "", "R otra partida    ESC al menu"],
+            &["el vals entero", "", "R otra vez    ESC volver a la pista"],
         );
     } else {
         let quien = format!(
@@ -280,8 +297,8 @@ pub fn fin_de_partida(l: &Layout, world: &World) {
                 "",
                 // Volver al primer jefe cada vez convertia practicar en un
                 // peaje. Se reintenta ESTE.
-                "R reintentar este jefe",
-                "ESC al menu",
+                "R reintentar este baile",
+                "ESC volver a la pista",
             ],
         );
     }
@@ -852,4 +869,177 @@ pub fn replay_badge(tick: usize, total: usize, divergencia: Option<u64>) {
         let m = measure_text(&aviso, None, 20, 1.0);
         draw_text(&aviso, screen_width() - m.width - 16.0, 48.0, 20.0, HITBOX);
     }
+}
+
+// ---------------------------------------------------------------------------
+// La pista de baile
+// ---------------------------------------------------------------------------
+
+/// Altura en pantalla del fondo de la pista. Por encima queda la pared.
+const HORIZONTE: f32 = ARENA_H * 0.20;
+/// Cuanto se estrecha la pista al fondo. Es lo unico que hace falta para que
+/// se lea como un suelo y no como una pared.
+const FONDO_ANCHO: f32 = 0.42;
+/// Y cuanto encogen las figuras alli.
+const FONDO_ESCALA: f32 = 0.52;
+/// Lineas de la tarima, por eje.
+const TABLAS: usize = 9;
+
+/// Lleva un punto de la pista a la pantalla. Devuelve tambien cuanto encoge
+/// alli lo que se dibuje.
+fn suelo(l: &Layout, px: f32, py: f32) -> (Vec2, f32) {
+    // 0 al fondo, 1 delante. La curva junta las lineas cerca del horizonte,
+    // que es lo que da la sensacion de profundidad.
+    let t = (py / ARENA_H).clamp(0.0, 1.0).powf(1.35);
+    let ancho = FONDO_ANCHO + (1.0 - FONDO_ANCHO) * t;
+    let x = ARENA_W * 0.5 + (px - ARENA_W * 0.5) * ancho;
+    let y = HORIZONTE + (ARENA_H - 24.0 - HORIZONTE) * t;
+    (l.to_screen(x, y), FONDO_ESCALA + (1.0 - FONDO_ESCALA) * t)
+}
+
+/// La tarima: un trapecio con vetas.
+fn dibujar_tarima(l: &Layout) {
+    let esquina = |x: f32, y: f32| suelo(l, x, y).0;
+    let (fi, fd) = (esquina(0.0, 0.0), esquina(ARENA_W, 0.0));
+    let (ci, cd) = (esquina(0.0, ARENA_H), esquina(ARENA_W, ARENA_H));
+    draw_triangle(fi, fd, cd, PISTA_SUELO);
+    draw_triangle(fi, cd, ci, PISTA_SUELO);
+
+    // Vetas a lo ancho: se van juntando hacia el fondo solas, porque la
+    // perspectiva ya esta en `suelo`.
+    for i in 0..=TABLAS {
+        let y = ARENA_H * i as f32 / TABLAS as f32;
+        let (a, b) = (esquina(0.0, y), esquina(ARENA_W, y));
+        let cerca = i as f32 / TABLAS as f32;
+        draw_line(a.x, a.y, b.x, b.y, 1.0, fade(GRID, 0.35 + cerca * 0.5));
+    }
+    // Y a lo largo, que son las que apuntan al fondo.
+    for i in 0..=TABLAS {
+        let x = ARENA_W * i as f32 / TABLAS as f32;
+        let (a, b) = (esquina(x, 0.0), esquina(x, ARENA_H));
+        draw_line(a.x, a.y, b.x, b.y, 1.0, fade(GRID, 0.55));
+    }
+}
+
+/// Un baile plantado en la pista.
+fn dibujar_nodo(l: &Layout, nodo: &Nodo, t: f32) {
+    let (s, escala) = suelo(l, nodo.pos.x, nodo.pos.y);
+    let r = l.len(30.0) * escala;
+    let alfa = if nodo.vencido { 0.45 } else { 1.0 };
+
+    // El foco: es lo que planta la figura en el suelo en vez de dejarla
+    // flotando.
+    draw_ellipse(
+        s.x,
+        s.y,
+        r * 1.9,
+        r * 0.55,
+        0.0,
+        fade(PISTA_FOCO, alfa * 0.5),
+    );
+
+    // El emblema, el mismo que lleva el jefe en combate.
+    let c = vec2(s.x, s.y - r * 1.5);
+    draw_poly_lines(
+        c.x,
+        c.y,
+        6,
+        r * 1.15,
+        t * 0.4,
+        2.0,
+        fade(BOSS_RING, alfa * 0.6),
+    );
+    draw_poly_lines(
+        c.x,
+        c.y,
+        3,
+        r * 0.85,
+        -t * 0.8,
+        2.5,
+        fade(BOSS_INNER, alfa * 0.85),
+    );
+    draw_circle(c.x, c.y, r * 0.55, fade(BOSS_CORE, alfa));
+    draw_poly_lines(c.x, c.y, 8, r * 0.55, t * 0.18, 1.5, fade(BOSS_RING, alfa));
+
+    let etiqueta = if nodo.vencido {
+        format!("{}  (bailado)", nodo.nombre)
+    } else {
+        nodo.nombre.clone()
+    };
+    let color = if nodo.vencido { VICTORY } else { TEXT };
+    let m = measure_text(&etiqueta, None, 18, 1.0);
+    draw_text(
+        &etiqueta,
+        s.x - m.width * 0.5,
+        s.y + 22.0,
+        18.0,
+        fade(color, alfa),
+    );
+}
+
+/// El mapa entero.
+pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
+    clear_background(BG);
+    let o = l.to_screen(0.0, 0.0);
+    draw_rectangle(o.x, o.y, l.len(ARENA_W), l.len(ARENA_H), ARENA_BG);
+    dibujar_tarima(l);
+
+    let t = p.tick as f32 + alpha;
+
+    // De fondo a frente, para que lo cercano tape a lo lejano.
+    let mut orden: Vec<usize> = (0..p.nodos.len()).collect();
+    orden.sort_by(|a, b| p.nodos[*a].pos.y.total_cmp(&p.nodos[*b].pos.y));
+    for i in orden {
+        dibujar_nodo(l, &p.nodos[i], t);
+    }
+
+    // --- La bailarina ---
+    // Es la misma figura del combate: se le pasa la velocidad para que la
+    // falda y las cintas se queden atras al andar, y se pone entera de
+    // elegancia porque aqui no esta esquivando nada.
+    let pos = p.render_pos(alpha);
+    let (s, escala) = suelo(l, pos.x, pos.y);
+    let pose = skeleton::pose(&p.figura(), t, false, 1.0);
+    let ls = l.escalado(escala);
+
+    // Los pies van justo donde pisa, no el centro del cuerpo: si no, la
+    // bailarina flota y se despega de su sombra.
+    let pie = pose.joints.iter().map(|j| j.y).fold(f32::MIN, f32::max);
+    let centro = s - vec2(0.0, pie * ls.scale());
+
+    draw_ellipse(
+        s.x,
+        s.y,
+        l.len(26.0) * escala,
+        l.len(7.0) * escala,
+        0.0,
+        fade(PISTA_FOCO, 0.55),
+    );
+    draw_figura(&pose, centro, &ls, 1.0);
+
+    // --- Cartel de arriba y ayuda de abajo ---
+    let cx = l.to_screen(ARENA_W * 0.5, 0.0).x;
+    let m = measure_text("LA PISTA", None, 34, 1.0);
+    draw_text(
+        "LA PISTA",
+        cx - m.width * 0.5,
+        o.y + 44.0,
+        34.0,
+        fade(TITLE, 0.9),
+    );
+
+    let pie_y = l.to_screen(0.0, ARENA_H).y - 16.0;
+    let aviso = match p.nodo_cerca() {
+        Some(i) => format!("Z    bailar {}", p.nodos[i].nombre),
+        None => "flechas andar    ESC menu".to_string(),
+    };
+    let color = if p.nodo_cerca().is_some() {
+        // Late, para que se vea que ahi hay algo que hacer.
+        let pulso = 0.7 + 0.3 * (t * 0.12).sin();
+        fade(METER_FULL, pulso)
+    } else {
+        TEXT_DIM
+    };
+    let m = measure_text(&aviso, None, 20, 1.0);
+    draw_text(&aviso, cx - m.width * 0.5, pie_y, 20.0, color);
 }

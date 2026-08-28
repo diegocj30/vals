@@ -5,6 +5,8 @@
 
 use macroquad::prelude::*;
 use vals_core::bench::Stress;
+use vals_core::boss::BossDef;
+use vals_core::pista::Pista;
 use vals_core::replay::{GOLDEN_REPLAY, Replay};
 use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
 
@@ -22,6 +24,18 @@ use bullet_renderer::BulletRenderer;
 use hot::HotReload;
 use music::Baile;
 use stats::FrameStats;
+
+/// En que parte del juego estamos.
+///
+/// Antes esto era un `bool` —menu o partida— porque no habia mas sitios. La
+/// pista mete un tercero, y es el que convierte una fila de jefes en un lugar:
+/// del menu se entra a la pista, y de la pista a cada baile.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Escena {
+    Menu,
+    Pista,
+    Combate,
+}
 
 /// "VALS" en ASCII. Semilla por defecto.
 const SEED: u64 = 0x5641_4C53;
@@ -165,7 +179,18 @@ async fn run_game() {
     let mut aviso: Option<(String, bool, u32)> = None;
     let mut bullets_gpu = nuevo_renderer();
     let mut attract = Attract::new();
-    let mut en_menu = true;
+    let mut escena = Escena::Menu;
+    // La pista se monta con un nodo por jefe: anadir el tango sera anadir su
+    // RON, y aparecera solo.
+    let mut pista = Pista::new(
+        BossDef::default_bosses()
+            .into_iter()
+            .map(|d| d.name)
+            .collect(),
+    );
+    let mut modo = Mode::Flight;
+    let mut nodo_actual = 0usize;
+    let mut marcado = false;
     let mut intentos: u32 = 0;
     let mut audio = Audio::load().await;
     // Los navegadores no dejan sonar nada hasta que el usuario toca algo. Si la
@@ -186,14 +211,12 @@ async fn run_game() {
 
         hubo_interaccion |= get_last_key_pressed().is_some();
         if hubo_interaccion {
-            // El tema lo decide el jefe que toca. En el menu suena el del
-            // primero, que es el que corre de fondo en el atractor.
             // La musica va por figura, no por jefe: cada fase del vals tiene
-            // la suya, y el menu suena con la primera.
-            audio.poner_musica(Baile::de_la_fase(if en_menu {
-                0
-            } else {
-                world.boss.phase
+            // la suya. El menu y la pista suenan con la primera, que es la que
+            // corre de fondo en el atractor y la que hace de salon de baile.
+            audio.poner_musica(Baile::de_la_fase(match escena {
+                Escena::Combate => world.boss.phase,
+                _ => 0,
             }));
         }
 
@@ -203,7 +226,7 @@ async fn run_game() {
         if is_key_pressed(KeyCode::F1) {
             show_debug = !show_debug;
         }
-        if is_key_pressed(KeyCode::R) && !en_menu {
+        if is_key_pressed(KeyCode::R) && escena == Escena::Combate {
             // Tras perder se reintenta **este** jefe con las vidas llenas; en
             // cualquier otro momento, partida nueva desde el principio.
             if world.defeat {
@@ -215,27 +238,53 @@ async fn run_game() {
             accumulator = 0.0;
             intentos += 1;
         }
-        if is_key_pressed(KeyCode::Escape) && !en_menu {
-            en_menu = true;
+        if is_key_pressed(KeyCode::Escape) {
+            // Se sale un escalon cada vez: del baile a la pista, de la pista
+            // al menu.
+            escena = match escena {
+                Escena::Combate => Escena::Pista,
+                _ => Escena::Menu,
+            };
         }
         if is_key_pressed(KeyCode::M) {
             audio.toggle_mute();
         }
-        if en_menu {
-            let modo = if is_key_pressed(KeyCode::Z) {
+        // De la pista se entra al baile que se tenga delante.
+        //
+        // Se mira **antes** que el menu a proposito: las dos escenas usan la Z,
+        // y si el menu fuese primero, la misma pulsacion que entra a la pista
+        // se leeria otra vez aqui en el mismo frame. Hoy no se notaria porque
+        // se entra lejos de todo, pero deja de ser verdad en cuanto un baile
+        // este cerca de la entrada.
+        if escena == Escena::Pista
+            && is_key_pressed(KeyCode::Z)
+            && let Some(i) = pista.nodo_cerca()
+        {
+            audio.play(Sfx::Empezar, 1.0);
+            escena = Escena::Combate;
+            nodo_actual = i;
+            marcado = false;
+            world = World::empezar_en(SEED, modo, i);
+            recorder = Recorder::for_world(&world);
+            accumulator = 0.0;
+            intentos += 1;
+        }
+
+        if escena == Escena::Menu {
+            let elegido = if is_key_pressed(KeyCode::Z) {
                 Some(Mode::Flight)
             } else if is_key_pressed(KeyCode::X) {
                 Some(Mode::Platform)
             } else {
                 None
             };
-            if let Some(modo) = modo {
+            if let Some(m) = elegido {
+                // El modo se elige al entrar a la pista y vale para todos los
+                // bailes de esa visita.
                 audio.play(Sfx::Empezar, 1.0);
-                en_menu = false;
-                world = World::with_mode(SEED, modo);
-                recorder = Recorder::for_world(&world);
+                modo = m;
+                escena = Escena::Pista;
                 accumulator = 0.0;
-                intentos += 1;
             }
         }
         if is_key_pressed(KeyCode::F2) {
@@ -248,7 +297,7 @@ async fn run_game() {
         // --- Simulacion: paso fijo, desacoplada del render ---
         // En el menu se avanza el modo atractor en vez de la partida; el
         // acumulador es el mismo, asi que el replay va al ritmo correcto.
-        let input = if en_menu {
+        let input = if escena == Escena::Menu {
             InputFrame::NONE
         } else {
             read_input()
@@ -260,14 +309,18 @@ async fn run_game() {
         // varios, y reaccionar solo al ultimo se comeria sonidos.
         let mut eventos = Events::default();
         while accumulator >= DT {
-            if en_menu {
-                if let Some(a) = attract.as_mut() {
-                    a.step();
+            match escena {
+                Escena::Menu => {
+                    if let Some(a) = attract.as_mut() {
+                        a.step();
+                    }
                 }
-            } else {
-                world.step(input);
-                recorder.record(input, &world);
-                eventos.merge(&world.events);
+                Escena::Pista => pista.step(input),
+                Escena::Combate => {
+                    world.step(input);
+                    recorder.record(input, &world);
+                    eventos.merge(&world.events);
+                }
             }
             accumulator -= DT;
             steps += 1;
@@ -278,8 +331,15 @@ async fn run_game() {
         }
         stats.push_sim((get_time() - t0) as f32);
         // En el menu no suena nada: el atractor es un fondo, no una partida.
-        if !en_menu {
+        if escena == Escena::Combate {
             audio.play_events(&eventos);
+        }
+
+        // Ganar un baile lo tacha en la pista. Una sola vez, que la pantalla
+        // de victoria se queda puesta muchos frames.
+        if escena == Escena::Combate && world.victory && !marcado {
+            pista.marcar_vencido(nodo_actual);
+            marcado = true;
         }
 
         // Fraccion de tick pendiente. Es lo que permite que el render vaya a
@@ -289,17 +349,21 @@ async fn run_game() {
         // --- Render ---
         let t1 = get_time();
         let layout = draw::Layout::compute();
-        let mostrado = match (en_menu, attract.as_ref()) {
-            (true, Some(a)) => &a.world,
-            _ => &world,
-        };
-        draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut());
-        if en_menu {
-            draw::menu(&layout, intentos);
-        } else if world.is_over() {
-            draw::fin_de_partida(&layout, &world);
+        if escena == Escena::Pista {
+            draw::pista(&pista, alpha, &layout);
+        } else {
+            let mostrado = match (escena, attract.as_ref()) {
+                (Escena::Menu, Some(a)) => &a.world,
+                _ => &world,
+            };
+            draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut());
+            if escena == Escena::Menu {
+                draw::menu(&layout, intentos);
+            } else if world.is_over() {
+                draw::fin_de_partida(&layout, &world);
+            }
         }
-        if show_debug && !en_menu {
+        if show_debug && escena == Escena::Combate {
             draw::debug_overlay(&world, &stats, steps);
             draw::recording_badge(recorder.ticks());
         }

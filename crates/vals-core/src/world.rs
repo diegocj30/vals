@@ -140,6 +140,18 @@ impl World {
         }
     }
 
+    /// Una partida que empieza en el jefe que se pida.
+    ///
+    /// Es lo que necesita la pista: entrar a un baile es empezar una partida
+    /// ahi, no recorrerse los anteriores. Un indice que no existe se recorta al
+    /// ultimo, para que un mapa desincronizado no reviente la partida.
+    pub fn empezar_en(seed: u64, mode: Mode, jefe: usize) -> Self {
+        let mut w = Self::with_mode(seed, mode);
+        w.boss_index = jefe.min(w.boss_defs.len().saturating_sub(1));
+        w.boss = Boss::from_def(&w.boss_defs[w.boss_index]);
+        w
+    }
+
     /// Vuelve a empezar **el jefe actual**, con las vidas llenas.
     ///
     /// Hoy que un baile es un jefe, esto reinicia el vals entero. No es un
@@ -1459,6 +1471,17 @@ mod tests {
         correr(&mut w, NADA, 120);
         assert!((w.player.pos.y - y).abs() < 0.001, "no deberia caer");
         assert!(!w.player.on_ground);
+    }
+
+    #[test]
+    fn se_puede_empezar_en_el_jefe_que_diga_la_pista() {
+        let w = World::empezar_en(0, Mode::Flight, 0);
+        assert_eq!(w.boss_index, 0);
+        assert_eq!(w.lives, STARTING_LIVES);
+        assert!(!w.boss.defeated);
+        // Un indice imposible no revienta: se queda en el ultimo que hay.
+        let w = World::empezar_en(0, Mode::Flight, 99);
+        assert_eq!(w.boss_index, w.boss_count() - 1);
     }
 
     // --- Reintentar el jefe actual ---
