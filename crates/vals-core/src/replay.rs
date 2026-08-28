@@ -62,9 +62,24 @@ pub struct Replay {
 /// Cubre los tres jefes, no solo el primero: un replay recorre el boss-rush
 /// entero, asi que tocar el jefe 3 tambien lo invalida.
 pub fn default_pattern_hash() -> u64 {
+    hash_patterns(DEFAULT_BOSS_RONS)
+}
+
+/// La huella de unos patrones, **sin contar los finales de linea**.
+///
+/// Un RON guardado con finales de Windows y el mismo con finales de Unix
+/// describen el jefe identico, asi que no pueden dar huellas distintas: si no,
+/// el replay dorado se rompe segun con que editor —o con que script— se toco el
+/// fichero por ultima vez. Costo un CI en rojo aprenderlo: se grabo en Windows
+/// con CRLF y fallo en Linux con LF, sin que el jefe hubiese cambiado en nada.
+fn hash_patterns<'a>(rons: impl IntoIterator<Item = &'a str>) -> u64 {
     let mut h = Fnv1a::new();
-    for ron in DEFAULT_BOSS_RONS {
-        h.write_str(ron);
+    for ron in rons {
+        // Partir por '\r' y escribir los trozos es escribir la cadena sin
+        // ningun retorno de carro, y sin reservar memoria.
+        for trozo in ron.split('\r') {
+            h.write_str(trozo);
+        }
     }
     h.finish()
 }
@@ -553,6 +568,13 @@ mod tests {
         let a = record_scripted(7, Mode::Flight, &inputs, 60).to_bytes();
         let b = record_scripted(7, Mode::Flight, &inputs, 60).to_bytes();
         assert_eq!(a, b, "el formato tambien tiene que ser determinista");
+    }
+
+    #[test]
+    fn los_finales_de_linea_no_cambian_la_huella() {
+        let unix = "(\n  name: \"X\",\n)\n";
+        let windows = unix.replace('\n', "\r\n");
+        assert_eq!(hash_patterns([unix]), hash_patterns([windows.as_str()]));
     }
 
     #[test]
