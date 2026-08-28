@@ -12,6 +12,7 @@ mod audio;
 mod bullet_renderer;
 mod draw;
 mod hot;
+mod music;
 mod replay_io;
 mod skeleton;
 mod stats;
@@ -19,6 +20,7 @@ mod stats;
 use audio::{Audio, Sfx};
 use bullet_renderer::BulletRenderer;
 use hot::HotReload;
+use music::Baile;
 use stats::FrameStats;
 
 /// "VALS" en ASCII. Semilla por defecto.
@@ -166,6 +168,11 @@ async fn run_game() {
     let mut en_menu = true;
     let mut intentos: u32 = 0;
     let mut audio = Audio::load().await;
+    // Los navegadores no dejan sonar nada hasta que el usuario toca algo. Si la
+    // musica arrancase sola, en web el menu saldria mudo y no se sabria por
+    // que. Se espera a la primera tecla, que ademas es cuando el jugador esta
+    // mirando.
+    let mut hubo_interaccion = false;
 
     loop {
         frames += 1;
@@ -175,6 +182,13 @@ async fn run_game() {
             world.reload_bosses(defs);
             // El replay en curso ya no reproduce nada: el jefe ha cambiado.
             recorder = Recorder::for_world(&world);
+        }
+
+        hubo_interaccion |= get_last_key_pressed().is_some();
+        if hubo_interaccion {
+            // El tema lo decide el jefe que toca. En el menu suena el del
+            // primero, que es el que corre de fondo en el atractor.
+            audio.poner_musica(Baile::del_jefe(if en_menu { 0 } else { world.boss_index }));
         }
 
         let frame_dt = get_frame_time().min(MAX_FRAME_DT);
@@ -199,7 +213,7 @@ async fn run_game() {
             en_menu = true;
         }
         if is_key_pressed(KeyCode::M) {
-            audio.muted = !audio.muted;
+            audio.toggle_mute();
         }
         if en_menu {
             let modo = if is_key_pressed(KeyCode::Z) {

@@ -49,9 +49,9 @@ llena, poco a poco. La idea es que acercarse compense.
 Al perder se reintenta **ese** jefe, no la carrera entera.
 
 No hay ni un asset en el repositorio. Las balas las dibuja un shader a partir de
-la distancia al centro, los sonidos los sintetiza un par de osciladores al
-arrancar, y el personaje es un esqueleto de articulaciones animado por codigo:
-la pose es funcion pura del tick y de lo que estes haciendo.
+la distancia al centro, el personaje es un esqueleto de articulaciones animado
+por codigo, y **el sonido y la musica se sintetizan al arrancar**: cada jefe
+tiene su vals, en 3/4 y con su tempo, su tonalidad y su progresion.
 
 ## Disenar un jefe
 

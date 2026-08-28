@@ -13,8 +13,10 @@
 //! cabecera mal formada, no devuelve error. Por eso el escritor esta cubierto
 //! por tests.
 
-use macroquad::audio::{PlaySoundParams, Sound, load_sound_from_bytes, play_sound};
+use macroquad::audio::{PlaySoundParams, Sound, load_sound_from_bytes, play_sound, stop_sound};
 use vals_core::Events;
+
+use crate::music::{self, Baile};
 
 /// 44.100 Hz para que el mezclador de macroquad no tenga que remuestrear.
 const SAMPLE_RATE: u32 = 44_100;
@@ -22,8 +24,12 @@ const SAMPLE_RATE: u32 = 44_100;
 /// Volumen general. Bajo: son efectos secos y muy repetidos.
 const MASTER: f32 = 0.6;
 
+/// La musica va por debajo de los efectos: es el suelo sobre el que pasan las
+/// cosas, no una de las cosas que pasan.
+const MASTER_MUSICA: f32 = 0.34;
+
 #[derive(Clone, Copy)]
-enum Wave {
+pub(crate) enum Wave {
     Sine,
     Square,
     Saw,
@@ -31,8 +37,11 @@ enum Wave {
 }
 
 /// Un oscilador con barrido de frecuencia y envolvente.
+///
+/// Es la unidad de todo el audio del juego: un efecto son una o dos, y un tema
+/// de musica son un par de cientos con distintos retardos.
 #[derive(Clone, Copy)]
-struct Voz {
+pub(crate) struct Voz {
     wave: Wave,
     /// Frecuencia inicial y final: el barrido es lo que da caracter.
     f0: f32,
@@ -46,6 +55,28 @@ struct Voz {
 }
 
 impl Voz {
+    /// Una nota: frecuencia fija, sin barrido.
+    pub(crate) const fn nota(wave: Wave, freq: f32, dur: f32, vol: f32, decay: f32) -> Self {
+        Self::new(wave, freq, freq, dur, vol, decay)
+    }
+
+    // Solo los usan los tests de `music`, que comprueban que las notas caen
+    // donde tienen que caer y que ninguna se sale del bucle.
+    #[cfg(test)]
+    pub(crate) fn inicio(&self) -> f32 {
+        self.delay
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fin(&self) -> f32 {
+        self.delay + self.dur
+    }
+
+    #[cfg(test)]
+    pub(crate) fn frecuencia(&self) -> f32 {
+        self.f0
+    }
+
     const fn new(wave: Wave, f0: f32, f1: f32, dur: f32, vol: f32, decay: f32) -> Self {
         Self {
             wave,
@@ -58,7 +89,7 @@ impl Voz {
         }
     }
 
-    const fn tras(mut self, delay: f32) -> Self {
+    pub(crate) const fn tras(mut self, delay: f32) -> Self {
         self.delay = delay;
         self
     }
@@ -78,6 +109,8 @@ pub enum Sfx {
     Derrota,
     Empezar,
 }
+
+const BAILES: [Baile; 3] = [Baile::Vals, Baile::ValsEspejo, Baile::ValsCoda];
 
 const TODOS: [Sfx; 10] = [
     Sfx::Disparo,
@@ -145,6 +178,10 @@ impl Sfx {
 /// Los sonidos ya cargados.
 pub struct Audio {
     sonidos: Vec<Option<Sound>>,
+    /// Un tema por baile.
+    musica: Vec<Option<Sound>>,
+    /// Cual esta sonando ahora.
+    sonando: Option<usize>,
     pub muted: bool,
 }
 
@@ -166,10 +203,75 @@ impl Audio {
             }
         }
         let cargados = sonidos.iter().filter(|s| s.is_some()).count();
-        println!("[audio] {cargados}/{} sonidos sintetizados", TODOS.len());
+
+        let mut musica = Vec::with_capacity(BAILES.len());
+        for b in BAILES {
+            let bytes = wav(&render_len(&music::tema(b), music::duracion(b)));
+            match load_sound_from_bytes(&bytes).await {
+                Ok(s) => musica.push(Some(s)),
+                Err(e) => {
+                    println!("[audio] no se pudo cargar la musica de {b:?}: {e}");
+                    musica.push(None);
+                }
+            }
+        }
+        let temas = musica.iter().filter(|s| s.is_some()).count();
+        println!(
+            "[audio] {cargados}/{} sonidos y {temas}/{} temas sintetizados",
+            TODOS.len(),
+            BAILES.len()
+        );
+
         Self {
             sonidos,
+            musica,
+            sonando: None,
             muted: false,
+        }
+    }
+
+    /// Pone el tema de un baile, en bucle. No hace nada si ya sonaba.
+    pub fn poner_musica(&mut self, b: Baile) {
+        let idx = b.indice();
+        if self.sonando == Some(idx) {
+            return;
+        }
+        self.parar_musica();
+        if self.muted {
+            // Se anota igual cual toca, para que al quitar el mudo entre sola.
+            self.sonando = Some(idx);
+            return;
+        }
+        if let Some(Some(s)) = self.musica.get(idx) {
+            play_sound(
+                s,
+                PlaySoundParams {
+                    looped: true,
+                    volume: MASTER_MUSICA,
+                },
+            );
+        }
+        self.sonando = Some(idx);
+    }
+
+    fn parar_musica(&mut self) {
+        if let Some(i) = self.sonando
+            && let Some(Some(s)) = self.musica.get(i)
+        {
+            stop_sound(s);
+        }
+    }
+
+    /// Silencia o devuelve el sonido, musica incluida.
+    pub fn toggle_mute(&mut self) {
+        self.muted = !self.muted;
+        let actual = self.sonando;
+        if self.muted {
+            self.parar_musica();
+            self.sonando = actual;
+        } else if let Some(i) = actual {
+            self.sonando = None;
+            self.poner_musica(Baile::por_indice(i));
         }
     }
 
@@ -240,7 +342,15 @@ fn render(voces: &[Voz]) -> Vec<i16> {
         .map(|v| v.delay + v.dur)
         .fold(0.0f32, f32::max)
         .max(0.001);
-    let n = (total * SAMPLE_RATE as f32) as usize;
+    render_len(voces, total)
+}
+
+/// Igual, pero con la duracion exacta del buffer.
+///
+/// La musica lo necesita: el bucle tiene que durar los compases justos. Si se
+/// dejara terminar en la ultima nota, el bucle daria un salto cada vuelta.
+fn render_len(voces: &[Voz], segundos: f32) -> Vec<i16> {
+    let n = (segundos.max(0.001) * SAMPLE_RATE as f32) as usize;
     let mut acc = vec![0.0f32; n];
 
     for v in voces {
@@ -384,6 +494,42 @@ mod tests {
                 pico < i16::MAX as u16,
                 "una receta llega al tope y va a distorsionar"
             );
+        }
+    }
+
+    #[test]
+    fn los_temas_de_musica_duran_lo_que_dicen() {
+        for b in BAILES {
+            let muestras = render_len(&music::tema(b), music::duracion(b));
+            let esperado = (music::duracion(b) * SAMPLE_RATE as f32) as usize;
+            assert_eq!(muestras.len(), esperado, "{b:?}");
+            // Y suenan: hay senal de verdad, no silencio.
+            let pico = muestras.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
+            assert!(pico > 3000, "{b:?} suena a casi nada: {pico}");
+        }
+    }
+
+    #[test]
+    fn los_temas_no_saturan() {
+        for b in BAILES {
+            let muestras = render_len(&music::tema(b), music::duracion(b));
+            let pico = muestras.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
+            assert!(pico < i16::MAX as u16, "{b:?} llega al tope y distorsiona");
+        }
+    }
+
+    #[test]
+    fn el_bucle_no_da_un_salto_al_volver_a_empezar() {
+        // El final y el principio tienen que ser silencio o casi: si el bucle
+        // corta una nota a media vibracion, se oye un chasquido cada vuelta.
+        for b in BAILES {
+            let m = render_len(&music::tema(b), music::duracion(b));
+            let cola: i32 = m[m.len() - 200..]
+                .iter()
+                .map(|v| (*v as i32).abs())
+                .max()
+                .unwrap();
+            assert!(cola < 2500, "{b:?} termina con senal viva: {cola}");
         }
     }
 
