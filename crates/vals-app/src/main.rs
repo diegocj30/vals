@@ -5,7 +5,7 @@
 
 use macroquad::prelude::*;
 use vals_core::bench::Stress;
-use vals_core::replay::Replay;
+use vals_core::replay::{GOLDEN_REPLAY, Replay};
 use vals_core::{DT, InputFrame, MAX_BULLETS, Recorder, World};
 
 mod bullet_renderer;
@@ -108,6 +108,41 @@ async fn main() {
     }
 }
 
+/// Modo atractor: el replay dorado corriendo de fondo en el menu.
+///
+/// Sale casi gratis. El replay va embebido en el binario, asi que funciona
+/// tambien en web, y reproducirlo es exactamente el mismo bucle que jugar.
+struct Attract {
+    world: World,
+    replay: Replay,
+    cursor: usize,
+}
+
+impl Attract {
+    fn new() -> Option<Self> {
+        let replay = Replay::from_bytes(GOLDEN_REPLAY).ok()?;
+        Some(Self {
+            world: World::new(replay.seed),
+            replay,
+            cursor: 0,
+        })
+    }
+
+    fn step(&mut self) {
+        match self.replay.inputs.get(self.cursor) {
+            Some(input) => {
+                self.world.step(*input);
+                self.cursor += 1;
+            }
+            // Al acabarse, vuelve a empezar: es un fondo, no una partida.
+            None => {
+                self.world = World::new(self.replay.seed);
+                self.cursor = 0;
+            }
+        }
+    }
+}
+
 async fn run_game() {
     let mut world = World::new(SEED);
     // Se graba siempre. Cuesta dos bytes por tick, asi que no hay ningun motivo
@@ -121,13 +156,16 @@ async fn run_game() {
     let mut frames: u32 = 0;
     let mut aviso: Option<(String, bool, u32)> = None;
     let mut bullets_gpu = nuevo_renderer();
+    let mut attract = Attract::new();
+    let mut en_menu = true;
+    let mut intentos: u32 = 0;
 
     loop {
         frames += 1;
         if frames.is_multiple_of(HOT_RELOAD_EVERY)
-            && let Some(def) = hot.poll()
+            && let Some(defs) = hot.poll()
         {
-            world.reload_boss(&def);
+            world.reload_bosses(defs);
             // El replay en curso ya no reproduce nada: el jefe ha cambiado.
             recorder = Recorder::new(SEED);
         }
@@ -138,10 +176,21 @@ async fn run_game() {
         if is_key_pressed(KeyCode::F1) {
             show_debug = !show_debug;
         }
-        if is_key_pressed(KeyCode::R) {
+        if is_key_pressed(KeyCode::R) && !en_menu {
             world = World::new(SEED);
             recorder = Recorder::new(SEED);
             accumulator = 0.0;
+            intentos += 1;
+        }
+        if is_key_pressed(KeyCode::Escape) && !en_menu {
+            en_menu = true;
+        }
+        if is_key_pressed(KeyCode::Z) && en_menu {
+            en_menu = false;
+            world = World::new(SEED);
+            recorder = Recorder::new(SEED);
+            accumulator = 0.0;
+            intentos += 1;
         }
         if is_key_pressed(KeyCode::F2) {
             aviso = Some(match guardar_replay(&recorder) {
@@ -151,13 +200,25 @@ async fn run_game() {
         }
 
         // --- Simulacion: paso fijo, desacoplada del render ---
-        let input = read_input();
+        // En el menu se avanza el modo atractor en vez de la partida; el
+        // acumulador es el mismo, asi que el replay va al ritmo correcto.
+        let input = if en_menu {
+            InputFrame::NONE
+        } else {
+            read_input()
+        };
         let t0 = get_time();
         accumulator += frame_dt;
         let mut steps = 0;
         while accumulator >= DT {
-            world.step(input);
-            recorder.record(input, &world);
+            if en_menu {
+                if let Some(a) = attract.as_mut() {
+                    a.step();
+                }
+            } else {
+                world.step(input);
+                recorder.record(input, &world);
+            }
             accumulator -= DT;
             steps += 1;
             if steps >= MAX_STEPS_PER_FRAME {
@@ -174,8 +235,17 @@ async fn run_game() {
         // --- Render ---
         let t1 = get_time();
         let layout = draw::Layout::compute();
-        draw::frame(&world, alpha, &layout, bullets_gpu.as_mut());
-        if show_debug {
+        let mostrado = match (en_menu, attract.as_ref()) {
+            (true, Some(a)) => &a.world,
+            _ => &world,
+        };
+        draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut());
+        if en_menu {
+            draw::menu(&layout, intentos);
+        } else if world.is_over() {
+            draw::fin_de_partida(&layout, &world);
+        }
+        if show_debug && !en_menu {
             draw::debug_overlay(&world, &stats, steps);
             draw::recording_badge(recorder.ticks());
         }

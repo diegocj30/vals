@@ -13,12 +13,22 @@ use crate::bullets::Bullets;
 use crate::hash::Fnv1a;
 use crate::pattern::{Pattern, PatternRunner, RunCtx, Step};
 
-/// El jefe por defecto, embebido en el binario.
+/// Los jefes del boss-rush, en orden, embebidos en el binario.
 ///
-/// Se embebe para que el build web funcione sin sistema de ficheros, y para
+/// Se embeben para que el build web funcione sin sistema de ficheros, y para
 /// que el juego arranque aunque alguien deje un RON a medias en disco. En
-/// nativo se prefiere el fichero, que es lo que permite el hot-reload.
-pub const DEFAULT_BOSS_RON: &str = include_str!("../../../assets/patterns/boss1.ron");
+/// nativo se prefieren los ficheros, que es lo que permite el hot-reload.
+///
+/// **Anadir un jefe es anadir un fichero y una linea aqui.** Ni una linea de
+/// codigo mas: esa era toda la razon de ser del interprete de patrones.
+pub const DEFAULT_BOSS_RONS: [&str; 3] = [
+    include_str!("../../../assets/patterns/boss1.ron"),
+    include_str!("../../../assets/patterns/boss2.ron"),
+    include_str!("../../../assets/patterns/boss3.ron"),
+];
+
+/// El primer jefe. Se conserva por comodidad y para los tests.
+pub const DEFAULT_BOSS_RON: &str = DEFAULT_BOSS_RONS[0];
 
 /// Ticks que el jefe parpadea al recibir dano.
 const HIT_FLASH_TICKS: u32 = 4;
@@ -53,11 +63,24 @@ impl BossDef {
         ron::from_str(src.trim_start_matches('\u{feff}'))
     }
 
-    /// La definicion embebida en el binario.
+    /// La definicion embebida del primer jefe.
     pub fn default_boss() -> Self {
         // Si esto falla, el fichero de assets esta roto y no hay nada que
         // hacer: es un error de compilacion disfrazado de error de ejecucion.
         Self::from_ron(DEFAULT_BOSS_RON).expect("el RON embebido debe ser valido")
+    }
+
+    /// Todos los jefes embebidos, en orden de aparicion.
+    pub fn default_bosses() -> Vec<Self> {
+        DEFAULT_BOSS_RONS
+            .iter()
+            .enumerate()
+            .map(|(i, ron)| {
+                Self::from_ron(ron).unwrap_or_else(|e| {
+                    panic!("el RON embebido del jefe {} es invalido: {e}", i + 1)
+                })
+            })
+            .collect()
     }
 }
 
@@ -223,6 +246,44 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn los_tres_jefes_embebidos_son_validos() {
+        let defs = BossDef::default_bosses();
+        assert_eq!(defs.len(), 3);
+        for (i, d) in defs.iter().enumerate() {
+            assert!(!d.name.is_empty(), "el jefe {} no tiene nombre", i + 1);
+            assert!(!d.phases.is_empty(), "el jefe {} no tiene fases", i + 1);
+            let b = Boss::from_def(d);
+            assert!(!b.defeated);
+        }
+    }
+
+    #[test]
+    fn cada_jefe_tiene_su_nombre() {
+        let nombres: Vec<String> = BossDef::default_bosses()
+            .iter()
+            .map(|d| d.name.clone())
+            .collect();
+        let unicos: std::collections::BTreeSet<_> = nombres.iter().collect();
+        assert_eq!(
+            unicos.len(),
+            nombres.len(),
+            "nombres repetidos: {nombres:?}"
+        );
+    }
+
+    #[test]
+    fn los_jefes_se_ponen_mas_duros() {
+        let vidas: Vec<i32> = BossDef::default_bosses()
+            .iter()
+            .map(|d| d.phases.iter().map(|f| f.hp).sum())
+            .collect();
+        assert!(
+            vidas.windows(2).all(|w| w[1] > w[0]),
+            "cada jefe deberia tener mas vida que el anterior: {vidas:?}"
+        );
     }
 
     #[test]

@@ -14,7 +14,7 @@
 //! De propina salen tres cosas por el mismo precio: tests de regresion de
 //! jugabilidad, material para GIFs de portfolio y un modo atractor.
 
-use crate::boss::DEFAULT_BOSS_RON;
+use crate::boss::DEFAULT_BOSS_RONS;
 use crate::hash::Fnv1a;
 use crate::{InputFrame, World};
 
@@ -51,10 +51,15 @@ pub struct Replay {
     pub checkpoints: Vec<Checkpoint>,
 }
 
-/// Huella del patron del jefe embebido.
+/// Huella de **todos** los patrones embebidos.
+///
+/// Cubre los tres jefes, no solo el primero: un replay recorre el boss-rush
+/// entero, asi que tocar el jefe 3 tambien lo invalida.
 pub fn default_pattern_hash() -> u64 {
     let mut h = Fnv1a::new();
-    h.write_str(DEFAULT_BOSS_RON);
+    for ron in DEFAULT_BOSS_RONS {
+        h.write_str(ron);
+    }
     h.finish()
 }
 
@@ -544,6 +549,29 @@ mod tests {
                  replay_tool -- record-golden"
             ),
         }
+    }
+
+    #[test]
+    fn el_replay_dorado_sigue_siendo_util() {
+        // Un dorado que muere a los tres segundos no prueba casi nada. Si un
+        // reajuste de dificultad lo acorta mucho, conviene enterarse.
+        let r = Replay::from_bytes(GOLDEN_REPLAY).unwrap();
+        let mut w = World::new(r.seed);
+        let mut fin = None;
+        for (i, input) in r.inputs.iter().copied().enumerate() {
+            w.step(input);
+            if w.is_over() && fin.is_none() {
+                fin = Some(i as u64);
+            }
+        }
+        let jugados = fin.unwrap_or(r.ticks());
+        assert!(
+            jugados > r.ticks() / 2,
+            "el dorado solo aguanta {jugados} de {} ticks; se ha vuelto poco util",
+            r.ticks()
+        );
+        assert!(w.player.parries > 0, "deberia parriar alguna vez");
+        assert!(w.player.grazes > 0, "y rozar balas");
     }
 
     #[test]

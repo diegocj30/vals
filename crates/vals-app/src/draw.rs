@@ -48,6 +48,10 @@ const METER: Color = color_u8!(120, 255, 200, 255);
 const METER_FULL: Color = color_u8!(255, 235, 140, 255);
 const METER_BG: Color = color_u8!(24, 40, 40, 255);
 
+const VEIL: Color = color_u8!(6, 6, 12, 200);
+const TITLE: Color = color_u8!(200, 245, 255, 255);
+const DEFEAT: Color = color_u8!(255, 110, 150, 255);
+
 const TEXT: Color = color_u8!(150, 210, 235, 255);
 const TEXT_DIM: Color = color_u8!(90, 120, 145, 255);
 
@@ -126,8 +130,94 @@ pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mu
     draw_player(world, alpha, layout);
     draw_hp_bar(world, layout);
     draw_meter(world, layout);
+    draw_hud(world, layout);
+}
+
+/// Nombre del jefe, cual de cuantos es, y las vidas que quedan.
+fn draw_hud(world: &World, l: &Layout) {
+    let o = l.to_screen(0.0, 0.0);
+    let w = l.len(ARENA_W);
+
+    if !world.boss.defeated {
+        let etiqueta = format!(
+            "{}  ({}/{})",
+            world.boss.name,
+            world.boss_index + 1,
+            world.boss_count()
+        );
+        let m = measure_text(&etiqueta, None, 18, 1.0);
+        draw_text(
+            &etiqueta,
+            o.x + w - m.width - 8.0,
+            o.y + 34.0,
+            18.0,
+            TEXT_DIM,
+        );
+    }
+
+    // Vidas, abajo a la derecha junto al medidor. Un punto por vida: contar
+    // tres puntos es mas rapido que leer un numero.
+    let y = l.to_screen(0.0, ARENA_H).y - 22.0;
+    for i in 0..world.lives {
+        draw_circle(o.x + w - 10.0 - i as f32 * 13.0, y, 4.0, HITBOX);
+    }
+}
+
+/// Velo mas titulo mas subtitulo. Lo comparten menu, victoria y derrota.
+fn draw_cartel(l: &Layout, titulo: &str, color: Color, lineas: &[&str]) {
+    let o = l.to_screen(0.0, 0.0);
+    draw_rectangle(o.x, o.y, l.len(ARENA_W), l.len(ARENA_H), VEIL);
+
+    let cx = l.to_screen(ARENA_W * 0.5, 0.0).x;
+    let mut y = l.to_screen(0.0, ARENA_H * 0.34).y;
+
+    let m = measure_text(titulo, None, 56, 1.0);
+    draw_text(titulo, cx - m.width * 0.5, y, 56.0, color);
+    y += 46.0;
+
+    for linea in lineas {
+        let m = measure_text(linea, None, 20, 1.0);
+        draw_text(linea, cx - m.width * 0.5, y, 20.0, TEXT);
+        y += 26.0;
+    }
+}
+
+/// Menu. De fondo corre el replay dorado, que es el modo atractor.
+pub fn menu(l: &Layout, intentos: u32) {
+    let sub = if intentos == 0 {
+        "Z para empezar".to_owned()
+    } else {
+        format!("Z para volver a intentarlo   ({intentos} intentos)")
+    };
+    draw_cartel(
+        l,
+        "VALS",
+        TITLE,
+        &[
+            &sub,
+            "",
+            "flechas mover   Z disparar   X dash",
+            "C parry   ESPACIO super   SHIFT focus",
+        ],
+    );
+}
+
+pub fn fin_de_partida(l: &Layout, world: &World) {
     if world.victory {
-        draw_victory(layout);
+        draw_cartel(
+            l,
+            "FIN DEL VALS",
+            VICTORY,
+            &["los tres han caido", "", "R reiniciar   ESC al menu"],
+        );
+    } else {
+        let m = format!("caiste ante {}", world.boss.name);
+        draw_cartel(
+            l,
+            "SE ACABO",
+            DEFEAT,
+            &[&m, "", "R reiniciar   ESC al menu"],
+        );
     }
 }
 
@@ -181,13 +271,6 @@ fn draw_hp_bar(world: &World, l: &Layout) {
             draw_circle_lines(cx, cy, 3.0, 1.0, HP_BAR_BG);
         }
     }
-}
-
-fn draw_victory(l: &Layout) {
-    let o = l.to_screen(ARENA_W * 0.5, ARENA_H * 0.42);
-    let texto = "FIN DEL VALS";
-    let m = measure_text(texto, None, 48, 1.0);
-    draw_text(texto, o.x - m.width * 0.5, o.y, 48.0, VICTORY);
 }
 
 /// Los disparos del jugador: trazos finos, para no confundirlos con las balas
@@ -465,6 +548,12 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
 
     y += 6.0;
     put(&format!("tick    {}", world.tick), TEXT_DIM, &mut y);
+    put(
+        &format!("jefe    {}/{}", world.boss_index + 1, world.boss_count()),
+        TEXT_DIM,
+        &mut y,
+    );
+    put(&format!("vidas   {}", world.lives), TEXT_DIM, &mut y);
     put(
         &format!("balas   {}", world.bullets.live_count()),
         TEXT_DIM,

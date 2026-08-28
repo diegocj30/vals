@@ -4,6 +4,9 @@ Boss-rush danmaku escrito en Rust. Jugable en nativo y en navegador.
 
 Los patrones de balas de este genero son coreografia: de ahi el nombre.
 
+Tres jefes —El Vals, El Espejo y La Coda—, tres vidas, y un parry que te empuja
+a meterte donde estan las balas en vez de huir de todas.
+
 ## Estructura
 
 | Crate | Que hace |
@@ -40,7 +43,9 @@ que acercarse compense.
 
 ## Disenar un jefe
 
-Los jefes se definen en `assets/patterns/*.ron`, **no en codigo**. El fichero
+Los tres jefes se definen en `assets/patterns/boss1.ron`, `boss2.ron` y
+`boss3.ron`, **no en codigo**. Anadir uno nuevo es escribir el fichero y meterlo
+en `DEFAULT_BOSS_RONS`: esa unica linea es toda la logica que hace falta. El fichero
 lleva en la cabecera la guia de los pasos del lenguaje (`Wait`, `Fire`, `Turn`,
 `Repeat`, `Forever`, `Parallel`, `MoveTo`).
 
