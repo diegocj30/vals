@@ -7,14 +7,17 @@
 //
 // Las cuatro figuras, en orden, con las balas por segundo que echa cada una:
 //
-//   1. El paso base   52 b/s   una espiral y un abanico apuntado. Ensena el 3/4.
-//   2. El espejo     103 b/s   Turn(0.31) y Turn(-0.31): el mismo giro del reves.
-//   3. El molinete   126 b/s   una vuelta lenta y otra rapidisima, a la vez.
-//   4. La coda       232 b/s   el final. Es el muro, y esta puesto a proposito.
+//   1. El paso base   48 b/s   una espiral y un abanico apuntado. Ensena el 3/4.
+//   2. El espejo      88 b/s   Turn(0.31) y Turn(-0.31): el mismo giro del reves.
+//   3. El molinete   115 b/s   una vuelta lenta y otra rapidisima, a la vez.
+//   4. La coda       156 b/s   el final.
 //
-// La suma de vida son 2040, casi lo mismo que costaba antes La Coda sola
-// (2000): reintentar el jefe entero cuesta lo mismo que costaba reintentar el
-// ultimo, y las tres primeras figuras son mas suaves que las suyas.
+// Las densidades bajaron un 15% cuando entro el presupuesto de dificultad
+// (`TECHO_POR_BAILE`): el vals es el primer baile de siete u ocho, y su final
+// no puede estar donde estaba el techo de todo el juego.
+//
+// La suma de vida son 2040, y es la referencia de lo que se siente bien de
+// larga: ningun baile deberia alejarse mucho de ahi.
 //
 // Este fichero es la fuente de verdad: el jefe se disena aqui, no en el codigo.
 // En nativo hay HOT-RELOAD: guarda y el cambio entra sin recompilar. Si el RON
@@ -62,7 +65,7 @@
           [
             Forever([
               Fire((
-                count: 7,
+                count: 6,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
                 speed: 130.0,
@@ -124,7 +127,7 @@
           [
             Forever([
               Fire((
-                count: 6,
+                count: 5,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
                 speed: 140.0,
@@ -144,7 +147,7 @@
           [
             Forever([
               Fire((
-                count: 6,
+                count: 5,
                 arc: 6.2831855,
                 aim: Fixed(3.14159),
                 speed: 140.0,
@@ -206,7 +209,7 @@
           [
             Forever([
               Fire((
-                count: 16,
+                count: 14,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
                 speed: 210.0,
@@ -226,7 +229,7 @@
           [
             Forever([
               Fire((
-                count: 7,
+                count: 6,
                 arc: 6.2831855,
                 aim: Fixed(1.0),
                 speed: 260.0,
@@ -247,7 +250,7 @@
             Forever([
               Wait(90),
               Fire((
-                count: 5,
+                count: 4,
                 arc: 0.5,
                 aim: AtPlayer,
                 speed: 240.0,
@@ -293,7 +296,7 @@
           [
             Forever([
               Fire((
-                count: 9,
+                count: 7,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
                 speed: 200.0,
@@ -313,7 +316,7 @@
           [
             Forever([
               Fire((
-                count: 9,
+                count: 7,
                 arc: 6.2831855,
                 aim: Fixed(1.7),
                 speed: 150.0,
@@ -337,7 +340,7 @@
                 times: 4,
                 body: [
                   Fire((
-                    count: 7,
+                    count: 6,
                     arc: 0.9,
                     aim: AtPlayer,
                     speed: 330.0,
@@ -359,7 +362,7 @@
             Forever([
               Wait(180),
               Fire((
-                count: 8,
+                count: 7,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
                 speed: 90.0,

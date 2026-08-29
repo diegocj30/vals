@@ -7,9 +7,15 @@
 // es lo contrario: silencio, arranque seco y parada en seco. De ahi salen las
 // tres figuras:
 //
-//   1. La caminata    87 b/s   el paso del tango: recto y marcado.
-//   2. El corte      131 b/s   balas que salen, frenan y VUELVEN.
-//   3. La quebrada   210 b/s   el abrazo roto: fuego cruzado desde dos lados.
+//   1. La caminata    66 b/s   el paso del tango: recto y marcado.
+//   2. El corte       95 b/s   balas que salen, frenan y VUELVEN.
+//   3. La quebrada   140 b/s   el abrazo roto: fuego cruzado desde dos lados.
+//
+// La primera version salio a 66/131/201 y no habia por donde cogerla: se
+// atascaba en la segunda figura. El problema no era el numero —131 es menos
+// que el molinete del vals— sino que habia DOS cortes solapados, y un corte
+// encima de otro no se lee. Ahora es uno solo, de una capa, y se ve la bala
+// pararse. Lo demas bajo con el presupuesto (`TECHO_POR_BAILE`).
 //
 // NO HAY UN SOLO `Turn` EN TODO EL FICHERO, y es la regla que define el baile.
 // Una espiral es un giro continuo, que es lo que hace un vals; el tango va en
@@ -45,7 +51,7 @@
     // --- La caminata. El paso del tango: recto y marcado, ni una espiral.
     (
       name: "La caminata",
-      hp: 500,
+      hp: 450,
       steps: [
         Parallel([
           [
@@ -61,7 +67,7 @@
             // El marcato: un golpe en cada tiempo, siempre recto al jugador.
             Forever([
               Fire((
-                count: 9,
+                count: 7,
                 arc: 0.62,
                 aim: AtPlayer,
                 speed: 230.0,
@@ -81,7 +87,7 @@
             // Y cada tres tiempos, la sala entera.
             Forever([
               Fire((
-                count: 32,
+                count: 23,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
                 speed: 135.0,
@@ -102,7 +108,7 @@
             Forever([
               Wait(30),
               Fire((
-                count: 18,
+                count: 13,
                 arc: 6.2831855,
                 aim: Fixed(0.9),
                 speed: 190.0,
@@ -122,7 +128,7 @@
             Forever([
               Wait(30),
               Fire((
-                count: 8,
+                count: 6,
                 arc: 1.1,
                 aim: AtPlayer,
                 speed: 300.0,
@@ -164,7 +170,7 @@
     // --- El corte. Salen, frenan, se paran y vuelven.
     (
       name: "El corte",
-      hp: 700,
+      hp: 600,
       steps: [
         Parallel([
           [
@@ -181,11 +187,11 @@
             // corte de tango, y no hizo falta tocar el motor para tenerlo.
             Forever([
               Fire((
-                count: 30,
+                count: 32,
                 arc: 6.2831855,
                 aim: Fixed(0.2),
                 speed: 330.0,
-                rings: 2,
+                rings: 1,
                 speed_step: 70.0,
                 ring_offset: 0.1,
                 accel: -190.0,
@@ -198,34 +204,12 @@
             ]),
           ],
           [
-            // Otro corte a contratiempo y en otro angulo: cuando el primero
-            // esta volviendo, el segundo esta yendo.
-            Forever([
-              Wait(30),
-              Fire((
-                count: 20,
-                arc: 6.2831855,
-                aim: Fixed(1.4),
-                speed: 300.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: -175.0,
-                spin: 0.0,
-                ttl: 9.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Wait(30),
-            ]),
-          ],
-          [
             // Agujas rectas: si te quedas quieto esperando a que vuelva el
             // corte, te cosen.
             Forever([
               Wait(30),
               Fire((
-                count: 8,
+                count: 10,
                 arc: 0.5,
                 aim: AtPlayer,
                 speed: 330.0,
@@ -244,7 +228,7 @@
           [
             Forever([
               Fire((
-                count: 16,
+                count: 20,
                 arc: 6.2831855,
                 aim: Fixed(1.1),
                 speed: 175.0,
@@ -264,7 +248,7 @@
             Forever([
               Wait(30),
               Fire((
-                count: 10,
+                count: 12,
                 arc: 1.6,
                 aim: AtPlayer,
                 speed: 250.0,
@@ -284,7 +268,7 @@
             Forever([
               Wait(240),
               Fire((
-                count: 4,
+                count: 5,
                 arc: 1.2,
                 aim: AtPlayer,
                 speed: 115.0,
@@ -305,7 +289,7 @@
     // --- La quebrada. El abrazo roto: fuego cruzado desde dos lados.
     (
       name: "La quebrada",
-      hp: 1000,
+      hp: 850,
       steps: [
         Parallel([
           [
@@ -321,7 +305,7 @@
             // medio. Se alternan en cada tiempo.
             Forever([
               Fire((
-                count: 16,
+                count: 11,
                 arc: 1.5,
                 aim: Fixed(0.6),
                 speed: 265.0,
@@ -336,7 +320,7 @@
               )),
               Wait(30),
               Fire((
-                count: 16,
+                count: 11,
                 arc: 1.5,
                 aim: Fixed(3.74),
                 speed: 265.0,
@@ -356,7 +340,7 @@
             // El corte vuelve, y ahora en cada tiempo fuerte.
             Forever([
               Fire((
-                count: 34,
+                count: 24,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
                 speed: 355.0,
@@ -376,7 +360,7 @@
             Forever([
               Wait(30),
               Fire((
-                count: 9,
+                count: 6,
                 arc: 0.55,
                 aim: AtPlayer,
                 speed: 320.0,
@@ -395,7 +379,7 @@
           [
             Forever([
               Fire((
-                count: 22,
+                count: 15,
                 arc: 6.2831855,
                 aim: Fixed(2.1),
                 speed: 210.0,
@@ -415,7 +399,7 @@
             Forever([
               Wait(30),
               Fire((
-                count: 26,
+                count: 18,
                 arc: 6.2831855,
                 aim: Fixed(4.4),
                 speed: 160.0,
@@ -434,7 +418,7 @@
           [
             Forever([
               Fire((
-                count: 20,
+                count: 14,
                 arc: 2.4,
                 aim: AtPlayer,
                 speed: 185.0,
@@ -454,7 +438,7 @@
             Forever([
               Wait(120),
               Fire((
-                count: 5,
+                count: 4,
                 arc: 1.4,
                 aim: AtPlayer,
                 speed: 130.0,

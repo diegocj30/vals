@@ -391,7 +391,12 @@ async fn run_game() {
             }
         }
         if show_debug && escena == Escena::Combate {
-            draw::debug_overlay(&world, &stats, steps);
+            draw::debug_overlay(
+                &world,
+                &stats,
+                steps,
+                mando.conectado().then(|| mando.botones()),
+            );
             draw::recording_badge(recorder.ticks());
         }
         if let Some((msg, error)) = hot.aviso() {
@@ -496,7 +501,7 @@ async fn run_replay(path: String) {
         let t1 = get_time();
         let layout = draw::Layout::compute();
         draw::frame(&world, alpha, &layout, bullets_gpu.as_mut());
-        draw::debug_overlay(&world, &stats, steps);
+        draw::debug_overlay(&world, &stats, steps, None);
         draw::replay_badge(cursor, replay.inputs.len(), divergencia);
         stats.push_render((get_time() - t1) as f32);
 

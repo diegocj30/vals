@@ -34,6 +34,25 @@ pub const DEFAULT_BOSS_RONS: [&str; 2] = [
 /// El primer jefe. Se conserva por comodidad y para los tests.
 pub const DEFAULT_BOSS_RON: &str = DEFAULT_BOSS_RONS[0];
 
+/// Techo de balas por segundo de la figura mas densa de cada baile.
+///
+/// Con siete u ocho bailes por delante, **"cada uno mas denso que el anterior"
+/// no es una regla: es una escalada**. Asi se llego a un segundo baile que
+/// disparaba mas que el primero y que no habia por donde cogerlo, y a los cinco
+/// bailes el numero no cabria en la pantalla.
+///
+/// Esto es el presupuesto. Responde a "cuanto puede costar el baile numero
+/// seis" **antes** de escribirlo, en vez de decidirlo comparandolo con el
+/// quinto. Sube despacio a proposito: del primero al octavo se multiplica por
+/// 1,5, no por cuatro.
+///
+/// Es un techo, no un objetivo: un baile puede quedarse corto si su gracia esta
+/// en otra cosa. Y es una condicion necesaria y no suficiente, porque la
+/// legibilidad importa tanto como la densidad y eso no lo mide un test —el
+/// tango de la primera version disparaba 131 en su segunda figura, menos que el
+/// molinete del vals, y era mucho peor de esquivar—.
+pub const TECHO_POR_BAILE: [f32; 8] = [170.0, 175.0, 190.0, 200.0, 210.0, 225.0, 240.0, 255.0];
+
 /// Ticks que el jefe parpadea al recibir dano.
 const HIT_FLASH_TICKS: u32 = 4;
 
@@ -356,40 +375,64 @@ mod tests {
     }
 
     #[test]
-    fn la_ultima_fase_de_cada_jefe_es_la_mas_densa() {
-        // Dos veces seguidas, jugando, la fase final resulto ser la mas facil:
-        // en El Espejo porque disparaba la MITAD que la primera, y en La Coda
-        // porque eran dos espirales limpias. Subir la vida de una fase no la
-        // hace mas dificil; esto vigila que el climax lo sea de verdad.
+    fn cada_baile_cabe_en_su_presupuesto() {
+        // Tres reglas, y las tres salieron de jugar.
         //
-        // Es una condicion necesaria, no suficiente: la legibilidad importa
-        // tanto como la densidad, y eso no lo mide un test.
-        for def in BossDef::default_bosses() {
-            let densidad: Vec<usize> = def
+        // 1. La ultima figura es la mas densa. Dos veces seguidas la fase final
+        //    resulto ser la mas facil —una disparaba la MITAD que la primera—,
+        //    y subirle la vida no la hace mas dificil.
+        // 2. El baile arranca de verdad mas suave que como acaba. Si no, no hay
+        //    curva dentro del jefe, hay meseta.
+        // 3. Y no se pasa de su techo. Sin esto cada baile se tuneaba contra el
+        //    anterior y la cosa escalaba sola.
+        for (i, def) in BossDef::default_bosses().iter().enumerate() {
+            let picos: Vec<f32> = def
                 .phases
                 .iter()
-                .map(|f| balas_de_la_fase(f, 600))
+                .map(|f| balas_de_la_fase(f, 600) as f32 / 10.0)
                 .collect();
-            let maxima = *densidad.iter().max().unwrap();
+            let ultima = *picos.last().unwrap();
+            let maxima = picos.iter().cloned().fold(0.0f32, f32::max);
+
             assert_eq!(
-                *densidad.last().unwrap(),
-                maxima,
-                "la ultima fase de {} no es la mas densa: {densidad:?}",
+                ultima, maxima,
+                "la ultima figura de {} no es la mas densa: {picos:?}",
+                def.name
+            );
+            assert!(
+                ultima >= picos[0] * 1.8,
+                "{} no sube lo bastante de la primera figura a la ultima: {picos:?}",
+                def.name
+            );
+
+            let techo = TECHO_POR_BAILE[i.min(TECHO_POR_BAILE.len() - 1)];
+            assert!(
+                maxima <= techo,
+                "{} se pasa del presupuesto: {maxima} b/s con techo {techo}",
                 def.name
             );
         }
     }
 
     #[test]
-    fn los_jefes_se_ponen_mas_duros() {
-        let vidas: Vec<i32> = BossDef::default_bosses()
-            .iter()
-            .map(|d| d.phases.iter().map(|f| f.hp).sum())
-            .collect();
-        assert!(
-            vidas.windows(2).all(|w| w[1] > w[0]),
-            "cada jefe deberia tener mas vida que el anterior: {vidas:?}"
-        );
+    fn ningun_baile_dura_una_barbaridad() {
+        // Antes esto exigia que cada jefe tuviera MAS vida que el anterior, y
+        // era la misma escalada que el presupuesto vino a cortar: con ocho
+        // bailes, el ultimo duraria cuatro veces mas que el primero sin que
+        // nadie lo hubiera decidido.
+        //
+        // La vida no es dificultad, es **duracion**. Y como en la pista se
+        // eligen en el orden que quieras, tampoco tiene por que crecer. Lo
+        // unico que importa es que ninguno sea ni un chiste ni una condena: el
+        // vals son 2040 y es la referencia de lo que se siente bien.
+        for def in BossDef::default_bosses() {
+            let vida: i32 = def.phases.iter().map(|f| f.hp).sum();
+            assert!(
+                (1500..=3000).contains(&vida),
+                "{} dura {vida} de vida, fuera de lo razonable",
+                def.name
+            );
+        }
     }
 
     #[test]

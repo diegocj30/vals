@@ -4,7 +4,7 @@
 
 use macroquad::prelude::*;
 use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
-use vals_core::pista::{Miron, Nodo, Pista};
+use vals_core::pista::{Nodo, Pista};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bullet_renderer::BulletRenderer;
@@ -765,7 +765,7 @@ pub fn bench_overlay(
     );
 }
 
-pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
+pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32, mando: Option<[&str; 4]>) {
     let mut y = 26.0;
     stats_block(stats, steps, &mut y);
 
@@ -847,8 +847,18 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32) {
         &mut y,
     );
 
-    let help = "Z disparar  X dash  C parry  ESPACIO super  SHIFT focus  M mudo  F1  R  F3 saltar";
-    draw_text(help, X, screen_height() - 14.0, 16.0, TEXT_DIM);
+    // Con los nombres del mando si hay mando. Esta es la linea que esta puesta
+    // todo el rato, asi que es la que de verdad se lee: tenerla en teclado
+    // mientras el menu decia otra cosa era peor que no tener ninguna.
+    let help = match mando {
+        Some(b) => format!(
+            "{} disparar  {} dash  {} parry  {} super  L2 focus  M mudo  F1  R  F3 saltar",
+            b[0], b[1], b[2], b[3]
+        ),
+        None => "Z disparar  X dash  C parry  ESPACIO super  SHIFT focus  M mudo  F1  R  F3 saltar"
+            .to_owned(),
+    };
+    draw_text(&help, X, screen_height() - 14.0, 16.0, TEXT_DIM);
 }
 
 /// Aviso de una linea. Verde si fue bien, rojo si no.
@@ -995,28 +1005,6 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, t: f32) {
     );
 }
 
-/// Alguien mirando desde un lado.
-///
-/// Todo lo que cambia con el respeto va por el mismo numero: se vuelve hacia
-/// ti, se mueve mas, baila mejor y se ve mas. Cuatro canales para un solo dato
-/// es lo que hace que se lea sin explicarlo.
-fn dibujar_miron(l: &Layout, p: &Pista, m: &Miron, respeto: f32, t: f32) {
-    let (s, escala) = suelo(l, m.pos.x, m.pos.y);
-    // Parados casi no se mueven; segun te respetan, se van soltando.
-    let ritmo = 0.30 + 0.70 * respeto;
-    // Nunca bailan tan bien como tu: la pista es tuya.
-    let pose = skeleton::pose(
-        &p.figura_de(m),
-        t * ritmo + m.desfase * 60.0,
-        false,
-        respeto * 0.75,
-    );
-    let ls = l.escalado(escala * m.talla * 0.82);
-    let pie = pose.joints.iter().map(|j| j.y).fold(f32::MIN, f32::max);
-    let alfa = 0.30 + 0.45 * respeto;
-    draw_figura(&pose, s - vec2(0.0, pie * ls.scale()), &ls, alfa);
-}
-
 /// El mapa entero.
 pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
     clear_background(BG);
@@ -1027,23 +1015,11 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
     let t = p.tick as f32 + alpha;
     let respeto = p.respeto();
 
-    // Todo lo que esta de pie en el suelo se ordena junto, de fondo a frente,
-    // para que lo cercano tape a lo lejano. Mezclar publico y bailes en la
-    // misma lista es lo que evita que un miron de delante quede detras de un
-    // baile del fondo.
-    enum Cosa<'a> {
-        Baile(&'a Nodo),
-        Miron(&'a Miron),
-    }
-    let mut cosas: Vec<(f32, Cosa)> = Vec::with_capacity(p.nodos.len() + p.publico.len());
-    cosas.extend(p.nodos.iter().map(|n| (n.pos.y, Cosa::Baile(n))));
-    cosas.extend(p.publico.iter().map(|m| (m.pos.y, Cosa::Miron(m))));
-    cosas.sort_by(|a, b| a.0.total_cmp(&b.0));
-    for (_, cosa) in &cosas {
-        match cosa {
-            Cosa::Baile(n) => dibujar_nodo(l, n, t),
-            Cosa::Miron(m) => dibujar_miron(l, p, m, respeto, t),
-        }
+    // De fondo a frente, para que lo cercano tape a lo lejano.
+    let mut orden: Vec<&Nodo> = p.nodos.iter().collect();
+    orden.sort_by(|a, b| a.pos.y.total_cmp(&b.pos.y));
+    for nodo in orden {
+        dibujar_nodo(l, nodo, t);
     }
 
     // --- La bailarina ---
