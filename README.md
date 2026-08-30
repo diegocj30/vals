@@ -4,8 +4,8 @@ Boss-rush danmaku escrito en Rust. Jugable en nativo y en navegador.
 
 Los patrones de balas de este genero son coreografia: de ahi el nombre.
 
-Una pista de baile, tres jefes —El Vals, El Tango y El Charleston, cada uno
-con sus figuras—, tres vidas, y un parry que te empuja
+Una pista de baile, tres jefes —El Vals, El Charleston y El Tango, cada uno con
+sus figuras—, tres vidas, y un parry que te empuja
 a meterte donde estan las balas en vez de huir de todas.
 
 Dos modos: **volar** por la arena, como el danmaku clasico, o **plataformas**

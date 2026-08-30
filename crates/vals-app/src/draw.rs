@@ -950,10 +950,16 @@ fn dibujar_tarima(l: &Layout) {
 }
 
 /// Un baile plantado en la pista.
-fn dibujar_nodo(l: &Layout, nodo: &Nodo, t: f32) {
+fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32) {
     let (s, escala) = suelo(l, nodo.pos.x, nodo.pos.y);
     let r = l.len(30.0) * escala;
-    let alfa = if nodo.vencido { 0.45 } else { 1.0 };
+    let alfa = if !abierto {
+        0.28
+    } else if nodo.vencido {
+        0.45
+    } else {
+        1.0
+    };
 
     // El foco: es lo que planta la figura en el suelo en vez de dejarla
     // flotando.
@@ -989,7 +995,9 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, t: f32) {
     draw_circle(c.x, c.y, r * 0.55, fade(BOSS_CORE, alfa));
     draw_poly_lines(c.x, c.y, 8, r * 0.55, t * 0.18, 1.5, fade(BOSS_RING, alfa));
 
-    let etiqueta = if nodo.vencido {
+    let etiqueta = if !abierto {
+        format!("{}  ({})", nodo.nombre, nodo.nivel.nombre())
+    } else if nodo.vencido {
         format!("{}  (bailado)", nodo.nombre)
     } else {
         nodo.nombre.clone()
@@ -1016,10 +1024,10 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
     let respeto = p.respeto();
 
     // De fondo a frente, para que lo cercano tape a lo lejano.
-    let mut orden: Vec<&Nodo> = p.nodos.iter().collect();
-    orden.sort_by(|a, b| a.pos.y.total_cmp(&b.pos.y));
-    for nodo in orden {
-        dibujar_nodo(l, nodo, t);
+    let mut orden: Vec<(usize, &Nodo)> = p.nodos.iter().enumerate().collect();
+    orden.sort_by(|a, b| a.1.pos.y.total_cmp(&b.1.pos.y));
+    for (i, nodo) in orden {
+        dibujar_nodo(l, nodo, p.abierto(i), t);
     }
 
     // --- La bailarina ---
@@ -1066,10 +1074,17 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
 
     let pie_y = l.to_screen(0.0, ARENA_H).y - 16.0;
     let aviso = match p.nodo_cerca() {
-        Some(i) => format!("Z    bailar {}", p.nodos[i].nombre),
+        Some(i) if p.abierto(i) => format!("Z    bailar {}", p.nodos[i].nombre),
+        // Un baile cerrado dice **por que** lo esta. "Bloqueado" a secas manda
+        // a probar cosas al azar; decir que falta el nivel de antes no.
+        Some(i) => format!(
+            "{} es {}: antes hay que sacar lo anterior",
+            p.nodos[i].nombre,
+            p.nodos[i].nivel.nombre()
+        ),
         None => "flechas andar    ESC menu".to_string(),
     };
-    let color = if p.nodo_cerca().is_some() {
+    let color = if p.nodo_cerca().is_some_and(|i| p.abierto(i)) {
         // Late, para que se vea que ahi hay algo que hacer.
         let pulso = 0.7 + 0.3 * (t * 0.12).sin();
         fade(METER_FULL, pulso)

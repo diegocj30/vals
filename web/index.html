@@ -81,6 +81,48 @@
       });
     })();
 
+    // El progreso, en localStorage.
+    //
+    // Mismo mecanismo: dos funciones que Rust declara en un extern "C". Lo
+    // unico del bundle de lo que dependen es `wasm_memory`, que es global
+    // desde que carga el .wasm; las cadenas se codifican aqui con TextEncoder
+    // en vez de tirar de las utilidades internas del bundle.
+    (function () {
+      var CLAVE = "vals.progreso";
+
+      function guardar(ptr, len) {
+        try {
+          var bytes = new Uint8Array(wasm_memory.buffer, ptr, len);
+          localStorage.setItem(CLAVE, new TextDecoder().decode(bytes));
+        } catch (e) {
+          // Modo privado, cuota llena, cookies bloqueadas. Se juega igual.
+          console.warn("no se pudo guardar el progreso:", e);
+        }
+      }
+
+      function cargar(ptr, cap) {
+        try {
+          var texto = localStorage.getItem(CLAVE);
+          if (texto === null) return -1;
+          var bytes = new TextEncoder().encode(texto);
+          if (bytes.length > cap) return -1;
+          new Uint8Array(wasm_memory.buffer, ptr, cap).set(bytes);
+          return bytes.length;
+        } catch (e) {
+          return -1;
+        }
+      }
+
+      miniquad_add_plugin({
+        register_plugin: function (importObject) {
+          importObject.env.vals_guardar = guardar;
+          importObject.env.vals_cargar = cargar;
+        },
+        version: 1,
+        name: "vals_guardado",
+      });
+    })();
+
     // Ojo: el bundle ya declara un `canvas` global con `const`. Redeclararlo
     // aqui seria un SyntaxError que se cargaria todo este script.
     var glcanvas = document.getElementById("glcanvas");

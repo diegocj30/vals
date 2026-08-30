@@ -13,6 +13,7 @@ use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
 mod audio;
 mod bullet_renderer;
 mod draw;
+mod guardado;
 mod hot;
 mod mando;
 mod music;
@@ -22,6 +23,7 @@ mod stats;
 
 use audio::{Audio, Sfx};
 use bullet_renderer::BulletRenderer;
+use guardado::Guardado;
 use hot::HotReload;
 use mando::Mando;
 use music::Tema;
@@ -187,9 +189,17 @@ async fn run_game() {
     let mut pista = Pista::new(
         BossDef::default_bosses()
             .into_iter()
-            .map(|d| d.name)
+            .map(|d| (d.name, d.nivel))
             .collect(),
     );
+    // El progreso de partidas anteriores. Se aplica por nombre, asi que un
+    // guardado de cuando habia dos bailes sigue valiendo con cuatro.
+    let mut progreso = Guardado::cargar();
+    for i in 0..pista.nodos.len() {
+        if progreso.tiene(&pista.nodos[i].nombre) {
+            pista.marcar_vencido(i);
+        }
+    }
     let mut modo = Mode::Flight;
     let mut nodo_actual = 0usize;
     let mut marcado = false;
@@ -268,6 +278,7 @@ async fn run_game() {
         if escena == Escena::Pista
             && (is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::SHOOT))
             && let Some(i) = pista.nodo_cerca()
+            && pista.abierto(i)
         {
             audio.play(Sfx::Empezar, 1.0);
             escena = Escena::Combate;
@@ -362,6 +373,8 @@ async fn run_game() {
         // de victoria se queda puesta muchos frames.
         if escena == Escena::Combate && world.victory && !marcado {
             pista.marcar_vencido(nodo_actual);
+            progreso.marcar(&pista.nodos[nodo_actual].nombre);
+            progreso.guardar();
             marcado = true;
         }
 

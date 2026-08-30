@@ -37,6 +37,8 @@
 // flags: 1 = parryable (rosa). Solo lo gordo y lento deberia serlo.
 (
   name: "El Charleston",
+  // los arcos se leen, pero hay que aprenderse la clave 3-3-2.
+  nivel: Media,
   pos: (320.0, 150.0),
   radius: 46.0,
   phases: [

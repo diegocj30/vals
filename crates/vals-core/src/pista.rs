@@ -17,8 +17,8 @@
 
 use glam::{Vec2, vec2};
 
+use crate::boss::Nivel;
 use crate::input::InputFrame;
-use crate::math::{TAU, sin_cos};
 use crate::{ARENA_H, ARENA_W, DT};
 
 /// Lo que corre la bailarina por la pista. Mas lento que en combate: aqui no
@@ -38,8 +38,8 @@ pub const ENTRADA: Vec2 = vec2(ARENA_W * 0.5, ARENA_H - 110.0);
 #[derive(Clone, Debug, PartialEq)]
 pub struct Nodo {
     pub nombre: String,
+    pub nivel: Nivel,
     pub pos: Vec2,
-    /// Si ya se ha bailado. De momento solo dura lo que dure el programa.
     pub vencido: bool,
 }
 
@@ -56,18 +56,26 @@ pub struct Pista {
 }
 
 impl Pista {
-    /// Una pista con un baile por nombre recibido.
-    pub fn new(nombres: Vec<String>) -> Self {
-        let n = nombres.len();
-        let nodos = nombres
-            .into_iter()
-            .enumerate()
-            .map(|(i, nombre)| Nodo {
-                nombre,
-                pos: sitio(i, n),
-                vencido: false,
-            })
-            .collect();
+    /// Una pista con un baile por cada (nombre, nivel) recibido.
+    ///
+    /// Los sitios salen del **nivel**, no del orden de la lista: lo facil
+    /// delante y lo dificil al fondo. Asi el orden en que se escribieron los
+    /// ficheros deja de decidir por donde empiezas.
+    pub fn new(bailes: Vec<(String, Nivel)>) -> Self {
+        let mut nodos: Vec<Nodo> = Vec::with_capacity(bailes.len());
+        for nivel in Nivel::TODOS {
+            let fila: Vec<usize> = (0..bailes.len())
+                .filter(|i| bailes[*i].1 == nivel)
+                .collect();
+            for (sitio_en_fila, i) in fila.iter().enumerate() {
+                nodos.push(Nodo {
+                    nombre: bailes[*i].0.clone(),
+                    nivel,
+                    pos: sitio(nivel, sitio_en_fila, fila.len()),
+                    vencido: false,
+                });
+            }
+        }
         Self {
             bailarina: ENTRADA,
             prev: ENTRADA,
@@ -108,6 +116,28 @@ impl Pista {
         self.bailarina += self.vel * DT;
         self.bailarina.x = self.bailarina.x.clamp(MARGEN, ARENA_W - MARGEN);
         self.bailarina.y = self.bailarina.y.clamp(MARGEN, ARENA_H - MARGEN);
+    }
+
+    /// Si se puede entrar a un nivel.
+    ///
+    /// Se abre cuando estan hechos **todos** los del nivel anterior. Es lo que
+    /// arregla que el tango apareciese el segundo siendo el mas duro: no se
+    /// hace mas facil, deja de estar ahi delante desde el principio.
+    ///
+    /// Un nivel sin bailes es transparente: no bloquea nada, porque "todos" de
+    /// una lista vacia se cumple solo.
+    pub fn nivel_abierto(&self, nivel: Nivel) -> bool {
+        self.nodos
+            .iter()
+            .filter(|n| n.nivel < nivel)
+            .all(|n| n.vencido)
+    }
+
+    /// Si se puede entrar a este baile.
+    pub fn abierto(&self, i: usize) -> bool {
+        self.nodos
+            .get(i)
+            .is_some_and(|n| self.nivel_abierto(n.nivel))
     }
 
     /// El baile que tiene delante, si esta lo bastante cerca para entrar.
@@ -165,33 +195,61 @@ fn acercar(v: Vec2, objetivo: Vec2, paso: f32) -> Vec2 {
     }
 }
 
-/// Donde se planta cada baile.
+/// A que profundidad de la pista se planta cada nivel.
 ///
-/// Uno solo va al centro; varios se reparten por una elipse, que en
-/// perspectiva se lee como un corro en mitad de la pista. Es una funcion y no
-/// una tabla para que anadir el tango no sea tambien anadirle un sitio.
-fn sitio(i: usize, n: usize) -> Vec2 {
-    let centro = vec2(ARENA_W * 0.5, ARENA_H * 0.40);
+/// Lo facil delante y lo dificil al fondo: la sala se lee de un vistazo y andar
+/// hacia dentro es andar hacia lo duro.
+fn fondo(nivel: Nivel) -> f32 {
+    ARENA_H
+        * match nivel {
+            Nivel::Facil => 0.70,
+            Nivel::Media => 0.52,
+            Nivel::Dificil => 0.34,
+            Nivel::Final => 0.17,
+        }
+}
+
+/// Donde se planta un baile dentro de la fila de su nivel.
+///
+/// Los de indice impar se apartan un poco hacia el fondo: en fila recta se leen
+/// como una lista, y en zigzag se leen como gente en una sala. Ademas separa lo
+/// justo para que no se solapen cuando la fila se llena.
+fn sitio(nivel: Nivel, i: usize, n: usize) -> Vec2 {
+    let y = fondo(nivel);
     if n <= 1 {
-        return centro;
+        return vec2(ARENA_W * 0.5, y);
     }
-    // Mas ancha que alta: el fondo de la pista queda mas lejos que los lados.
-    let (rx, ry) = (ARENA_W * 0.30, ARENA_H * 0.20);
-    // Empezando por delante, que es por donde se entra: asi el primer baile es
-    // con el que te tropiezas primero. Al reves te encontrabas antes el tango,
-    // que es el dificil, y el orden en que estan escritos dejaba de significar
-    // nada.
-    let angulo = TAU * i as f32 / n as f32;
-    let (s, c) = sin_cos(angulo);
-    centro + vec2(s * rx, c * ry)
+    let hueco = ARENA_W - 2.0 * MARGEN - 2.0 * RADIO_NODO;
+    let paso = (hueco / (n - 1) as f32).min(160.0);
+    let x = ARENA_W * 0.5 + (i as f32 - (n - 1) as f32 * 0.5) * paso;
+    let zigzag = if i % 2 == 1 { -40.0 } else { 0.0 };
+    vec2(x, y + zigzag)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Una pista con `n` bailes repartidos por los cuatro niveles, que es como
+    /// se van a repartir de verdad.
     fn pista_de(n: usize) -> Pista {
-        Pista::new((1..=n).map(|i| format!("Baile {i}")).collect())
+        Pista::new(
+            (0..n)
+                .map(|i| {
+                    let nivel = Nivel::TODOS[i * Nivel::TODOS.len() / n.max(1)];
+                    (format!("Baile {}", i + 1), nivel)
+                })
+                .collect(),
+        )
+    }
+
+    /// Y una con todos en el mismo nivel, para probar que una fila llena cabe.
+    fn fila_de(n: usize) -> Pista {
+        Pista::new(
+            (0..n)
+                .map(|i| (format!("Baile {}", i + 1), Nivel::Facil))
+                .collect(),
+        )
     }
 
     const DERECHA: InputFrame = InputFrame::from_bits(InputFrame::RIGHT);
@@ -228,31 +286,91 @@ mod tests {
     }
 
     #[test]
-    fn el_primer_baile_es_el_que_pilla_mas_cerca() {
-        // El orden de `DEFAULT_BOSS_RONS` es el orden en que estan pensados
-        // para jugarse, y la pista tiene que respetarlo: si no, te tropiezas
-        // primero con el ultimo.
-        let p = pista_de(3);
-        let cerca = |n: &Nodo| (n.pos - ENTRADA).length();
-        for otro in &p.nodos[1..] {
-            assert!(
-                cerca(&p.nodos[0]) < cerca(otro),
-                "el primer baile no es el mas cercano a la entrada"
-            );
+    fn lo_facil_esta_delante_y_lo_dificil_al_fondo() {
+        // La pista se lee de un vistazo: andar hacia dentro es andar hacia lo
+        // duro. Antes esto salia del orden del fichero, que no queria decir
+        // nada; ahora sale del nivel que declara cada baile.
+        let p = pista_de(8);
+        for a in &p.nodos {
+            for b in &p.nodos {
+                if a.nivel < b.nivel {
+                    assert!(
+                        a.pos.y > b.pos.y,
+                        "{} ({}) deberia estar mas cerca que {} ({})",
+                        a.nombre,
+                        a.nivel.nombre(),
+                        b.nombre,
+                        b.nivel.nombre()
+                    );
+                }
+            }
         }
+        // Y lo mas facil es lo que pillas al entrar.
+        let cerca = |n: &Nodo| (n.pos - ENTRADA).length();
+        let primero = p.nodos.iter().min_by(|a, b| cerca(a).total_cmp(&cerca(b)));
+        assert_eq!(primero.unwrap().nivel, Nivel::Facil);
+    }
+
+    #[test]
+    fn un_nivel_se_abre_cuando_esta_hecho_el_anterior() {
+        // Es lo que arregla que el tango, siendo el mas duro, apareciese el
+        // segundo. No se hace mas facil: deja de estar ahi desde el principio.
+        let mut p = Pista::new(vec![
+            ("Vals".into(), Nivel::Facil),
+            ("Charleston".into(), Nivel::Media),
+            ("Tango".into(), Nivel::Dificil),
+        ]);
+        assert!(
+            p.nivel_abierto(Nivel::Facil),
+            "lo facil siempre esta abierto"
+        );
+        assert!(!p.nivel_abierto(Nivel::Media));
+        assert!(!p.nivel_abierto(Nivel::Dificil));
+
+        let vals = p.nodos.iter().position(|n| n.nombre == "Vals").unwrap();
+        p.marcar_vencido(vals);
+        assert!(
+            p.nivel_abierto(Nivel::Media),
+            "cayo el vals, entra el medio"
+        );
+        assert!(!p.nivel_abierto(Nivel::Dificil));
+
+        let ch = p
+            .nodos
+            .iter()
+            .position(|n| n.nombre == "Charleston")
+            .unwrap();
+        p.marcar_vencido(ch);
+        assert!(p.nivel_abierto(Nivel::Dificil));
+        assert!(p.nodos.iter().enumerate().all(|(i, _)| p.abierto(i)));
+    }
+
+    #[test]
+    fn un_nivel_vacio_no_bloquea_nada() {
+        // Si un dia hay bailes dificiles y ninguno medio, el hueco no puede
+        // dejar el juego cerrado para siempre.
+        let mut p = Pista::new(vec![
+            ("Vals".into(), Nivel::Facil),
+            ("Tango".into(), Nivel::Dificil),
+        ]);
+        assert!(!p.nivel_abierto(Nivel::Dificil));
+        p.marcar_vencido(0);
+        assert!(p.nivel_abierto(Nivel::Dificil), "el nivel medio esta vacio");
     }
 
     #[test]
     fn un_solo_baile_se_planta_en_medio() {
-        let p = pista_de(1);
+        let p = fila_de(1);
         assert_eq!(p.nodos.len(), 1);
         assert!((p.nodos[0].pos.x - ARENA_W * 0.5).abs() < 0.01);
     }
 
     #[test]
     fn varios_bailes_no_se_pisan_y_caben_en_la_pista() {
-        for n in 2..=6 {
-            let p = pista_de(n);
+        // Cuatro por fila es lo que se espera como mucho: con ocho bailes en
+        // cuatro niveles salen a dos por fila.
+        for n in 2..=4 {
+            let p = fila_de(n);
             for (i, a) in p.nodos.iter().enumerate() {
                 assert!(
                     a.pos.x > MARGEN && a.pos.x < ARENA_W - MARGEN,

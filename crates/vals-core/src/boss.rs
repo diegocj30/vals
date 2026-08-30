@@ -52,7 +52,53 @@ pub const DEFAULT_BOSS_RON: &str = DEFAULT_BOSS_RONS[0];
 /// legibilidad importa tanto como la densidad y eso no lo mide un test —el
 /// tango de la primera version disparaba 131 en su segunda figura, menos que el
 /// molinete del vals, y era mucho peor de esquivar—.
-pub const TECHO_POR_BAILE: [f32; 8] = [170.0, 175.0, 190.0, 200.0, 210.0, 225.0, 240.0, 255.0];
+pub const TECHO_POR_NIVEL: [f32; 4] = [160.0, 190.0, 215.0, 245.0];
+
+/// Lo duro que es un baile. **Se declara en su RON; no se calcula.**
+///
+/// La primera version deducia la dificultad de la posicion en
+/// `DEFAULT_BOSS_RONS`, que era a la vez el orden en que se escribieron y el
+/// orden en que salen en la pista: tres cosas distintas metidas en un indice.
+/// El sintoma salio jugando: el tango era demasiado dificil para ser
+/// el tercero mas facil.
+///
+/// Y no se calcula porque **no se puede**. El tango echa 140 balas por segundo,
+/// menos que el charleston, que echa 172, y aun asi es el mas duro con
+/// diferencia: las balas que salen, frenan y vuelven son lo peor de leer del
+/// juego. La densidad es un tope, nunca un objetivo, y el verbo del baile pesa
+/// mas que el numero.
+///
+/// Por defecto `Facil`, que es el techo mas apretado: si a alguien se le olvida
+/// declararlo, el test de presupuesto se queja en vez de dejarlo pasar.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Serialize, Deserialize)]
+pub enum Nivel {
+    #[default]
+    Facil,
+    Media,
+    Dificil,
+    Final,
+}
+
+impl Nivel {
+    /// Todos, de menos a mas.
+    pub const TODOS: [Nivel; 4] = [Nivel::Facil, Nivel::Media, Nivel::Dificil, Nivel::Final];
+
+    /// Cuantas balas por segundo puede echar, como mucho, la figura mas densa
+    /// de un baile de este nivel.
+    pub fn techo(self) -> f32 {
+        TECHO_POR_NIVEL[self as usize]
+    }
+
+    /// Como se dice en pantalla.
+    pub fn nombre(self) -> &'static str {
+        match self {
+            Nivel::Facil => "facil",
+            Nivel::Media => "medio",
+            Nivel::Dificil => "dificil",
+            Nivel::Final => "final",
+        }
+    }
+}
 
 /// Ticks que el jefe parpadea al recibir dano.
 const HIT_FLASH_TICKS: u32 = 4;
@@ -77,6 +123,9 @@ pub struct PhaseDef {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BossDef {
     pub name: String,
+    /// Lo duro que es. Lo decide quien disena el baile, no su sitio en la lista.
+    #[serde(default)]
+    pub nivel: Nivel,
     pub pos: Vec2,
     /// Radio para recibir los disparos del jugador. No colisiona con nada mas.
     pub radius: f32,
@@ -269,6 +318,7 @@ mod tests {
     fn def_de_prueba() -> BossDef {
         BossDef {
             name: "Prueba".into(),
+            nivel: Nivel::Facil,
             pos: Vec2::new(320.0, 130.0),
             radius: 30.0,
             phases: vec![
@@ -421,9 +471,10 @@ mod tests {
         //    y subirle la vida no la hace mas dificil.
         // 2. El baile arranca de verdad mas suave que como acaba. Si no, no hay
         //    curva dentro del jefe, hay meseta.
-        // 3. Y no se pasa de su techo. Sin esto cada baile se tuneaba contra el
-        //    anterior y la cosa escalaba sola.
-        for (i, def) in BossDef::default_bosses().iter().enumerate() {
+        // 3. Y no se pasa del techo de SU NIVEL. Ojo: del nivel que declara,
+        //    no de su sitio en la lista. Un baile puede ser dificil disparando
+        //    poco, que es justo lo que le pasa al tango.
+        for def in BossDef::default_bosses() {
             let picos: Vec<f32> = def
                 .phases
                 .iter()
@@ -443,11 +494,12 @@ mod tests {
                 def.name
             );
 
-            let techo = TECHO_POR_BAILE[i.min(TECHO_POR_BAILE.len() - 1)];
+            let techo = def.nivel.techo();
             assert!(
                 maxima <= techo,
-                "{} se pasa del presupuesto: {maxima} b/s con techo {techo}",
-                def.name
+                "{} ({}) se pasa de su presupuesto: {maxima} b/s con techo {techo}",
+                def.name,
+                def.nivel.nombre()
             );
         }
     }
@@ -582,6 +634,7 @@ mod tests {
     fn un_jefe_sin_fases_no_revienta() {
         let def = BossDef {
             name: "Vacio".into(),
+            nivel: Nivel::Facil,
             pos: Vec2::ZERO,
             radius: 10.0,
             phases: vec![],
