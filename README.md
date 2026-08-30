@@ -52,8 +52,10 @@ Al perder se reintenta **ese** jefe, no la carrera entera.
 Los unicos assets del repositorio son **dos tipografias** con licencia SIL OFL
 —Poiret One y Barlow—, y son una herramienta, no arte del juego. Todo lo que se
 dibuja lo genera el codigo: las balas salen de un shader a partir de la
-distancia al centro, el personaje es un esqueleto de articulaciones animado por
-codigo, las chispas y la sacudida se disparan desde los sucesos que publica el
+distancia al centro, los personajes —la protagonista y los jefes— son esqueletos
+de articulaciones animados por codigo, y **cada jefe baila la misma gramatica
+con la que dispara**: el vals gira, el tango es una pareja que se para en seco,
+el charleston patea en la clave 3-3-2; las chispas y la sacudida se disparan desde los sucesos que publica el
 nucleo, y **el sonido y la musica se sintetizan al arrancar**: cada jefe
 tiene su vals — y como el jefe es el baile entero, **la musica va por figura**.
 El paso base suena a El Danubio azul (Strauss II, 1866) y el molinete a Sobre

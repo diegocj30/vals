@@ -11,6 +11,7 @@ use vals_core::replay::{GOLDEN_REPLAY, Replay};
 use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
 
 mod audio;
+mod bailarines;
 mod bullet_renderer;
 mod draw;
 mod fuentes;

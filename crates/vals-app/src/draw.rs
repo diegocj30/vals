@@ -7,6 +7,7 @@ use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
 use vals_core::pista::{Nodo, Pista};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
+use crate::bailarines;
 use crate::bullet_renderer::BulletRenderer;
 use crate::fuentes::{self, Cara};
 use crate::music::Tema;
@@ -345,18 +346,29 @@ fn draw_boss(world: &World, alpha: f32, l: &Layout) {
     }
     let p = b.render_pos(alpha);
     let s = l.to_screen(p.x, p.y);
-    let r = l.len(b.radius);
     let t = world.tick as f32 + alpha;
+    let vida = b.hp_ratio();
 
-    // Cada anillo gira a su ritmo y en su sentido. Es lo que hace que la
-    // figura parezca viva estando hecha de tres poligonos.
-    draw_poly_lines(s.x, s.y, 6, r * 1.55, t * 0.6, 2.0, fade(BOSS_RING, 0.55));
-    draw_poly_lines(s.x, s.y, 3, r * 1.15, -t * 1.1, 2.5, fade(BOSS_INNER, 0.8));
-    draw_circle(s.x, s.y, r * 0.72, BOSS_CORE);
-    draw_poly_lines(s.x, s.y, 8, r * 0.72, t * 0.25, 1.5, BOSS_RING);
+    // El aro de golpeo. El cuerpo dice quien es; el aro dice donde darle.
+    // Cuando el jefe era un hexagono las dos cosas eran la misma, y por eso se
+    // leia bien pero no contaba nada.
+    let (pulso, brillo) = bailarines::halo(t, vida);
+    let r = l.len(b.radius) * pulso;
+    draw_circle(s.x, s.y, r, fade(BOSS_CORE, 0.55));
+    draw_poly_lines(s.x, s.y, 24, r, 0.0, 1.5, fade(BOSS_RING, 0.20 + brillo));
 
-    if b.hit_flash > 0 {
-        draw_circle(s.x, s.y, r * 0.8, fade(BOSS_FLASH, 0.5));
+    // Y la figura. El jefe es un bailarin, y baila lo suyo.
+    let golpeado = b.hit_flash > 0;
+    let (cuerpo, tela) = if golpeado {
+        (BOSS_FLASH, BOSS_FLASH)
+    } else {
+        (BOSS_RING, BOSS_INNER)
+    };
+    let ls = l.escalado(bailarines::ESCALA);
+    for pose in bailarines::poses(world.boss_index, b.phase, t, vida) {
+        // Los pies del bailarin caen por debajo del aro: la figura se planta
+        // sobre su sitio en vez de flotar en el centro.
+        draw_figura(&pose, s, &ls, 1.0, cuerpo, tela);
     }
 }
 
@@ -518,7 +530,7 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
         0.0
     };
     let figura = skeleton::pose(&world.player, t, world.mode == Mode::Platform, elegancia);
-    draw_figura(&figura, s, l, body_alpha);
+    draw_figura(&figura, s, l, body_alpha, PLAYER_BODY, FALDA);
 
     // Anillo de focus: se cierra sobre la hitbox conforme entras en modo lento.
     let ft = world.player.focus_t;
@@ -574,17 +586,22 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
 /// Cada trazo se pinta dos veces, una gruesa y tenue y otra fina y viva. Es un
 /// truco barato que da el contorno de neon sin post-proceso ni una segunda
 /// pasada de render.
-fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, alfa: f32) {
+fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, alfa: f32, cuerpo: Color, tela: Color) {
+    // Los jefes no llevan cintas y algunos no llevan falda. En vez de un campo
+    // mas en la pose, se mira si la geometria es degenerada: si el ultimo punto
+    // esta donde el primero, esa parte no existe.
+    let hay_cintas = p.cintas[0][N_CINTA - 1] != p.cintas[0][0];
+    let hay_falda = p.falda[0] != p.falda[N_FALDA - 1];
     let punto = |j: Vec2| centro + vec2(j.x, j.y) * l.scale();
 
     // --- Cintas ---
     // Van detras de todo: son lo mas lejano y lo mas tenue.
-    for cinta in p.cintas {
+    for cinta in p.cintas.iter().filter(|_| hay_cintas) {
         for k in 0..N_CINTA - 1 {
             let (a, b) = (punto(cinta[k]), punto(cinta[k + 1]));
             let t = 1.0 - k as f32 / (N_CINTA - 1) as f32;
             let g = l.len(0.8 * t).max(0.8);
-            draw_line(a.x, a.y, b.x, b.y, g, fade(FALDA, alfa * 0.5 * t));
+            draw_line(a.x, a.y, b.x, b.y, g, fade(tela, alfa * 0.5 * t));
         }
     }
 
@@ -594,24 +611,27 @@ fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, alfa: f32) {
     // no de mas geometria.
     let cadera = punto(p.joints[skeleton::CADERA]);
     for (escala, relleno, borde) in [(1.0, 0.18, 0.70), (0.62, 0.30, 0.95)] {
+        if !hay_falda {
+            break;
+        }
         for i in 0..N_FALDA - 1 {
             let a = cadera + (punto(p.falda[i]) - cadera) * escala;
             let b = cadera + (punto(p.falda[i + 1]) - cadera) * escala;
-            draw_triangle(cadera, a, b, fade(FALDA, alfa * relleno));
+            draw_triangle(cadera, a, b, fade(tela, alfa * relleno));
             let g = l.len(0.85).max(1.0);
-            draw_line(a.x, a.y, b.x, b.y, g, fade(FALDA, alfa * borde));
+            draw_line(a.x, a.y, b.x, b.y, g, fade(tela, alfa * borde));
         }
     }
 
     // --- Corpino ---
     // El torso deja de ser una linea y pasa a tener silueta.
     let c: Vec<Vec2> = p.corpino.iter().map(|q| punto(*q)).collect();
-    draw_triangle(c[0], c[1], c[2], fade(PLAYER_BODY, alfa * 0.85));
-    draw_triangle(c[0], c[2], c[3], fade(PLAYER_BODY, alfa * 0.85));
+    draw_triangle(c[0], c[1], c[2], fade(cuerpo, alfa * 0.85));
+    draw_triangle(c[0], c[2], c[3], fade(cuerpo, alfa * 0.85));
 
     // --- Cuerpo ---
     for (grosor, halo) in [(1.9, 0.20), (1.0, 1.0)] {
-        let c = fade(PLAYER_BODY, alfa * halo);
+        let c = fade(cuerpo, alfa * halo);
         for (a, b, r0, r1) in HUESOS {
             hueso(
                 punto(p.joints[a]),
@@ -1095,7 +1115,7 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
         0.0,
         fade(PISTA_FOCO, 0.55),
     );
-    draw_figura(&pose, centro, &ls, 1.0);
+    draw_figura(&pose, centro, &ls, 1.0, PLAYER_BODY, FALDA);
 
     // --- Cartel de arriba y ayuda de abajo ---
     let cx = l.to_screen(ARENA_W * 0.5, 0.0).x;
