@@ -698,6 +698,16 @@ fn unidades_por_compas(p: &Partitura) -> u32 {
     UNIDADES_POR_TIEMPO * p.tiempos as u32
 }
 
+/// El compas de un tema: **ticks por tiempo y tiempos por compas**.
+///
+/// Lo necesita la escenografia para latir con la musica. Sale de la misma
+/// partitura que suena, asi que la sala respira con lo que se oye sin analizar
+/// una sola muestra de audio: los dos numeros vienen del mismo sitio.
+pub fn compas(t: Tema) -> (f32, usize) {
+    let p = partitura(t);
+    (60.0 * vals_core::TICK_HZ as f32 / p.bpm, p.tiempos)
+}
+
 /// Duracion del bucle completo.
 pub fn duracion(t: Tema) -> f32 {
     let p = partitura(t);

@@ -21,6 +21,7 @@ mod mando;
 mod music;
 mod particulas;
 mod replay_io;
+mod salon;
 mod skeleton;
 mod stats;
 mod zumo;

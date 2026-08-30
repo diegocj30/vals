@@ -55,7 +55,9 @@ dibuja lo genera el codigo: las balas salen de un shader a partir de la
 distancia al centro, los personajes —la protagonista y los jefes— son esqueletos
 de articulaciones animados por codigo, y **cada jefe baila la misma gramatica
 con la que dispara**: el vals gira, el tango es una pareja que se para en seco,
-el charleston patea en la clave 3-3-2; las chispas y la sacudida se disparan desde los sucesos que publica el
+el charleston patea en la clave 3-3-2. El salon —pared, tarima en
+perspectiva, lampara y focos— **late con el compas del tema que suena**, sin
+analizar audio: los bpm y los tiempos por compas ya estan en la partitura; las chispas y la sacudida se disparan desde los sucesos que publica el
 nucleo, y **el sonido y la musica se sintetizan al arrancar**: cada jefe
 tiene su vals — y como el jefe es el baile entero, **la musica va por figura**.
 El paso base suena a El Danubio azul (Strauss II, 1866) y el molinete a Sobre

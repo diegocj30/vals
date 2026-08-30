@@ -12,6 +12,7 @@ use crate::bullet_renderer::BulletRenderer;
 use crate::fuentes::{self, Cara};
 use crate::music::Tema;
 use crate::particulas::Particulas;
+use crate::salon;
 use crate::skeleton::{self, HUESOS, N_CINTA, N_FALDA, Pose, REMATES};
 use crate::stats::FrameStats;
 
@@ -70,9 +71,6 @@ const FALDA: Color = color_u8!(120, 180, 255, 255);
 const TEXT: Color = color_u8!(150, 210, 235, 255);
 const TEXT_DIM: Color = color_u8!(90, 120, 145, 255);
 
-/// Separacion de la rejilla de fondo, en unidades logicas.
-const GRID_STEP: f32 = 80.0;
-
 /// Correspondencia entre las unidades logicas del mundo y los pixeles de la
 /// ventana. El mundo nunca sabe cuantos pixeles mide nada.
 pub struct Layout {
@@ -94,7 +92,7 @@ impl Layout {
         Self { origin, scale }
     }
 
-    fn to_screen(&self, x: f32, y: f32) -> Vec2 {
+    pub(crate) fn to_screen(&self, x: f32, y: f32) -> Vec2 {
         self.origin + vec2(x, y) * self.scale
     }
 
@@ -114,7 +112,7 @@ impl Layout {
         (min, max)
     }
 
-    fn len(&self, logical: f32) -> f32 {
+    pub(crate) fn len(&self, logical: f32) -> f32 {
         logical * self.scale
     }
 
@@ -155,7 +153,11 @@ fn fade(c: Color, a: f32) -> Color {
 /// de `docs/PERF.md` dentro de un ano.
 pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mut BulletRenderer>) {
     clear_background(BG);
-    draw_arena(layout);
+    draw_arena(
+        layout,
+        Tema::de(world.boss_index, world.boss.phase),
+        world.tick as f32 + alpha,
+    );
     if world.mode == Mode::Platform {
         draw_ground(layout);
     }
@@ -463,27 +465,12 @@ pub fn draw_bullets_at(bullets: &Bullets, l: &Layout, phase: f32) {
     }
 }
 
-fn draw_arena(l: &Layout) {
+fn draw_arena(l: &Layout, tema: Tema, t: f32) {
     let o = l.to_screen(0.0, 0.0);
-    let w = l.len(ARENA_W);
-    let h = l.len(ARENA_H);
-
-    draw_rectangle(o.x, o.y, w, h, ARENA_BG);
-
-    let mut x = GRID_STEP;
-    while x < ARENA_W {
-        let p = l.to_screen(x, 0.0);
-        draw_line(p.x, o.y, p.x, o.y + h, 1.0, GRID);
-        x += GRID_STEP;
-    }
-    let mut y = GRID_STEP;
-    while y < ARENA_H {
-        let p = l.to_screen(0.0, y);
-        draw_line(o.x, p.y, o.x + w, p.y, 1.0, GRID);
-        y += GRID_STEP;
-    }
-
-    draw_rectangle_lines(o.x, o.y, w, h, 2.0, BORDER);
+    salon::dibujar(l, tema, t);
+    // El borde si se queda nitido: es lo unico de todo esto que es informacion
+    // y no decorado. Dice hasta donde se puede llegar.
+    draw_rectangle_lines(o.x, o.y, l.len(ARENA_W), l.len(ARENA_H), 2.0, BORDER);
 }
 
 /// La estela. Se muestrea a ritmo de tick en el core, asi que se ve igual a 60
