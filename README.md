@@ -4,8 +4,8 @@ Boss-rush danmaku escrito en Rust. Jugable en nativo y en navegador.
 
 Los patrones de balas de este genero son coreografia: de ahi el nombre.
 
-Una pista de baile y tres jefes —El Vals, El Charleston y El Tango, cada uno con
-sus figuras—, que se presentan con su cartela antes de bailarlos. Tres vidas y
+Una pista de baile y cuatro jefes —El Vals, El Charleston, El Dembow y El
+Tango, cada uno con sus figuras—, que se presentan con su cartela antes de bailarlos. Tres vidas y
 un parry que te empuja a meterte donde estan las balas en vez de huir de todas.
 
 Dos modos: **volar** por la arena, como el danmaku clasico, o **plataformas**
@@ -55,7 +55,7 @@ dibuja lo genera el codigo: las balas salen de un shader a partir de la
 distancia al centro, los personajes —la protagonista y los jefes— son esqueletos
 de articulaciones animados por codigo, y **cada jefe baila la misma gramatica
 con la que dispara**: el vals gira, el tango es una pareja que se para en seco,
-el charleston patea en la clave 3-3-2. El salon —pared, tarima en
+el charleston patea en la clave 3-3-2, el dembow se hunde en el bombo. El salon —pared, tarima en
 perspectiva, lampara y focos— **late con el compas del tema que suena**, sin
 analizar audio: los bpm y los tiempos por compas ya estan en la partitura; las chispas y la sacudida se disparan desde los sucesos que publica el
 nucleo, y **el sonido y la musica se sintetizan al arrancar**: cada jefe

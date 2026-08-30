@@ -26,10 +26,11 @@ use crate::pattern::{Pattern, PatternRunner, RunCtx, Step};
 /// El vals entero cabe en `boss1.ron` y el tango en `boss2.ron`, cada uno con
 /// una fase por figura suya. Anadir un baile es anadir su fichero y una linea
 /// aqui: la pista le pone el nodo sola y la musica lo busca por indice.
-pub const DEFAULT_BOSS_RONS: [&str; 3] = [
+pub const DEFAULT_BOSS_RONS: [&str; 4] = [
     include_str!("../../../assets/patterns/boss1.ron"),
     include_str!("../../../assets/patterns/boss2.ron"),
     include_str!("../../../assets/patterns/boss3.ron"),
+    include_str!("../../../assets/patterns/boss4.ron"),
 ];
 
 /// El primer jefe. Se conserva por comodidad y para los tests.
@@ -346,7 +347,7 @@ mod tests {
     fn los_jefes_embebidos_son_validos() {
         let defs = BossDef::default_bosses();
         // Uno por baile.
-        assert_eq!(defs.len(), 3);
+        assert_eq!(defs.len(), 4);
         for (i, d) in defs.iter().enumerate() {
             assert!(!d.name.is_empty(), "el jefe {} no tiene nombre", i + 1);
             assert!(!d.phases.is_empty(), "el jefe {} no tiene fases", i + 1);
@@ -399,6 +400,17 @@ mod tests {
         })
     }
 
+    /// Si en algun sitio del arbol sale una onda expansiva: varias capas
+    /// concentricas a distinta velocidad, que es un muro grueso con huecos.
+    fn hay_ondas(steps: &[Step]) -> bool {
+        steps.iter().any(|paso| match paso {
+            Step::Fire(e) => e.rings >= 3,
+            Step::Repeat { body, .. } | Step::Forever(body) => hay_ondas(body),
+            Step::Parallel(ramas) => ramas.iter().any(|r| hay_ondas(r)),
+            _ => false,
+        })
+    }
+
     /// Si en algun sitio del arbol sale una bala con trayectoria curva.
     fn hay_curvas(steps: &[Step]) -> bool {
         steps.iter().any(|paso| match paso {
@@ -420,6 +432,9 @@ mod tests {
     /// - **El tango va recto**: ni un `Turn`. Linea recta y cambio de golpe.
     /// - **El charleston curva**: `spin` en todas sus figuras, y es el unico
     ///   que lo usa. Un swing-out no es una linea ni una parada: es un arco.
+    /// - **El dembow apila**: `rings` alto con `speed_step` grande, muros
+    ///   gruesos que se abren. Es lo unico que hace un bajo de reggaeton en una
+    ///   sala: empujarte hacia fuera.
     #[test]
     fn cada_baile_tiene_su_verbo_y_no_el_del_vecino() {
         let defs = BossDef::default_bosses();
@@ -460,6 +475,30 @@ mod tests {
             vals.phases.iter().all(|f| !hay_curvas(&f.steps)),
             "el vals ha empezado a curvar balas"
         );
+
+        let dembow = &defs[3];
+        assert!(
+            dembow.phases.iter().all(|f| hay_ondas(&f.steps)),
+            "el dembow sin ondas no se distingue de nadie"
+        );
+        for f in &dembow.phases {
+            assert!(
+                !hay_espirales(&f.steps) && !hay_curvas(&f.steps),
+                "el dembow, en {}, esta usando el verbo de otro",
+                f.name
+            );
+        }
+        // Y los tres de antes no apilan: la onda es suya.
+        for otro in &defs[..3] {
+            for f in &otro.phases {
+                assert!(
+                    !hay_ondas(&f.steps),
+                    "{} apila capas en {}, y eso es del dembow",
+                    otro.name,
+                    f.name
+                );
+            }
+        }
     }
 
     #[test]

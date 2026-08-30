@@ -109,6 +109,21 @@ const CUERPO_CHARLESTON: Cuerpo = Cuerpo {
     vuelo: 0.85,
 };
 
+/// El mas bajo y el mas ancho de los cuatro. Piernas separadas y centro de
+/// gravedad por los suelos: un perreo no se baila de puntillas.
+const CUERPO_DEMBOW: Cuerpo = Cuerpo {
+    torso: 5.6,
+    cuello: 4.2,
+    brazo: 6.0,
+    antebrazo: 5.2,
+    muslo: 6.4,
+    pantorrilla: 6.0,
+    hombros: 4.8,
+    cintura: 3.8,
+    falda: 4.5,
+    vuelo: 0.25,
+};
+
 /// Los angulos que decide un baile. Lo que `montar` convierte en una figura.
 struct Postura {
     /// Desplazamiento de la cadera respecto al centro del jefe.
@@ -250,7 +265,8 @@ pub fn poses(jefe: usize, fase: usize, t: f32, vida: f32) -> Vec<Pose> {
     match jefe {
         0 => vec![vals(fase, t, vida)],
         1 => tango(fase, t, vida),
-        _ => vec![charleston(fase, t, vida)],
+        2 => vec![charleston(fase, t, vida)],
+        _ => vec![dembow(fase, t, vida)],
     }
 }
 
@@ -378,6 +394,51 @@ fn charleston(fase: usize, t: f32, vida: f32) -> Pose {
     )
 }
 
+/// **El Dembow**: baja en el bombo. Es lo contrario del vals.
+///
+/// El vals sube y gira; este se hunde. El tema va a 90 negras en 4/4 —40 ticks
+/// por tiempo, 160 por compas, 10 por semicorchea— y el bombo cae en 0 y 80,
+/// que es cuando baja la cadera. La caja, en 3, 6, 11 y 14, da un tiron corto
+/// de hombros: la misma reja que usan sus balas y su percusion.
+fn dembow(fase: usize, t: f32, vida: f32) -> Pose {
+    const COMPAS: f32 = 160.0;
+    const SEMI: f32 = 10.0;
+    let dentro = t.rem_euclid(COMPAS);
+
+    // El bombo: en 0 y en 80.
+    let desde_bombo = if dentro < 80.0 { dentro } else { dentro - 80.0 };
+    let bombo = (1.0 - desde_bombo / 24.0).max(0.0);
+
+    // La caja: en 3, 6, 11 y 14 de las dieciseis semicorcheas.
+    let semi = (dentro / SEMI).floor() as i32 % 16;
+    let caja = if [3, 6, 11, 14].contains(&semi) {
+        (1.0 - dentro.rem_euclid(SEMI) / 8.0).max(0.0)
+    } else {
+        0.0
+    };
+
+    let brio = 1.0 + fase as f32 * 0.16 + (1.0 - vida) * 0.25;
+    let (vaiven, _) = sin_cos(t * 0.04);
+
+    montar(
+        &CUERPO_DEMBOW,
+        &Postura {
+            // La y crece hacia abajo: en el bombo se HUNDE.
+            centro: vec2(vaiven * 2.4, bombo * 3.2 * brio),
+            lean: vaiven * 0.16 + caja * 0.10,
+            // Brazos bajos y sueltos, con un tiron en cada caja.
+            brazo_i: (0.55 + caja * 0.40, 0.55),
+            brazo_d: (-0.55 - caja * 0.40, 0.55),
+            // Piernas muy abiertas y rodillas dobladas, que es la postura.
+            pierna_i: (0.62, 0.55 + bombo * 0.45),
+            pierna_d: (-0.62, 0.55 + bombo * 0.45),
+            arrastre: vec2(-vaiven * 2.5, 1.5),
+            giro: 1.0,
+            fase: t,
+        },
+    )
+}
+
 /// Un aro alrededor del jefe, para que se vea donde le entran los disparos.
 ///
 /// El cuerpo dice quien es; el aro dice donde darle. Cuando el jefe era un
@@ -397,7 +458,7 @@ mod tests {
     fn la_pose_es_funcion_pura_de_sus_entradas() {
         // La misma disciplina que la protagonista: sin esto, la animacion y la
         // simulacion se desfasan y nadie sabe por que.
-        for jefe in 0..3 {
+        for jefe in 0..4 {
             let a = poses(jefe, 1, 123.5, 0.6);
             let b = poses(jefe, 1, 123.5, 0.6);
             for (x, y) in a.iter().zip(b.iter()) {
@@ -416,6 +477,7 @@ mod tests {
             "el tango se baila entre dos"
         );
         assert_eq!(poses(2, 0, 10.0, 1.0).len(), 1);
+        assert_eq!(poses(3, 0, 10.0, 1.0).len(), 1);
     }
 
     #[test]
@@ -424,7 +486,7 @@ mod tests {
         // lo ancho a proposito —es lo que hace que parezca que gira— y eso
         // cambia las distancias. Lo que no puede cambiar nunca es la anatomia:
         // la cabeza arriba, los pies abajo y todo dentro de un tamano humano.
-        for jefe in 0..3 {
+        for jefe in 0..4 {
             for paso in 0..120 {
                 let t = paso as f32 * 3.7;
                 for vida in [1.0, 0.5, 0.0] {
@@ -459,10 +521,10 @@ mod tests {
             let pose = &poses(jefe, 0, 0.0, 1.0)[0];
             pose.joints[CADERA].y - pose.joints[CABEZA].y
         };
-        let (v, t, c) = (alto(0), alto(1), alto(2));
+        let (v, t, c, d) = (alto(0), alto(1), alto(2), alto(3));
         assert!(
-            v > t && t > c,
-            "alturas iguales: vals {v}, tango {t}, charleston {c}"
+            v > t && t > c && c > d,
+            "alturas iguales: vals {v}, tango {t}, charleston {c}, dembow {d}"
         );
     }
 
@@ -491,6 +553,21 @@ mod tests {
             tango_salto > tango_quieto * 3.0,
             "el tango deberia saltar de postura: quieto {tango_quieto}, salto {tango_salto}"
         );
+    }
+
+    #[test]
+    fn el_dembow_se_hunde_en_el_bombo() {
+        // Lo contrario del vals: el vals sube y gira, este baja. El bombo cae
+        // en las semicorcheas 0 y 8 de cada compas de 160 ticks.
+        let altura = |t: f32| poses(3, 0, t, 1.0)[0].joints[CADERA].y;
+        for bombo in [0.0, 80.0] {
+            let en_bombo = altura(bombo);
+            let entre = altura(bombo + 45.0);
+            assert!(
+                en_bombo > entre,
+                "no se hunde en el bombo {bombo}: {en_bombo} vs {entre}"
+            );
+        }
     }
 
     #[test]
