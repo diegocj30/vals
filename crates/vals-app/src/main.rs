@@ -13,6 +13,7 @@ use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
 mod audio;
 mod bailarines;
 mod bullet_renderer;
+mod cartela;
 mod draw;
 mod fuentes;
 mod guardado;
@@ -28,6 +29,7 @@ mod zumo;
 
 use audio::{Audio, Sfx};
 use bullet_renderer::BulletRenderer;
+use cartela::{Cartela, Fundido};
 use guardado::Guardado;
 use hot::HotReload;
 use mando::Mando;
@@ -222,6 +224,8 @@ async fn run_game() {
     let mut mando = Mando::new();
     let mut chispas = Particulas::new();
     let mut zumo = Zumo::new();
+    let mut cartela: Option<Cartela> = None;
+    let mut fundido = Fundido::nuevo();
 
     loop {
         frames += 1;
@@ -255,7 +259,17 @@ async fn run_game() {
         // Hitstop: unos frames sin avanzar el mundo al parriar, al cambiar de
         // figura y al morir. Congela el reloj de pared, no los ticks, asi que
         // el replay no se entera: el mundo hace los mismos ticks, mas tarde.
-        let congelado = escena == Escena::Combate && zumo.congelado();
+        // La cartela de entrada para el mundo mientras se lee: una cartela que
+        // hay que leer esquivando no se lee. Y se salta con cualquier tecla,
+        // porque la segunda vez ya te la sabes.
+        if let Some(c) = cartela.as_mut()
+            && c.para_el_mundo()
+            && (get_last_key_pressed().is_some() || mando.frame().bits() != 0)
+        {
+            c.saltar();
+        }
+        let leyendo = cartela.as_ref().is_some_and(Cartela::para_el_mundo);
+        let congelado = escena == Escena::Combate && (zumo.congelado() || leyendo);
 
         if is_key_pressed(KeyCode::F1) {
             show_debug = !show_debug;
@@ -284,6 +298,8 @@ async fn run_game() {
                 Escena::Combate => Escena::Pista,
                 _ => Escena::Menu,
             };
+            cartela = None;
+            fundido.empezar(0.24);
         }
         if is_key_pressed(KeyCode::M) {
             audio.toggle_mute();
@@ -310,6 +326,12 @@ async fn run_game() {
             recorder = Recorder::for_world(&world);
             accumulator = 0.0;
             intentos += 1;
+            cartela = Some(Cartela::entrada(
+                &world.boss.name,
+                world.boss.phase_name(),
+                Tema::de(world.baile, 0).titulo(),
+            ));
+            fundido.empezar(0.30);
         }
 
         if escena == Escena::Menu {
@@ -327,6 +349,7 @@ async fn run_game() {
                 modo = m;
                 escena = Escena::Pista;
                 accumulator = 0.0;
+                fundido.empezar(0.30);
             }
         }
         // Saltarse el baile. Es una trampa y esta puesta a proposito: ver
@@ -395,6 +418,17 @@ async fn run_game() {
                 break;
             }
         }
+        // La cartela y el fundido corren con el reloj de pared, no con los
+        // ticks. Es presentacion —tiene que durar igual a 60 que a 144 Hz— y,
+        // sobre todo, **tiene que avanzar mientras la cartela para el mundo**,
+        // que es justo cuando no hay ticks. Meterlos en el bucle de simulacion
+        // dejaba la pantalla en negro para siempre al entrar a un baile.
+        fundido.step(frame_dt);
+        if let Some(c) = cartela.as_mut()
+            && !c.step(frame_dt)
+        {
+            cartela = None;
+        }
         stats.push_sim((get_time() - t0) as f32);
         // En el menu no suena nada ni sacude nada: el atractor es un fondo, no
         // una partida. Las chispas si, porque son lo que lo hace parecer vivo.
@@ -403,6 +437,9 @@ async fn run_game() {
                 audio.play_events(&eventos);
                 chispas.reaccionar(&eventos, &world);
                 zumo.reaccionar(&eventos);
+                if eventos.phase_changed && !world.boss.defeated {
+                    cartela = Some(Cartela::figura(world.boss.phase_name()));
+                }
             }
             (Escena::Menu, Some(a)) => chispas.reaccionar(&eventos, &a.world),
             _ => {}
@@ -453,6 +490,10 @@ async fn run_game() {
             );
             draw::recording_badge(recorder.ticks());
         }
+        if let Some(c) = cartela.as_ref() {
+            c.dibujar(&layout);
+        }
+        fundido.dibujar();
         if let Some((msg, error)) = hot.aviso() {
             draw::banner(msg, error);
         } else if let Some((msg, error, restantes)) = &mut aviso {
