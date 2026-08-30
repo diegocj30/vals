@@ -8,7 +8,9 @@ use vals_core::pista::{Nodo, Pista};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bullet_renderer::BulletRenderer;
+use crate::fuentes::{self, Cara};
 use crate::music::Tema;
+use crate::particulas::Particulas;
 use crate::skeleton::{self, HUESOS, N_CINTA, N_FALDA, Pose, REMATES};
 use crate::stats::FrameStats;
 
@@ -115,6 +117,18 @@ impl Layout {
         logical * self.scale
     }
 
+    /// Una copia desplazada, en unidades de arena.
+    ///
+    /// Asi es como sacude la pantalla: **moviendo el origen**. Ni una funcion
+    /// de dibujo se entera de que existe una sacudida, igual que no se entera
+    /// de que existe una perspectiva.
+    pub fn sacudido(&self, d: Vec2) -> Self {
+        Self {
+            origin: self.origin + d * self.scale,
+            scale: self.scale,
+        }
+    }
+
     /// Una copia con la escala multiplicada.
     ///
     /// La pista la usa para la perspectiva: dibujar una figura al fondo es
@@ -200,25 +214,25 @@ fn draw_hud(world: &World, l: &Layout) {
             world.boss.phase + 1,
             world.boss.phase_count()
         );
-        let m = measure_text(&etiqueta, None, 18, 1.0);
-        draw_text(
+        fuentes::derecha(
             &etiqueta,
-            o.x + w - m.width - 8.0,
+            o.x + w - 8.0,
             o.y + 34.0,
-            18.0,
-            TEXT_DIM,
+            19.0,
+            Cara::Titulo,
+            TEXT,
         );
 
         // Y debajo, que vals suena. "Cada jefe es un baile" se entiende mejor
         // si el baile tiene nombre y autor.
         let baile = Tema::de(world.boss_index, world.boss.phase).titulo();
-        let m = measure_text(baile, None, 14, 1.0);
-        draw_text(
+        fuentes::derecha(
             baile,
-            o.x + w - m.width - 8.0,
+            o.x + w - 8.0,
             o.y + 52.0,
             14.0,
-            fade(TEXT_DIM, 0.7),
+            Cara::Cuerpo,
+            fade(TEXT_DIM, 0.9),
         );
     }
 
@@ -238,14 +252,12 @@ fn draw_cartel(l: &Layout, titulo: &str, color: Color, lineas: &[&str]) {
     let cx = l.to_screen(ARENA_W * 0.5, 0.0).x;
     let mut y = l.to_screen(0.0, ARENA_H * 0.34).y;
 
-    let m = measure_text(titulo, None, 56, 1.0);
-    draw_text(titulo, cx - m.width * 0.5, y, 56.0, color);
-    y += 46.0;
+    fuentes::centrado(titulo, cx, y, 64.0, Cara::Titulo, color);
+    y += 52.0;
 
     for linea in lineas {
-        let m = measure_text(linea, None, 20, 1.0);
-        draw_text(linea, cx - m.width * 0.5, y, 20.0, TEXT);
-        y += 26.0;
+        fuentes::centrado(linea, cx, y, 19.0, Cara::Cuerpo, TEXT);
+        y += 25.0;
     }
 }
 
@@ -660,11 +672,12 @@ fn draw_meter(world: &World, l: &Layout) {
 
     // La barra no lleva etiqueta desde H4, y en las primeras partidas de
     // verdad el jugador no supo nunca para que servia. Una palabra lo arregla.
-    draw_text(
+    fuentes::texto(
         "SUPER",
         o.x,
         y - 6.0,
         16.0,
+        Cara::Cuerpo,
         if lleno { METER_FULL } else { TEXT_DIM },
     );
 
@@ -673,12 +686,12 @@ fn draw_meter(world: &World, l: &Layout) {
         // Latido y aviso explicito de la tecla: si no lo dice, no existe.
         let t = (get_time() as f32 * 6.0).sin() * 0.5 + 0.5;
         let aviso = "ESPACIO";
-        let m = measure_text(aviso, None, 20, 1.0);
-        draw_text(
+        fuentes::derecha(
             aviso,
-            o.x + w - m.width,
+            o.x + w,
             y - 6.0,
-            20.0,
+            19.0,
+            Cara::Cuerpo,
             fade(METER_FULL, 0.55 + 0.45 * t),
         );
     }
@@ -687,7 +700,7 @@ fn draw_meter(world: &World, l: &Layout) {
 const X: f32 = 14.0;
 
 fn put(text: &str, color: Color, y: &mut f32) {
-    draw_text(text, X, *y, 18.0, color);
+    fuentes::texto(text, X, *y, 17.0, Cara::Cuerpo, color);
     *y += 18.0;
 }
 
@@ -756,16 +769,23 @@ pub fn bench_overlay(
             );
         }
     }
-    draw_text(
+    fuentes::texto(
         "estos numeros van a docs/PERF.md",
         X,
         screen_height() - 14.0,
-        16.0,
+        15.0,
+        Cara::Cuerpo,
         TEXT_DIM,
     );
 }
 
-pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32, mando: Option<[&str; 4]>) {
+pub fn debug_overlay(
+    world: &World,
+    stats: &FrameStats,
+    steps: u32,
+    chispas: usize,
+    mando: Option<[&str; 4]>,
+) {
     let mut y = 26.0;
     stats_block(stats, steps, &mut y);
 
@@ -782,6 +802,7 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32, mando: Optio
         &mut y,
     );
     put(&format!("vidas   {}", world.lives), TEXT_DIM, &mut y);
+    put(&format!("chispas {chispas}"), TEXT_DIM, &mut y);
     put(
         &format!("modo    {}", world.mode.nombre()),
         TEXT_DIM,
@@ -858,25 +879,33 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32, mando: Optio
         None => "Z disparar  X dash  C parry  ESPACIO super  SHIFT focus  M mudo  F1  R  F3 saltar"
             .to_owned(),
     };
-    draw_text(&help, X, screen_height() - 14.0, 16.0, TEXT_DIM);
+    fuentes::texto(
+        &help,
+        X,
+        screen_height() - 14.0,
+        15.0,
+        Cara::Cuerpo,
+        TEXT_DIM,
+    );
 }
 
 /// Aviso de una linea. Verde si fue bien, rojo si no.
 pub fn banner(msg: &str, error: bool) {
     let color = if error { HITBOX } else { VICTORY };
-    draw_text(msg, X, screen_height() - 38.0, 18.0, color);
+    fuentes::texto(msg, X, screen_height() - 38.0, 17.0, Cara::Cuerpo, color);
 }
 
 /// Chivato de grabacion. Se graba siempre, asi que conviene que se vea.
 pub fn recording_badge(ticks: u64) {
     let texto = format!("REC {:>5}t   F2 guardar", ticks);
-    let m = measure_text(&texto, None, 16, 1.0);
+    let m = fuentes::medir(&texto, 15.0, Cara::Cuerpo);
     draw_circle(screen_width() - m.width - 26.0, 20.0, 4.0, HITBOX);
-    draw_text(
+    fuentes::derecha(
         &texto,
-        screen_width() - m.width - 16.0,
+        screen_width() - 16.0,
         25.0,
-        16.0,
+        15.0,
+        Cara::Cuerpo,
         TEXT_DIM,
     );
 }
@@ -889,13 +918,25 @@ pub fn replay_badge(tick: usize, total: usize, divergencia: Option<u64>) {
     } else {
         format!("REPLAY  {tick}/{total}")
     };
-    let m = measure_text(&texto, None, 18, 1.0);
-    draw_text(&texto, screen_width() - m.width - 16.0, 25.0, 18.0, VICTORY);
+    fuentes::derecha(
+        &texto,
+        screen_width() - 16.0,
+        25.0,
+        17.0,
+        Cara::Cuerpo,
+        VICTORY,
+    );
 
     if let Some(t) = divergencia {
         let aviso = format!("DIVERGENCIA en el tick {t}");
-        let m = measure_text(&aviso, None, 20, 1.0);
-        draw_text(&aviso, screen_width() - m.width - 16.0, 48.0, 20.0, HITBOX);
+        fuentes::derecha(
+            &aviso,
+            screen_width() - 16.0,
+            48.0,
+            19.0,
+            Cara::Cuerpo,
+            HITBOX,
+        );
     }
 }
 
@@ -1003,12 +1044,12 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32) {
         nodo.nombre.clone()
     };
     let color = if nodo.vencido { VICTORY } else { TEXT };
-    let m = measure_text(&etiqueta, None, 18, 1.0);
-    draw_text(
+    fuentes::centrado(
         &etiqueta,
-        s.x - m.width * 0.5,
+        s.x,
         s.y + 22.0,
-        18.0,
+        20.0,
+        Cara::Titulo,
         fade(color, alfa),
     );
 }
@@ -1058,19 +1099,18 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
 
     // --- Cartel de arriba y ayuda de abajo ---
     let cx = l.to_screen(ARENA_W * 0.5, 0.0).x;
-    let m = measure_text("LA PISTA", None, 34, 1.0);
-    draw_text(
+    fuentes::centrado(
         "LA PISTA",
-        cx - m.width * 0.5,
+        cx,
         o.y + 44.0,
-        34.0,
+        40.0,
+        Cara::Titulo,
         fade(TITLE, 0.9),
     );
 
     let hechos = p.nodos.iter().filter(|n| n.vencido).count();
     let cuenta = format!("{hechos} / {} bailes", p.nodos.len());
-    let m = measure_text(&cuenta, None, 16, 1.0);
-    draw_text(&cuenta, cx - m.width * 0.5, o.y + 66.0, 16.0, TEXT_DIM);
+    fuentes::centrado(&cuenta, cx, o.y + 66.0, 15.0, Cara::Cuerpo, TEXT_DIM);
 
     let pie_y = l.to_screen(0.0, ARENA_H).y - 16.0;
     let aviso = match p.nodo_cerca() {
@@ -1091,6 +1131,10 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
     } else {
         TEXT_DIM
     };
-    let m = measure_text(&aviso, None, 20, 1.0);
-    draw_text(&aviso, cx - m.width * 0.5, pie_y, 20.0, color);
+    fuentes::centrado(&aviso, cx, pie_y, 19.0, Cara::Cuerpo, color);
+}
+
+/// Las chispas, encima de todo.
+pub fn particulas(p: &Particulas, l: &Layout) {
+    p.draw(|q| l.to_screen(q.x, q.y), l.scale());
 }

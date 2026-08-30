@@ -49,9 +49,12 @@ llena, poco a poco. La idea es que acercarse compense.
 
 Al perder se reintenta **ese** jefe, no la carrera entera.
 
-No hay ni un asset en el repositorio. Las balas las dibuja un shader a partir de
-la distancia al centro, el personaje es un esqueleto de articulaciones animado
-por codigo, y **el sonido y la musica se sintetizan al arrancar**: cada jefe
+Los unicos assets del repositorio son **dos tipografias** con licencia SIL OFL
+—Poiret One y Barlow—, y son una herramienta, no arte del juego. Todo lo que se
+dibuja lo genera el codigo: las balas salen de un shader a partir de la
+distancia al centro, el personaje es un esqueleto de articulaciones animado por
+codigo, las chispas y la sacudida se disparan desde los sucesos que publica el
+nucleo, y **el sonido y la musica se sintetizan al arrancar**: cada jefe
 tiene su vals — y como el jefe es el baile entero, **la musica va por figura**.
 El paso base suena a El Danubio azul (Strauss II, 1866) y el molinete a Sobre
 las olas (Juventino Rosas, 1888), las dos de dominio publico y transcritas a una

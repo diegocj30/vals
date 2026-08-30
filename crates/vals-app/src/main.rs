@@ -13,13 +13,16 @@ use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
 mod audio;
 mod bullet_renderer;
 mod draw;
+mod fuentes;
 mod guardado;
 mod hot;
 mod mando;
 mod music;
+mod particulas;
 mod replay_io;
 mod skeleton;
 mod stats;
+mod zumo;
 
 use audio::{Audio, Sfx};
 use bullet_renderer::BulletRenderer;
@@ -27,7 +30,9 @@ use guardado::Guardado;
 use hot::HotReload;
 use mando::Mando;
 use music::Tema;
+use particulas::Particulas;
 use stats::FrameStats;
+use zumo::Zumo;
 
 /// En que parte del juego estamos.
 ///
@@ -127,6 +132,8 @@ fn parse_mode() -> Arranque {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    // Antes de dibujar nada: las tres formas de arrancar escriben texto.
+    fuentes::cargar();
     match parse_mode() {
         Arranque::Game => run_game().await,
         Arranque::Bench { target, frames } => run_bench(target, frames).await,
@@ -211,6 +218,8 @@ async fn run_game() {
     // mirando.
     let mut hubo_interaccion = false;
     let mut mando = Mando::new();
+    let mut chispas = Particulas::new();
+    let mut zumo = Zumo::new();
 
     loop {
         frames += 1;
@@ -236,6 +245,11 @@ async fn run_game() {
 
         let frame_dt = get_frame_time().min(MAX_FRAME_DT);
         stats.push_frame(frame_dt);
+
+        // Hitstop: unos frames sin avanzar el mundo al parriar, al cambiar de
+        // figura y al morir. Congela el reloj de pared, no los ticks, asi que
+        // el replay no se entera: el mundo hace los mismos ticks, mas tarde.
+        let congelado = escena == Escena::Combate && zumo.congelado();
 
         if is_key_pressed(KeyCode::F1) {
             show_debug = !show_debug;
@@ -317,6 +331,7 @@ async fn run_game() {
             // dentro del bucle de simulacion, y el proximo tick ya los habra
             // vaciado.
             audio.play(Sfx::Fase, 1.0);
+            zumo.golpe_gordo();
             aviso = Some(("baile saltado".to_owned(), false, 120));
         }
         if is_key_pressed(KeyCode::F2) {
@@ -337,7 +352,9 @@ async fn run_game() {
             InputFrame::from_bits(read_input().bits() | mando.frame().bits())
         };
         let t0 = get_time();
-        accumulator += frame_dt;
+        if !congelado {
+            accumulator += frame_dt;
+        }
         let mut steps = 0;
         // Los sucesos de todos los ticks del frame se juntan: puede haber
         // varios, y reaccionar solo al ultimo se comeria sonidos.
@@ -347,6 +364,9 @@ async fn run_game() {
                 Escena::Menu => {
                     if let Some(a) = attract.as_mut() {
                         a.step();
+                        // El atractor tambien echa chispas: es lo primero que
+                        // se ve del juego y merece estar vivo.
+                        eventos.merge(&a.world.events);
                     }
                 }
                 Escena::Pista => pista.step(input),
@@ -356,6 +376,10 @@ async fn run_game() {
                     eventos.merge(&world.events);
                 }
             }
+            // Las chispas van al mismo paso fijo que la simulacion: si fueran
+            // por frame, en un monitor de 144 Hz volarian al doble.
+            chispas.step(DT);
+            zumo.step();
             accumulator -= DT;
             steps += 1;
             if steps >= MAX_STEPS_PER_FRAME {
@@ -364,9 +388,16 @@ async fn run_game() {
             }
         }
         stats.push_sim((get_time() - t0) as f32);
-        // En el menu no suena nada: el atractor es un fondo, no una partida.
-        if escena == Escena::Combate {
-            audio.play_events(&eventos);
+        // En el menu no suena nada ni sacude nada: el atractor es un fondo, no
+        // una partida. Las chispas si, porque son lo que lo hace parecer vivo.
+        match (escena, attract.as_ref()) {
+            (Escena::Combate, _) => {
+                audio.play_events(&eventos);
+                chispas.reaccionar(&eventos, &world);
+                zumo.reaccionar(&eventos);
+            }
+            (Escena::Menu, Some(a)) => chispas.reaccionar(&eventos, &a.world),
+            _ => {}
         }
 
         // Ganar un baile lo tacha en la pista. Una sola vez, que la pantalla
@@ -384,7 +415,7 @@ async fn run_game() {
 
         // --- Render ---
         let t1 = get_time();
-        let layout = draw::Layout::compute();
+        let layout = draw::Layout::compute().sacudido(zumo.desplazamiento());
         if escena == Escena::Pista {
             draw::pista(&pista, alpha, &layout);
         } else {
@@ -393,6 +424,7 @@ async fn run_game() {
                 _ => &world,
             };
             draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut());
+            draw::particulas(&chispas, &layout);
             if escena == Escena::Menu {
                 draw::menu(
                     &layout,
@@ -408,6 +440,7 @@ async fn run_game() {
                 &world,
                 &stats,
                 steps,
+                chispas.vivas(),
                 mando.conectado().then(|| mando.botones()),
             );
             draw::recording_badge(recorder.ticks());
@@ -514,7 +547,7 @@ async fn run_replay(path: String) {
         let t1 = get_time();
         let layout = draw::Layout::compute();
         draw::frame(&world, alpha, &layout, bullets_gpu.as_mut());
-        draw::debug_overlay(&world, &stats, steps, None);
+        draw::debug_overlay(&world, &stats, steps, 0, None);
         draw::replay_badge(cursor, replay.inputs.len(), divergencia);
         stats.push_render((get_time() - t1) as f32);
 
