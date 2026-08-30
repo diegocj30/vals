@@ -4,8 +4,8 @@ Boss-rush danmaku escrito en Rust. Jugable en nativo y en navegador.
 
 Los patrones de balas de este genero son coreografia: de ahi el nombre.
 
-Una pista de baile con publico que te va respetando, dos jefes —El Vals y El
-Tango, con sus figuras—, tres vidas, y un parry que te empuja
+Una pista de baile, tres jefes —El Vals, El Tango y El Charleston, cada uno
+con sus figuras—, tres vidas, y un parry que te empuja
 a meterte donde estan las balas en vez de huir de todas.
 
 Dos modos: **volar** por la arena, como el danmaku clasico, o **plataformas**
@@ -67,10 +67,15 @@ vive en `assets/patterns/boss1.ron` y el tango en `boss2.ron`, **no en codigo**.
 Anadir un baile es escribir su fichero y meterlo en `DEFAULT_BOSS_RONS`: la
 pista le pone el nodo sola y la musica lo busca por indice.
 
-Lo que separa un baile de otro no es la melodia, es la gramatica. El vals no
-para de girar y sus cuatro figuras son espirales; el tango va en linea recta,
-**no tiene un solo `Turn`**, y sus balas salen, frenan y vuelven. Hay un test
-que vigila las dos reglas a la vez. El fichero
+Lo que separa un baile de otro no es la melodia, es la gramatica: **cada uno
+tiene un verbo del motor que es solo suyo**. El vals gira (`Turn`, espirales);
+el tango frena y vuelve (`accel` negativa, el corte); el charleston curva
+(`spin`, el arco del swing-out). Hay un test que exige las dos direcciones: que
+cada baile use el suyo y que no use el de nadie mas.
+
+Al ritmo le pasa lo mismo —tres tiempos, cuatro tiempos, clave 3-3-2— y las
+esperas de cada patron son multiplos de su tiempo en ticks, asi que **las balas
+caen con la musica**. El fichero
 lleva en la cabecera la guia de los pasos del lenguaje (`Wait`, `Fire`, `Turn`,
 `Repeat`, `Forever`, `Parallel`, `MoveTo`).
 

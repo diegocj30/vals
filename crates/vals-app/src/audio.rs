@@ -21,6 +21,15 @@ use crate::music::{self, TEMAS, Tema};
 /// 44.100 Hz para que el mezclador de macroquad no tenga que remuestrear.
 const SAMPLE_RATE: u32 = 44_100;
 
+/// La musica va a la mitad, y ocupa la mitad.
+///
+/// Con once temas, a 44,1 kHz eran unos 20 MB de memoria; a 22,05 son 10. Lo
+/// unico que aliasa a esa frecuencia son los armonicos muy altos de los golpes
+/// de acorde, que suenan a volumen 0,05: la melodia y el bajo son senos y no
+/// tienen nada por encima de su fundamental. Era la palanca mas barata que
+/// habia y estaba apuntada esperando a hacer falta.
+const SAMPLE_RATE_MUSICA: u32 = 22_050;
+
 /// Volumen general. Bajo: son efectos secos y muy repetidos.
 const MASTER: f32 = 0.6;
 
@@ -211,7 +220,10 @@ impl Audio {
         let mut musica = Vec::with_capacity(TEMAS.len());
         let mut bytes_musica = 0usize;
         for b in TEMAS {
-            let bytes = wav(&render_len(&music::tema(b), music::duracion(b)));
+            let bytes = wav_a(
+                &render_len_a(&music::tema(b), music::duracion(b), SAMPLE_RATE_MUSICA),
+                SAMPLE_RATE_MUSICA,
+            );
             bytes_musica += bytes.len();
             match load_sound_from_bytes(&bytes).await {
                 Ok(s) => musica.push(Some(s)),
@@ -357,12 +369,17 @@ fn render(voces: &[Voz]) -> Vec<i16> {
 /// La musica lo necesita: el bucle tiene que durar los compases justos. Si se
 /// dejara terminar en la ultima nota, el bucle daria un salto cada vuelta.
 fn render_len(voces: &[Voz], segundos: f32) -> Vec<i16> {
-    let n = (segundos.max(0.001) * SAMPLE_RATE as f32) as usize;
+    render_len_a(voces, segundos, SAMPLE_RATE)
+}
+
+/// Igual, a la frecuencia de muestreo que se pida.
+fn render_len_a(voces: &[Voz], segundos: f32, rate: u32) -> Vec<i16> {
+    let n = (segundos.max(0.001) * rate as f32) as usize;
     let mut acc = vec![0.0f32; n];
 
     for v in voces {
-        let inicio = (v.delay * SAMPLE_RATE as f32) as usize;
-        let largo = ((v.dur * SAMPLE_RATE as f32) as usize).max(1);
+        let inicio = (v.delay * rate as f32) as usize;
+        let largo = ((v.dur * rate as f32) as usize).max(1);
         let mut fase = 0.0f32;
         // Ruido con un generador propio: nada de aleatoriedad del sistema, para
         // que el mismo sonido salga igual en cada arranque.
@@ -375,7 +392,7 @@ fn render_len(voces: &[Voz], segundos: f32) -> Vec<i16> {
             }
             let t = i as f32 / largo as f32;
             let f = v.f0 + (v.f1 - v.f0) * t;
-            fase += f / SAMPLE_RATE as f32;
+            fase += f / rate as f32;
             if fase >= 1.0 {
                 fase -= 1.0;
             }
@@ -411,6 +428,11 @@ fn render_len(voces: &[Voz], segundos: f32) -> Vec<i16> {
 
 /// Empaqueta muestras mono de 16 bits en un WAV.
 fn wav(samples: &[i16]) -> Vec<u8> {
+    wav_a(samples, SAMPLE_RATE)
+}
+
+/// Igual, declarando la frecuencia de muestreo que toque.
+fn wav_a(samples: &[i16], rate: u32) -> Vec<u8> {
     let datos = samples.len() * 2;
     let mut out = Vec::with_capacity(44 + datos);
 
@@ -422,8 +444,8 @@ fn wav(samples: &[i16]) -> Vec<u8> {
     out.extend_from_slice(&16u32.to_le_bytes()); // tamano del bloque fmt
     out.extend_from_slice(&1u16.to_le_bytes()); // PCM sin comprimir
     out.extend_from_slice(&1u16.to_le_bytes()); // mono
-    out.extend_from_slice(&SAMPLE_RATE.to_le_bytes());
-    out.extend_from_slice(&(SAMPLE_RATE * 2).to_le_bytes()); // bytes por segundo
+    out.extend_from_slice(&rate.to_le_bytes());
+    out.extend_from_slice(&(rate * 2).to_le_bytes()); // bytes por segundo
     out.extend_from_slice(&2u16.to_le_bytes()); // bytes por muestra
     out.extend_from_slice(&16u16.to_le_bytes()); // bits por muestra
 
@@ -507,8 +529,8 @@ mod tests {
     #[test]
     fn los_temas_de_musica_duran_lo_que_dicen() {
         for b in TEMAS {
-            let muestras = render_len(&music::tema(b), music::duracion(b));
-            let esperado = (music::duracion(b) * SAMPLE_RATE as f32) as usize;
+            let muestras = render_len_a(&music::tema(b), music::duracion(b), SAMPLE_RATE_MUSICA);
+            let esperado = (music::duracion(b) * SAMPLE_RATE_MUSICA as f32) as usize;
             assert_eq!(muestras.len(), esperado, "{b:?}");
             // Y suenan: hay senal de verdad, no silencio.
             let pico = muestras.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
@@ -519,7 +541,7 @@ mod tests {
     #[test]
     fn los_temas_no_saturan() {
         for b in TEMAS {
-            let muestras = render_len(&music::tema(b), music::duracion(b));
+            let muestras = render_len_a(&music::tema(b), music::duracion(b), SAMPLE_RATE_MUSICA);
             let pico = muestras.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
             assert!(pico < i16::MAX as u16, "{b:?} llega al tope y distorsiona");
         }
@@ -530,7 +552,7 @@ mod tests {
         // El final y el principio tienen que ser silencio o casi: si el bucle
         // corta una nota a media vibracion, se oye un chasquido cada vuelta.
         for b in TEMAS {
-            let m = render_len(&music::tema(b), music::duracion(b));
+            let m = render_len_a(&music::tema(b), music::duracion(b), SAMPLE_RATE_MUSICA);
             let cola: i32 = m[m.len() - 200..]
                 .iter()
                 .map(|v| (*v as i32).abs())

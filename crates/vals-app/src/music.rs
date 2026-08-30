@@ -66,10 +66,18 @@ pub enum Tema {
     Corte,
     /// Y vuelta a la primera, disparada. Un tango tambien vuelve al tema.
     Quebrada,
+
+    // --- El Charleston ---
+    /// Maple Leaf Rag, primera parte. 4/4, stride, y las corcheas swingadas.
+    CharlestonA,
+    /// Su segunda parte.
+    CharlestonB,
+    /// Y la primera otra vez, un tono arriba y corriendo.
+    CharlestonFin,
 }
 
 /// Todos, en el orden en que se sintetizan y se guardan.
-pub const TEMAS: [Tema; 8] = [
+pub const TEMAS: [Tema; 11] = [
     Tema::Sala,
     Tema::PasoBase,
     Tema::Espejo,
@@ -78,6 +86,9 @@ pub const TEMAS: [Tema; 8] = [
     Tema::Caminata,
     Tema::Corte,
     Tema::Quebrada,
+    Tema::CharlestonA,
+    Tema::CharlestonB,
+    Tema::CharlestonFin,
 ];
 
 impl Tema {
@@ -92,9 +103,12 @@ impl Tema {
             (0, 1) => Tema::Espejo,
             (0, 2) => Tema::Molinete,
             (0, _) => Tema::Coda,
-            (_, 0) => Tema::Caminata,
-            (_, 1) => Tema::Corte,
-            (_, _) => Tema::Quebrada,
+            (1, 0) => Tema::Caminata,
+            (1, 1) => Tema::Corte,
+            (1, _) => Tema::Quebrada,
+            (_, 0) => Tema::CharlestonA,
+            (_, 1) => Tema::CharlestonB,
+            (_, _) => Tema::CharlestonFin,
         }
     }
 
@@ -184,6 +198,11 @@ enum Acompanamiento {
     /// Grave en los tiempos fuertes y golpe seco en los debiles. Esto es un
     /// tango: no mece, marca.
     Marcato,
+    /// Bajo que **anda**, alternando fundamental y quinta en los tiempos
+    /// fuertes, y acorde en los debiles. Es el stride del ragtime: se parece al
+    /// marcato en donde caen los golpes y no se parece en nada al oirlo,
+    /// porque el bajo se mueve en vez de repetirse.
+    Stride,
     /// Ni una cosa ni la otra: notas largas y nada de golpes. Una sala no
     /// tiene compas porque no se esta bailando todavia.
     Sala,
@@ -360,6 +379,62 @@ const SALA: [Nota; 9] = [
 #[rustfmt::skip]
 const SALA_ACORDES: [Acorde; 4] = [men(0), may(8), men(5), men(0)];
 
+/// **Maple Leaf Rag**, Scott Joplin (1899), primera parte.
+///
+/// En fa mayor: los tonos son semitonos sobre el fa. Compas de 4/4, dieciseis
+/// unidades por compas, igual que el tango.
+///
+/// Es ragtime y no swing —el swing llega veinte anos despues—, pero es la raiz
+/// del jazz, es de dominio publico sin discusion (Joplin murio en 1917) y se
+/// reconoce a la primera. Lo que lo convierte en jazz al sonar es que sus
+/// corcheas van **swingadas**, que es cosa del sintetizador y no de la tabla.
+#[rustfmt::skip]
+const RAG_A: [Nota; 97] = [
+    z(2), n(0, 2), n(7, 2), n(0, 2), n(4, 2), n(7, 4), n(0, 2),              // 1
+    n(7, 2), n(-1, 2), n(2, 2), n(7, 10),                                   // 2
+    z(2), n(0, 2), n(7, 2), n(0, 2), n(4, 2), n(7, 4), n(0, 2),              // 3
+    n(7, 2), n(-1, 2), n(2, 2), n(7, 10),                                   // 4
+    z(2), n(0, 2), n(3, 2), n(8, 2), z(2), n(7, 4), n(7, 2),                 // 5
+    z(2), n(0, 2), n(3, 2), n(8, 2), z(2), n(7, 6),                          // 6
+    n(0, 2), n(3, 2), n(7, 2), n(12, 2), n(3, 2), n(7, 2), n(12, 2), n(15, 2), // 7
+    n(7, 2), n(12, 2), n(15, 2), n(19, 2), n(12, 2), n(15, 2), n(19, 2), n(24, 2), // 8
+    n(12, 4), n(12, 4), n(12, 4), n(12, 2), n(12, 2),                        // 9
+    n(12, 2), n(7, 2), n(9, 2), n(4, 2), n(7, 2), n(9, 6),                   // 10
+    n(0, 2), n(2, 2), n(3, 2), n(0, 2), n(2, 2), n(4, 4), n(0, 2),           // 11
+    n(4, 2), n(0, 2), n(2, 4), n(0, 4), z(4),                                // 12
+    n(12, 4), n(12, 4), n(12, 4), n(12, 2), n(12, 2),                        // 13
+    n(12, 2), n(7, 2), n(9, 2), n(4, 2), n(7, 2), n(9, 6),                   // 14
+    n(0, 2), n(2, 2), n(3, 2), n(0, 2), n(2, 2), n(4, 4), n(0, 2),           // 15
+    n(4, 2), n(0, 2), n(2, 4), n(0, 4), z(4),                                // 16
+];
+
+#[rustfmt::skip]
+const RAG_A_ACORDES: [Acorde; 16] = [
+    may(0), sep(7), may(0), sep(7),
+    may(8), may(8), may(0), may(0),
+    may(8), may(0), may(8), sep(7),
+    may(8), may(0), may(8), sep(7),
+];
+
+/// Su segunda parte, la que sube al agudo.
+#[rustfmt::skip]
+const RAG_B: [Nota; 57] = [
+    z(2), n(11, 2), n(19, 2), n(11, 2), n(14, 2), n(18, 4), n(11, 2),        // 1
+    n(17, 2), n(11, 2), n(14, 2), n(16, 2), n(16, 2), n(7, 2), n(14, 2), n(7, 2), // 2
+    z(2), n(4, 2), n(12, 2), n(4, 2), n(7, 2), n(9, 4), n(7, 2),             // 3
+    n(12, 2), n(4, 2), n(7, 2), n(9, 2), n(9, 2), n(4, 2), n(9, 4),          // 4
+    z(2), n(7, 2), n(11, 2), n(2, 2), n(5, 2), n(9, 4), n(7, 2),             // 5
+    n(11, 2), n(2, 2), n(5, 2), n(9, 2), n(9, 2), n(5, 2), n(9, 4),          // 6
+    z(2), n(4, 2), n(12, 2), n(4, 2), n(7, 2), n(9, 4), n(7, 2),             // 7
+    n(12, 2), n(4, 2), n(7, 2), n(9, 2), n(9, 2), n(4, 2), n(9, 4),          // 8
+];
+
+#[rustfmt::skip]
+const RAG_B_ACORDES: [Acorde; 8] = [
+    sep(7), sep(7), may(0), may(0),
+    sep(7), sep(7), may(0), may(0),
+];
+
 /// Todo lo que hace falta para sonar.
 struct Partitura {
     titulo: &'static str,
@@ -373,6 +448,10 @@ struct Partitura {
     acordes: &'static [Acorde],
     /// Si se refleja la melodia y la armonia antes de sonar.
     espejo: bool,
+    /// Si las corcheas van swingadas: la de a contratiempo llega tarde, a dos
+    /// tercios del tiempo en vez de a la mitad. **Es lo unico que separa un
+    /// ritmo de jazz de uno que no lo es**, y son tres lineas.
+    swing: bool,
 }
 
 fn partitura(t: Tema) -> Partitura {
@@ -386,6 +465,7 @@ fn partitura(t: Tema) -> Partitura {
         melodia,
         acordes,
         espejo,
+        swing: false,
     };
     // El tango: cuatro tiempos y marcato. Mismo modulo, otra gramatica.
     let tango = |titulo, bpm, tonica, melodia, acordes| Partitura {
@@ -397,6 +477,19 @@ fn partitura(t: Tema) -> Partitura {
         melodia,
         acordes,
         espejo: false,
+        swing: false,
+    };
+    // El charleston: cuatro tiempos, stride, y corcheas que llegan tarde.
+    let rag = |titulo, bpm, tonica, melodia, acordes| Partitura {
+        titulo,
+        bpm,
+        tiempos: 4,
+        acompanamiento: Acompanamiento::Stride,
+        tonica,
+        melodia,
+        acordes,
+        espejo: false,
+        swing: true,
     };
 
     match t {
@@ -409,6 +502,7 @@ fn partitura(t: Tema) -> Partitura {
             melodia: &SALA,
             acordes: &SALA_ACORDES,
             espejo: false,
+            swing: false,
         },
 
         Tema::PasoBase => vals(
@@ -470,6 +564,31 @@ fn partitura(t: Tema) -> Partitura {
             26,
             &CUMPARSITA_A,
             &CUMPARSITA_A_ACORDES,
+        ),
+
+        Tema::CharlestonA => rag(
+            "Maple Leaf Rag - Scott Joplin, 1899",
+            100.0,
+            20, // fa
+            &RAG_A,
+            &RAG_A_ACORDES,
+        ),
+        Tema::CharlestonB => rag(
+            "Maple Leaf Rag, segunda parte",
+            92.0,
+            20,
+            &RAG_B,
+            &RAG_B_ACORDES,
+        ),
+        // Y otra vez la primera, un tono arriba y corriendo. Los tres bailes
+        // cierran igual, y no es pereza: volver al tema del principio para
+        // acabar es lo que hacen las tres musicas de verdad.
+        Tema::CharlestonFin => rag(
+            "Maple Leaf Rag, al galope",
+            128.0,
+            22,
+            &RAG_A,
+            &RAG_A_ACORDES,
         ),
     }
 }
@@ -607,9 +726,23 @@ pub fn tema(t: Tema) -> Vec<Voz> {
             // Las notas largas caen mas despacio; con la caida corta de las
             // breves se apagarian antes de tiempo y la frase se rompe.
             let decay = if nota.unidades > 4 { 1.2 } else { 2.4 };
-            let dur = nota.unidades as f32 * u;
+            // El swing. La corchea de a contratiempo no cae en la mitad del
+            // tiempo: cae a dos tercios. Con cuatro unidades por tiempo, la
+            // corchea recta empieza en la 2 y la swingada en la 2,67.
+            //
+            // Son tres lineas y es **lo unico** que separa un ritmo de jazz de
+            // uno que no lo es. La tabla de notas es la misma.
+            let atraso = if p.swing && unidad % UNIDADES_POR_TIEMPO == UNIDADES_POR_TIEMPO / 2 {
+                2.0 / 3.0
+            } else {
+                0.0
+            };
+            let dur = (nota.unidades as f32 - atraso) * u;
             let f = frecuencia(p.tonica + tono);
-            v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.22, decay).tras(unidad as f32 * u));
+            v.push(
+                Voz::nota(Wave::Sine, f, dur * 0.92, 0.22, decay)
+                    .tras((unidad as f32 + atraso) * u),
+            );
         }
         unidad += nota.unidades;
     }
@@ -666,6 +799,24 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
                     }
                 }
             }
+            // El bajo anda: fundamental en el uno, quinta en el tres, y el
+            // acorde contestando en los tiempos debiles. Cae donde el marcato
+            // del tango, pero no suena igual, porque un bajo que se mueve no
+            // es lo mismo que uno que se repite.
+            Acompanamiento::Stride => {
+                for paso in (0..p.tiempos).step_by(2) {
+                    let cuando = t0 + paso as f32 * t;
+                    let nota_baja = if paso == 0 { raiz } else { raiz + 7 };
+                    let f = frecuencia(bajo(nota_baja));
+                    v.push(Voz::nota(Wave::Sine, f, t * 0.6, 0.30, 2.2).tras(cuando));
+                }
+                for paso in (1..p.tiempos).step_by(2) {
+                    let cuando = t0 + paso as f32 * t;
+                    for f in triada() {
+                        v.push(Voz::nota(Wave::Square, f, t * 0.4, 0.05, 2.6).tras(cuando));
+                    }
+                }
+            }
             // Sin golpes: el grave y el acorde duran el compas entero. No hay
             // compas que marcar porque todavia no se esta bailando.
             Acompanamiento::Sala => {
@@ -683,7 +834,7 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
 mod tests {
     use super::*;
 
-    const TODOS: [Tema; 8] = TEMAS;
+    const TODOS: [Tema; 11] = TEMAS;
 
     #[test]
     fn la_melodia_y_la_armonia_cuadran() {
@@ -826,6 +977,10 @@ mod tests {
     fn en_el_tango_el_grave_cae_en_el_uno_y_en_el_tres() {
         // El marcato. Es lo que separa un tango de un vals antes de que entre
         // ninguna melodia: no mece en tres, marca en cuatro.
+        //
+        // El charleston cae en los mismos tiempos —el stride tambien va a uno
+        // y tres— y por eso lo que lo distingue no es donde, es que el bajo se
+        // mueve. Ver `el_bajo_del_charleston_anda`.
         for t in [Tema::Caminata, Tema::Corte, Tema::Quebrada] {
             let p = partitura(t);
             let graves = graves_por_compas(t);
@@ -835,6 +990,64 @@ mod tests {
                 assert_eq!(*sitio, esperado, "{t:?}: el grave {i} esta fuera de sitio");
             }
         }
+    }
+
+    #[test]
+    fn el_bajo_del_charleston_anda() {
+        // Stride: fundamental en el uno, quinta en el tres. Cae donde el
+        // marcato del tango, pero un bajo que se mueve no suena como uno que
+        // se repite, y esa es toda la diferencia al oido.
+        for t in [Tema::CharlestonA, Tema::CharlestonB, Tema::CharlestonFin] {
+            let p = partitura(t);
+            assert!(p.acompanamiento == Acompanamiento::Stride);
+            assert_eq!(graves_por_compas(t), {
+                let mut v = Vec::new();
+                for _ in 0..p.acordes.len() {
+                    v.push(0);
+                    v.push(2);
+                }
+                v
+            });
+            // Y los dos graves de un compas no son la misma nota.
+            let tiempo = 60.0 / p.bpm;
+            let graves: Vec<f32> = tema(t)
+                .iter()
+                .filter(|v| v.frecuencia() < 150.0)
+                .map(|v| v.frecuencia())
+                .collect();
+            assert!(
+                graves
+                    .chunks(2)
+                    .any(|par| par.len() == 2 && par[0] != par[1]),
+                "el bajo no se mueve: no es stride, es marcato"
+            );
+            assert!(tiempo > 0.0);
+        }
+    }
+
+    #[test]
+    fn las_corcheas_del_charleston_llegan_tarde() {
+        // Lo que convierte el ragtime en jazz. La corchea de a contratiempo
+        // tiene que caer a dos tercios del tiempo, no a la mitad: si cayera en
+        // la mitad, esto seria una pianola.
+        let p = partitura(Tema::CharlestonA);
+        assert!(p.swing);
+        let tiempo = 60.0 / p.bpm;
+        let corchea = tiempo / 2.0;
+
+        let notas: Vec<f32> = tema(Tema::CharlestonA)
+            .iter()
+            .filter(|v| v.frecuencia() > 200.0)
+            .map(|v| (v.inicio() / corchea) % 2.0)
+            .collect();
+        // Las que caen a contratiempo estan en 1,33 corcheas y no en 1.
+        let tarde = notas.iter().filter(|x| (**x - 1.333).abs() < 0.02).count();
+        let rectas = notas.iter().filter(|x| (**x - 1.0).abs() < 0.02).count();
+        assert!(tarde > 10, "casi ninguna corchea va swingada: {tarde}");
+        assert_eq!(rectas, 0, "hay corcheas cayendo en la mitad del tiempo");
+
+        // Y el vals no swinga: sus corcheas caen donde toca.
+        assert!(!partitura(Tema::PasoBase).swing);
     }
 
     #[test]
@@ -870,8 +1083,10 @@ mod tests {
         assert_eq!(Tema::de(1, 1), Tema::Corte);
         assert_ne!(Tema::de(0, 0), Tema::de(1, 0));
         // Una fase que no existe cae en la ultima figura de SU baile.
+        assert_eq!(Tema::de(2, 1), Tema::CharlestonB);
         assert_eq!(Tema::de(0, 99), Tema::Coda);
         assert_eq!(Tema::de(1, 99), Tema::Quebrada);
+        assert_eq!(Tema::de(2, 99), Tema::CharlestonFin);
         // Y el indice y su vuelta cuadran para todos.
         for t in TEMAS {
             assert_eq!(Tema::por_indice(t.indice()), t);

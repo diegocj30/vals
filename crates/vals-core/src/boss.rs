@@ -26,9 +26,10 @@ use crate::pattern::{Pattern, PatternRunner, RunCtx, Step};
 /// El vals entero cabe en `boss1.ron` y el tango en `boss2.ron`, cada uno con
 /// una fase por figura suya. Anadir un baile es anadir su fichero y una linea
 /// aqui: la pista le pone el nodo sola y la musica lo busca por indice.
-pub const DEFAULT_BOSS_RONS: [&str; 2] = [
+pub const DEFAULT_BOSS_RONS: [&str; 3] = [
     include_str!("../../../assets/patterns/boss1.ron"),
     include_str!("../../../assets/patterns/boss2.ron"),
+    include_str!("../../../assets/patterns/boss3.ron"),
 ];
 
 /// El primer jefe. Se conserva por comodidad y para los tests.
@@ -294,8 +295,8 @@ mod tests {
     #[test]
     fn los_jefes_embebidos_son_validos() {
         let defs = BossDef::default_bosses();
-        // Uno por baile: el vals y el tango.
-        assert_eq!(defs.len(), 2);
+        // Uno por baile.
+        assert_eq!(defs.len(), 3);
         for (i, d) in defs.iter().enumerate() {
             assert!(!d.name.is_empty(), "el jefe {} no tiene nombre", i + 1);
             assert!(!d.phases.is_empty(), "el jefe {} no tiene fases", i + 1);
@@ -348,30 +349,67 @@ mod tests {
         })
     }
 
-    /// La regla que separa un baile de otro, y por tanto la que hay que
-    /// vigilar.
+    /// Si en algun sitio del arbol sale una bala con trayectoria curva.
+    fn hay_curvas(steps: &[Step]) -> bool {
+        steps.iter().any(|paso| match paso {
+            Step::Fire(e) => e.spin != 0.0,
+            Step::Repeat { body, .. } | Step::Forever(body) => hay_curvas(body),
+            Step::Parallel(ramas) => ramas.iter().any(|r| hay_curvas(r)),
+            _ => false,
+        })
+    }
+
+    /// Cada baile tiene su verbo, y ninguno usa el del vecino.
     ///
-    /// Una espiral es un giro continuo: es lo que hace un vals, y el vals las
-    /// usa en las cuatro figuras. El tango va en linea recta y cambia de
-    /// golpe, asi que no tiene ninguna. Si algun dia se cuela una, las dos
-    /// gramaticas empiezan a parecerse y "cada jefe es un baile" deja de ser
-    /// verdad sin que nadie se entere.
+    /// Es la regla que sostiene "cada jefe es un baile". Si se cruzan, las
+    /// gramaticas empiezan a parecerse y la idea deja de ser verdad sin que
+    /// nadie se entere jugando.
+    ///
+    /// - **El vals gira**: `Turn` en las cuatro figuras. Una espiral es un giro
+    ///   continuo, y eso es lo que hace un vals.
+    /// - **El tango va recto**: ni un `Turn`. Linea recta y cambio de golpe.
+    /// - **El charleston curva**: `spin` en todas sus figuras, y es el unico
+    ///   que lo usa. Un swing-out no es una linea ni una parada: es un arco.
     #[test]
-    fn el_vals_gira_y_el_tango_no() {
+    fn cada_baile_tiene_su_verbo_y_no_el_del_vecino() {
         let defs = BossDef::default_bosses();
+
         let vals = &defs[0];
-        let tango = &defs[1];
         assert!(
             vals.phases.iter().all(|f| hay_espirales(&f.steps)),
             "el vals sin espirales ha dejado de ser un vals"
         );
-        for f in &tango.phases {
+
+        for f in &defs[1].phases {
             assert!(
                 !hay_espirales(&f.steps),
-                "{} tiene una espiral, y eso es un vals",
+                "el tango, en {}, tiene una espiral, y eso es un vals",
+                f.name
+            );
+            assert!(
+                !hay_curvas(&f.steps),
+                "el tango, en {}, curva balas, y eso es del charleston",
                 f.name
             );
         }
+
+        let charleston = &defs[2];
+        assert!(
+            charleston.phases.iter().all(|f| hay_curvas(&f.steps)),
+            "el charleston sin arcos no se distingue de nadie"
+        );
+        for f in &charleston.phases {
+            assert!(
+                !hay_espirales(&f.steps),
+                "el charleston, en {}, tiene una espiral, y eso es un vals",
+                f.name
+            );
+        }
+        // Y el vals no curva: gira, que no es lo mismo.
+        assert!(
+            vals.phases.iter().all(|f| !hay_curvas(&f.steps)),
+            "el vals ha empezado a curvar balas"
+        );
     }
 
     #[test]
