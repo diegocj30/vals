@@ -39,6 +39,12 @@ pub const ENTRADA: Vec2 = vec2(ARENA_W * 0.5, ARENA_H - 110.0);
 pub struct Nodo {
     pub nombre: String,
     pub nivel: Nivel,
+    /// Cual de los bailes de `DEFAULT_BOSS_RONS` es.
+    ///
+    /// **No es su sitio en la pista.** La pista los reordena por nivel, asi que
+    /// el segundo nodo que ves puede ser el tercer fichero. Confundir los dos
+    /// indices hacia que entrar al charleston te metiera en el tango.
+    pub jefe: usize,
     pub pos: Vec2,
     pub vencido: bool,
 }
@@ -71,6 +77,7 @@ impl Pista {
                 nodos.push(Nodo {
                     nombre: bailes[*i].0.clone(),
                     nivel,
+                    jefe: *i,
                     pos: sitio(nivel, sitio_en_fila, fila.len()),
                     vencido: false,
                 });
@@ -309,6 +316,28 @@ mod tests {
         let cerca = |n: &Nodo| (n.pos - ENTRADA).length();
         let primero = p.nodos.iter().min_by(|a, b| cerca(a).total_cmp(&cerca(b)));
         assert_eq!(primero.unwrap().nivel, Nivel::Facil);
+    }
+
+    #[test]
+    fn cada_nodo_sabe_que_jefe_es() {
+        // La pista reordena por nivel, asi que el sitio en la pista y el sitio
+        // en la lista de ficheros son cosas distintas. Confundirlos hacia que
+        // entrar al charleston te metiera en el tango.
+        let p = Pista::new(vec![
+            ("Vals".into(), Nivel::Facil),
+            ("Tango".into(), Nivel::Dificil),
+            ("Charleston".into(), Nivel::Media),
+        ]);
+        let por_nombre = |n: &str| p.nodos.iter().find(|x| x.nombre == n).unwrap();
+        assert_eq!(por_nombre("Vals").jefe, 0);
+        assert_eq!(por_nombre("Tango").jefe, 1);
+        assert_eq!(por_nombre("Charleston").jefe, 2);
+        // Y el orden en la pista NO es el de los ficheros.
+        assert_eq!(
+            p.nodos[1].nombre, "Charleston",
+            "el segundo nodo es el medio"
+        );
+        assert_ne!(p.nodos[1].jefe, 1, "pero no es el segundo fichero");
     }
 
     #[test]

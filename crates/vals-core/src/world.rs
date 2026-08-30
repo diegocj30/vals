@@ -78,6 +78,13 @@ pub struct World {
     pub boss: Boss,
     /// Cual de los jefes se esta jugando.
     pub boss_index: usize,
+    /// Cual de los bailes de `DEFAULT_BOSS_RONS` se esta bailando.
+    ///
+    /// No es lo mismo que `boss_index`, que es el sitio dentro de **este**
+    /// mundo: en una partida de la pista el mundo tiene un solo jefe y su
+    /// indice siempre es cero. Lo necesitan la musica y el replay, que quieren
+    /// saber **que baile** es, no cual de los que hay cargados.
+    pub baile: usize,
     /// Vidas que quedan.
     pub lives: u32,
     /// Se pone a `true` al caer el ultimo jefe.
@@ -112,6 +119,7 @@ impl World {
             player_shots: Bullets::with_capacity(PLAYER_SHOT_CAPACITY),
             boss: Boss::from_def(&defs[0]),
             boss_index: 0,
+            baile: 0,
             lives: STARTING_LIVES,
             victory: false,
             defeat: false,
@@ -140,15 +148,24 @@ impl World {
         }
     }
 
-    /// Una partida que empieza en el jefe que se pida.
+    /// Una partida de **un solo baile**: el que se pida.
     ///
-    /// Es lo que necesita la pista: entrar a un baile es empezar una partida
-    /// ahi, no recorrerse los anteriores. Un indice que no existe se recorta al
-    /// ultimo, para que un mapa desincronizado no reviente la partida.
+    /// Es lo que necesita la pista, y la primera version se quedo a medias: se
+    /// cambiaba el jefe de arranque pero el mundo seguia teniendo los demas
+    /// detras, asi que al caer el vals el mundo pasaba al siguiente en vez de
+    /// dar la partida por ganada. Como la pista solo marca un baile cuando hay
+    /// `victory`, **ganar el vals no desbloqueaba nada**.
+    ///
+    /// La progresion la lleva la pista; el mundo solo baila lo que le toca. Un
+    /// indice que no existe se recorta al ultimo, para que un mapa
+    /// desincronizado no reviente la partida.
     pub fn empezar_en(seed: u64, mode: Mode, jefe: usize) -> Self {
         let mut w = Self::with_mode(seed, mode);
-        w.boss_index = jefe.min(w.boss_defs.len().saturating_sub(1));
-        w.boss = Boss::from_def(&w.boss_defs[w.boss_index]);
+        let i = jefe.min(w.boss_defs.len().saturating_sub(1));
+        w.baile = i;
+        w.boss_defs = vec![w.boss_defs[i].clone()];
+        w.boss_index = 0;
+        w.boss = Boss::from_def(&w.boss_defs[0]);
         w
     }
 
@@ -1500,6 +1517,51 @@ mod tests {
         assert!(!w.player.on_ground);
     }
 
+    /// Ganar un baile de la pista es GANAR. Sin esto no se desbloquea nada.
+    ///
+    /// El bug que esto vigila salio jugando: tras pasarse el vals, el
+    /// charleston seguia cerrado. `empezar_en` cambiaba el jefe de arranque
+    /// pero dejaba los demas detras, asi que al caer el vals el mundo pasaba al
+    /// siguiente en vez de dar la partida por ganada, y la pista solo marca un
+    /// baile cuando hay `victory`.
+    #[test]
+    fn ganar_un_baile_de_la_pista_es_ganar() {
+        for jefe in 0..BossDef::default_bosses().len() {
+            let mut w = World::empezar_en(0, Mode::Flight, jefe);
+            // Con el jefe disparando, la bailarina se muere antes de rematarlo:
+            // lo que se prueba aqui es la progresion, no esquivar.
+            w.boss_enabled = false;
+            assert_eq!(w.baile, jefe, "el mundo tiene que saber que baile es");
+            assert_eq!(w.boss_count(), 1, "un combate es UN baile");
+            rematar_jefe(&mut w);
+            assert!(w.victory, "tumbar el baile {jefe} no dio la victoria");
+        }
+    }
+
+    /// Pegarle al jefe **no** llena el medidor del super.
+    ///
+    /// La duda era si se habia colado eso al meter las particulas. No: el
+    /// medidor solo sube parriando y rozando, y lo que se ve al disparar son
+    /// las chispas del impacto, que son otra cosa. Queda como test para que la
+    /// respuesta no dependa de que alguien se acuerde.
+    #[test]
+    fn pegarle_al_jefe_no_llena_el_medidor() {
+        let mut w = mundo(0);
+        w.player.pos = w.boss.pos + Vec2::new(0.0, 150.0);
+        let vida = w.boss.hp;
+        for _ in 0..120 {
+            // Sin balas del jefe cerca no hay graze, que es lo unico que sube
+            // el medidor pasivamente.
+            w.bullets.clear();
+            w.step(DISPARAR);
+        }
+        assert!(w.boss.hp < vida, "no le esta dando");
+        assert_eq!(
+            w.player.meter, 0.0,
+            "el medidor solo sube parriando o rozando"
+        );
+    }
+
     #[test]
     fn se_puede_empezar_en_el_jefe_que_diga_la_pista() {
         let w = World::empezar_en(0, Mode::Flight, 0);
@@ -1507,8 +1569,9 @@ mod tests {
         assert_eq!(w.lives, STARTING_LIVES);
         assert!(!w.boss.defeated);
         // Un indice imposible no revienta: se queda en el ultimo que hay.
+        let ultimo = BossDef::default_bosses().len() - 1;
         let w = World::empezar_en(0, Mode::Flight, 99);
-        assert_eq!(w.boss_index, w.boss_count() - 1);
+        assert_eq!(w.baile, ultimo);
     }
 
     #[test]

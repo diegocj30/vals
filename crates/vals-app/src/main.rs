@@ -229,7 +229,11 @@ async fn run_game() {
         if frames.is_multiple_of(HOT_RELOAD_EVERY)
             && let Some(defs) = hot.poll()
         {
-            world.reload_bosses(defs);
+            // El mundo solo tiene el baile en curso, asi que se le recarga
+            // solo ese: pasarle la lista entera le devolveria los demas.
+            if let Some(def) = defs.get(world.baile) {
+                world.reload_bosses(vec![def.clone()]);
+            }
             // El replay en curso ya no reproduce nada: el jefe ha cambiado.
             recorder = Recorder::for_world(&world);
         }
@@ -240,7 +244,7 @@ async fn run_game() {
             // propia: dejar sonando el vals en el mapa decia que el vals era
             // el juego, y el vals es UN jefe del juego.
             audio.poner_musica(match escena {
-                Escena::Combate => Tema::de(world.boss_index, world.boss.phase),
+                Escena::Combate => Tema::de(world.baile, world.boss.phase),
                 _ => Tema::Sala,
             });
         }
@@ -300,7 +304,9 @@ async fn run_game() {
             escena = Escena::Combate;
             nodo_actual = i;
             marcado = false;
-            world = World::empezar_en(SEED, modo, i);
+            // Ojo: el jefe sale del NODO, no del sitio en la pista. La pista
+            // reordena por nivel.
+            world = World::empezar_en(SEED, modo, pista.nodos[i].jefe);
             recorder = Recorder::for_world(&world);
             accumulator = 0.0;
             intentos += 1;

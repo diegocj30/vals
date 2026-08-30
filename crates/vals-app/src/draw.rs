@@ -155,7 +155,7 @@ pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mu
     clear_background(BG);
     draw_arena(
         layout,
-        Tema::de(world.boss_index, world.boss.phase),
+        Tema::de(world.baile, world.boss.phase),
         world.tick as f32 + alpha,
     );
     if world.mode == Mode::Platform {
@@ -228,7 +228,7 @@ fn draw_hud(world: &World, l: &Layout) {
 
         // Y debajo, que vals suena. "Cada jefe es un baile" se entiende mejor
         // si el baile tiene nombre y autor.
-        let baile = Tema::de(world.boss_index, world.boss.phase).titulo();
+        let baile = Tema::de(world.baile, world.boss.phase).titulo();
         fuentes::derecha(
             baile,
             o.x + w - 8.0,
@@ -1043,9 +1043,10 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32) {
     draw_circle(c.x, c.y, r * 0.55, fade(BOSS_CORE, alfa));
     draw_poly_lines(c.x, c.y, 8, r * 0.55, t * 0.18, 1.5, fade(BOSS_RING, alfa));
 
-    let etiqueta = if !abierto {
-        format!("{}  ({})", nodo.nombre, nodo.nivel.nombre())
-    } else if nodo.vencido {
+    // Un baile cerrado no dice lo dificil que es: eso se descubre bailandolo.
+    // Lo unico que necesita saberse de un nodo cerrado es que esta cerrado, y
+    // eso ya lo dice que se vea mas apagado que los demas.
+    let etiqueta = if nodo.vencido {
         format!("{}  (bailado)", nodo.nombre)
     } else {
         nodo.nombre.clone()
@@ -1125,9 +1126,8 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
         // Un baile cerrado dice **por que** lo esta. "Bloqueado" a secas manda
         // a probar cosas al azar; decir que falta el nivel de antes no.
         Some(i) => format!(
-            "{} es {}: antes hay que sacar lo anterior",
-            p.nodos[i].nombre,
-            p.nodos[i].nivel.nombre()
+            "{} todavia no: antes hay que sacar lo anterior",
+            p.nodos[i].nombre
         ),
         None => "flechas andar    ESC menu".to_string(),
     };
