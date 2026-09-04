@@ -69,22 +69,6 @@ impl Voz {
         Self::new(wave, freq, freq, dur, vol, decay)
     }
 
-    /// Una voz que cae de tono mientras suena.
-    ///
-    /// Es lo que separa un bombo de una nota grave: el golpe esta en el
-    /// **barrido**, no en la frecuencia. Los efectos lo usaban desde H7; la
-    /// musica lo necesito al llegar el dembow.
-    pub(crate) const fn barrido(
-        wave: Wave,
-        f0: f32,
-        f1: f32,
-        dur: f32,
-        vol: f32,
-        decay: f32,
-    ) -> Self {
-        Self::new(wave, f0, f1, dur, vol, decay)
-    }
-
     // Solo los usan los tests de `music`, que comprueban que las notas caen
     // donde tienen que caer y que ninguna se sale del bucle.
     #[cfg(test)]

@@ -4,7 +4,7 @@ Boss-rush danmaku escrito en Rust. Jugable en nativo y en navegador.
 
 Los patrones de balas de este genero son coreografia: de ahi el nombre.
 
-Una pista de baile y cuatro jefes —El Vals, El Charleston, El Dembow y El
+Una pista de baile y cuatro jefes —El Vals, El Charleston, El Cancan y El
 Tango, cada uno con sus figuras—, que se presentan con su cartela antes de bailarlos. Tres vidas y
 un parry que te empuja a meterte donde estan las balas en vez de huir de todas.
 
@@ -51,13 +51,29 @@ Al perder se reintenta **ese** jefe, no la carrera entera.
 
 Los unicos assets del repositorio son **dos tipografias** con licencia SIL OFL
 —Poiret One y Barlow—, y son una herramienta, no arte del juego. Todo lo que se
-dibuja lo genera el codigo: las balas salen de un shader a partir de la
-distancia al centro, los personajes —la protagonista y los jefes— son esqueletos
-de articulaciones animados por codigo, y **cada jefe baila la misma gramatica
-con la que dispara**: el vals gira, el tango es una pareja que se para en seco,
-el charleston patea en la clave 3-3-2, el dembow se hunde en el bombo. El salon —pared, tarima en
+dibuja lo genera el codigo.
+
+**Se ve como un cartel de la Belle Epoque**, que es la epoca del juego: papel
+crema con grano fuera, la arena como una lamina impresa encima con su marco de
+tinta, y **una tinta por baile** —el vals azul de Prusia, el tango carmin, el
+charleston mostaza, el cancan rosa Moulin Rouge—, asi que los cuatro se
+distinguen de un vistazo con el sonido quitado. Las balas son la excepcion y a
+proposito: su color dice el tamano y la velocidad de lo que viene, y eso no
+puede cambiar de un baile a otro.
+
+Las balas salen de un shader a partir de la distancia al centro. Los personajes
+—la protagonista y los jefes— son esqueletos de articulaciones animados por
+codigo, **con contorno de tinta y miembros arqueados**: los huesos se trazan con
+una Bezier cuyo control se desplaza en perpendicular, asi que el brazo se curva
+y el codo no se ve. No hay caras; cada bailarin lleva su tocado, que es como un
+cartel resuelve un personaje.
+
+Y **cada jefe baila la misma gramatica con la que dispara**: el vals gira, el
+tango es una pareja que se para en seco, el charleston patea en la clave 3-3-2,
+el cancan levanta una pierna en cada tiempo. El salon —pared, tarima en
 perspectiva, lampara y focos— **late con el compas del tema que suena**, sin
-analizar audio: los bpm y los tiempos por compas ya estan en la partitura; las chispas y la sacudida se disparan desde los sucesos que publica el
+analizar audio: los bpm y los tiempos por compas ya estan en la partitura; las
+chispas y la sacudida se disparan desde los sucesos que publica el
 nucleo, y **el sonido y la musica se sintetizan al arrancar**: cada jefe
 tiene su vals — y como el jefe es el baile entero, **la musica va por figura**.
 El paso base suena a El Danubio azul (Strauss II, 1866) y el molinete a Sobre

@@ -400,13 +400,16 @@ mod tests {
         })
     }
 
-    /// Si en algun sitio del arbol sale una onda expansiva: varias capas
-    /// concentricas a distinta velocidad, que es un muro grueso con huecos.
-    fn hay_ondas(steps: &[Step]) -> bool {
+    /// Si en algun sitio del arbol sale una bala que se desvanece: una que
+    /// vive un momento y desaparece sola, en vez de cruzar la pantalla.
+    ///
+    /// El resto del juego dispara con `ttl: 30.0`, que a efectos practicos es
+    /// "hasta que se salga". Dos segundos es otra cosa entera.
+    fn hay_patadas(steps: &[Step]) -> bool {
         steps.iter().any(|paso| match paso {
-            Step::Fire(e) => e.rings >= 3,
-            Step::Repeat { body, .. } | Step::Forever(body) => hay_ondas(body),
-            Step::Parallel(ramas) => ramas.iter().any(|r| hay_ondas(r)),
+            Step::Fire(e) => e.ttl <= 2.0,
+            Step::Repeat { body, .. } | Step::Forever(body) => hay_patadas(body),
+            Step::Parallel(ramas) => ramas.iter().any(|r| hay_patadas(r)),
             _ => false,
         })
     }
@@ -432,9 +435,10 @@ mod tests {
     /// - **El tango va recto**: ni un `Turn`. Linea recta y cambio de golpe.
     /// - **El charleston curva**: `spin` en todas sus figuras, y es el unico
     ///   que lo usa. Un swing-out no es una linea ni una parada: es un arco.
-    /// - **El dembow apila**: `rings` alto con `speed_step` grande, muros
-    ///   gruesos que se abren. Es lo unico que hace un bajo de reggaeton en una
-    ///   sala: empujarte hacia fuera.
+    /// - **El cancan se desvanece**: `ttl` corto, asi que sus balas salen,
+    ///   cruzan un trozo de pantalla y se van solas. Una patada dura lo que
+    ///   dura la patada. Es lo que le deja ser el mas denso del juego y seguir
+    ///   siendo legible.
     #[test]
     fn cada_baile_tiene_su_verbo_y_no_el_del_vecino() {
         let defs = BossDef::default_bosses();
@@ -476,24 +480,24 @@ mod tests {
             "el vals ha empezado a curvar balas"
         );
 
-        let dembow = &defs[3];
+        let cancan = &defs[3];
         assert!(
-            dembow.phases.iter().all(|f| hay_ondas(&f.steps)),
-            "el dembow sin ondas no se distingue de nadie"
+            cancan.phases.iter().all(|f| hay_patadas(&f.steps)),
+            "el cancan sin patadas no se distingue de nadie"
         );
-        for f in &dembow.phases {
+        for f in &cancan.phases {
             assert!(
                 !hay_espirales(&f.steps) && !hay_curvas(&f.steps),
-                "el dembow, en {}, esta usando el verbo de otro",
+                "el cancan, en {}, esta usando el verbo de otro",
                 f.name
             );
         }
-        // Y los tres de antes no apilan: la onda es suya.
+        // Y los tres de antes no se desvanecen: la patada es suya.
         for otro in &defs[..3] {
             for f in &otro.phases {
                 assert!(
-                    !hay_ondas(&f.steps),
-                    "{} apila capas en {}, y eso es del dembow",
+                    !hay_patadas(&f.steps),
+                    "{} tira balas que se desvanecen en {}, y eso es del cancan",
                     otro.name,
                     f.name
                 );

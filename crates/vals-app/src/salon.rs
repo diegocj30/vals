@@ -31,12 +31,11 @@ const VETAS: usize = 11;
 /// Focos en el suelo.
 const FOCOS: usize = 3;
 
-const PARED: Color = color_u8!(9, 9, 18, 255);
-const TARIMA: Color = color_u8!(16, 16, 30, 255);
-const VETA: Color = color_u8!(34, 36, 64, 255);
-const LUZ: Color = color_u8!(150, 200, 255, 255);
-const ORO: Color = color_u8!(255, 220, 150, 255);
-const SOMBRA: Color = color_u8!(4, 4, 10, 255);
+// Los colores salen de `paleta`: la sala es madera y luz de bombilla, no un
+// vectorial azul. Sigue siendo oscura porque las balas tienen que brillar
+// encima, pero deja de ser fria, que es lo que la hacia parecer el espacio.
+use crate::paleta::{LUZ, ORO, PARED, TARIMA, VETA};
+const SOMBRA: Color = color_u8!(10, 5, 6, 255);
 
 /// Lleva un punto del suelo a la pantalla.
 ///
@@ -68,6 +67,12 @@ fn latido(tema: Tema, t: f32) -> (f32, bool) {
 pub fn dibujar(l: &Layout, tema: Tema, t: f32) {
     let (pulso, fuerte) = latido(tema, t);
     let brillo = pulso * if fuerte { 1.0 } else { 0.45 };
+
+    // La lamina es opaca. La tarima es un trapecio y deja dos triangulos
+    // sueltos bajo el horizonte; desde que el fondo es papel, por ahi se colaba
+    // la pagina dentro del escenario. Un fondo a toda la arena lo cierra.
+    let o = l.to_screen(0.0, 0.0);
+    draw_rectangle(o.x, o.y, l.len(ARENA_W), l.len(ARENA_H), PARED);
 
     pared(l, brillo);
     tarima(l);

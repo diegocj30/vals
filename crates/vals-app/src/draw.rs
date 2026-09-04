@@ -11,65 +11,100 @@ use crate::bailarines;
 use crate::bullet_renderer::BulletRenderer;
 use crate::fuentes::{self, Cara};
 use crate::music::Tema;
+use crate::paleta;
 use crate::particulas::Particulas;
 use crate::salon;
 use crate::skeleton::{self, HUESOS, N_CINTA, N_FALDA, Pose, REMATES};
 use crate::stats::FrameStats;
 
-// Paleta neon. El arte del juego es procedural: no se dibuja nada a mano.
-const BG: Color = color_u8!(8, 8, 14, 255);
-const ARENA_BG: Color = color_u8!(14, 14, 26, 255);
-const GRID: Color = color_u8!(30, 32, 58, 255);
-const BORDER: Color = color_u8!(90, 220, 255, 255);
-const PLAYER_GLOW: Color = color_u8!(120, 210, 255, 40);
-const PLAYER_BODY: Color = color_u8!(190, 240, 255, 255);
-const TRAIL: Color = color_u8!(110, 190, 255, 255);
-const TRAIL_DASH: Color = color_u8!(255, 120, 200, 255);
-const HITBOX: Color = color_u8!(255, 70, 140, 255);
+// El arte del juego es procedural: no se dibuja nada a mano. Lo que cambia
+// respecto al neon de antes no es el detalle, es el material: esto es un cartel
+// impreso, y por eso hay papel, tinta y colores de epoca. Ver `paleta.rs`.
+const BG: Color = paleta::PAPEL;
+const ARENA_BG: Color = paleta::TARIMA;
+const GRID: Color = paleta::VETA;
+const PLAYER_GLOW: Color = color_u8!(255, 226, 170, 40);
+/// La protagonista va en hueso sobre la tarima oscura: es lo que mas tiene que
+/// destacar de la pantalla despues de las balas.
+const PLAYER_BODY: Color = color_u8!(240, 232, 212, 255);
+const TRAIL: Color = color_u8!(214, 198, 164, 255);
+const TRAIL_DASH: Color = color_u8!(232, 96, 142, 255);
+const HITBOX: Color = color_u8!(226, 58, 92, 255);
+
+/// **La tinta.** Un negro calido y no un agujero: en un cartel el contorno esta
+/// impreso, no recortado.
+///
+/// Es el color que no habia. Este juego tenia 27 constantes y ninguna era un
+/// contorno, y por eso se veia a marcianitos: sin tinta todo brilla, y lo que
+/// brilla flota.
+const TINTA: Color = color_u8!(18, 13, 20, 255);
+/// Lo que engorda el contorno, en unidades logicas. Se **suma** al grosor en
+/// vez de multiplicarlo, que es lo que hace que la linea salga del mismo ancho
+/// en un antebrazo que en un muslo. Una plumilla no se ensancha con el hueso.
+///
+/// Va en unidades logicas y no en pixeles a proposito: asi el jefe, que se
+/// dibuja a 2.1, lleva un trazo mas gordo que la protagonista. Es lo que hace
+/// un dibujante cuando algo esta mas cerca. Ojo con bajarlo: los huesos mas
+/// finos miden 0.7, asi que por debajo de 1 el contorno se queda en menos de un
+/// pixel y desaparece —que es exactamente lo que paso en el primer intento—.
+const TINTA_GRUESA: f32 = 1.35;
 // Un color por tipo de bala. Que cada tipo se lea de un vistazo importa mas
 // que que sea bonito: con la pantalla llena, el color es la unica pista de a
 // que velocidad viene algo.
+//
+// **Estos no llevan la tinta del baile, y es a proposito.** Todo lo demas de la
+// pantalla cambia de color con el baile; las balas no, porque su color no es
+// decoracion, es la ficha tecnica: dice el tamano y la velocidad de lo que
+// viene. Si cambiase con el baile habria que reaprenderlo cuatro veces.
 const BULLET_COLORS: [Color; 4] = [
-    color_u8!(120, 230, 255, 255), // pequena: cian
-    color_u8!(255, 190, 90, 255),  // media: ambar
-    color_u8!(200, 130, 255, 255), // grande: violeta
-    color_u8!(255, 245, 210, 255), // aguja: blanco caliente
+    color_u8!(240, 228, 196, 255), // pequena: hueso
+    color_u8!(240, 150, 62, 255),  // media: naranja quemado
+    color_u8!(96, 176, 168, 255),  // grande: verdigris
+    color_u8!(255, 240, 170, 255), // aguja: amarillo de foco
 ];
 
-// El jefe. Formas geometricas girando: arte procedural, cero dibujo.
-const BOSS_RING: Color = color_u8!(120, 240, 255, 255);
-const BOSS_INNER: Color = color_u8!(255, 110, 190, 255);
-const BOSS_CORE: Color = color_u8!(30, 20, 60, 255);
+// El jefe ya no tiene color propio: lo saca de la tinta de su baile, en
+// `paleta::del_baile`. Lo unico que queda aqui es el disco de debajo, que es
+// sombra y no color.
+const BOSS_CORE: Color = color_u8!(20, 12, 14, 255);
 const BOSS_FLASH: Color = color_u8!(255, 255, 255, 255);
-const HP_BAR: Color = color_u8!(255, 90, 160, 255);
-const HP_BAR_BG: Color = color_u8!(40, 26, 48, 255);
-const SHOT: Color = color_u8!(180, 255, 240, 255);
-const VICTORY: Color = color_u8!(180, 255, 220, 255);
+const HP_BAR: Color = color_u8!(206, 66, 74, 255);
+const HP_BAR_BG: Color = color_u8!(52, 34, 32, 255);
+const SHOT: Color = color_u8!(248, 238, 206, 255);
+const VICTORY: Color = color_u8!(198, 214, 148, 255);
 
 // Las parryables. Rosa brillante y con un anillo que late: tienen que gritar
 // "ven a por mi" desde el otro lado de la pantalla, porque en eso consiste el
 // juego que anaden.
-const PARRYABLE: Color = color_u8!(255, 145, 210, 255);
+const PARRYABLE: Color = color_u8!(238, 112, 158, 255);
 const PARRY_RING: Color = color_u8!(255, 255, 255, 255);
-const METER: Color = color_u8!(120, 255, 200, 255);
-const METER_FULL: Color = color_u8!(255, 235, 140, 255);
-const METER_BG: Color = color_u8!(24, 40, 40, 255);
+const METER: Color = color_u8!(110, 182, 172, 255);
+const METER_FULL: Color = color_u8!(246, 206, 104, 255);
+const METER_BG: Color = color_u8!(46, 34, 32, 255);
 
-const VEIL: Color = color_u8!(6, 6, 12, 200);
-const TITLE: Color = color_u8!(200, 245, 255, 255);
-const DEFEAT: Color = color_u8!(255, 110, 150, 255);
+const VEIL: Color = color_u8!(20, 13, 15, 205);
+const TITLE: Color = color_u8!(244, 232, 204, 255);
+const DEFEAT: Color = color_u8!(214, 78, 84, 255);
 
-const GROUND: Color = color_u8!(80, 120, 190, 255);
+const GROUND: Color = color_u8!(120, 84, 66, 255);
 
 /// La tarima de la pista, y el foco que planta a cada bailarin en el suelo.
-const PISTA_SUELO: Color = color_u8!(18, 18, 34, 255);
-const PISTA_FOCO: Color = color_u8!(150, 200, 255, 60);
+const PISTA_SUELO: Color = color_u8!(42, 29, 28, 255);
+const PISTA_FOCO: Color = color_u8!(255, 212, 148, 60);
 /// La falda va mas fria que el cuerpo: separa la tela de la piel sin necesidad
 /// de dibujar ni una linea de detalle.
-const FALDA: Color = color_u8!(120, 180, 255, 255);
+const FALDA: Color = color_u8!(196, 178, 148, 255);
 
-const TEXT: Color = color_u8!(150, 210, 235, 255);
-const TEXT_DIM: Color = color_u8!(90, 120, 145, 255);
+const TEXT: Color = color_u8!(216, 200, 170, 255);
+const TEXT_DIM: Color = color_u8!(142, 124, 102, 255);
+
+// Y los mismos, para lo que se imprime **sobre el papel**: los avisos, las
+// chapas y el overlay de F1, que viven en coordenadas de pantalla y por tanto
+// caen fuera de la arena. Con los de arriba —pensados para la tarima oscura—
+// serian ilegibles: es el precio de que el marco haya dejado de ser negro.
+const TEXT_PAPEL: Color = paleta::TINTA_TENUE;
+const TEXT_PAPEL_FUERTE: Color = paleta::TINTA;
+const TEXT_PAPEL_ROJO: Color = color_u8!(158, 40, 44, 255);
 
 /// Correspondencia entre las unidades logicas del mundo y los pixeles de la
 /// ventana. El mundo nunca sabe cuantos pixeles mide nada.
@@ -84,8 +119,12 @@ impl Layout {
         // ventana estrecha —o en el navegador de un movil en vertical— escalar
         // solo por la altura saca la arena por los lados y recorta el campo de
         // juego, que en un danmaku es directamente injugable.
-        let scale = ((screen_height() - 24.0) / ARENA_H)
-            .min((screen_width() - 24.0) / ARENA_W)
+        // El margen es el papel, y ahora el papel se ve: la arena es una lamina
+        // impresa en una pagina, no una pantalla a sangre. Antes eran 24 px
+        // porque el marco era negro y daba igual.
+        const MARGEN: f32 = 76.0;
+        let scale = ((screen_height() - MARGEN) / ARENA_H)
+            .min((screen_width() - MARGEN) / ARENA_W)
             .max(0.05);
         let size = vec2(ARENA_W * scale, ARENA_H * scale);
         let origin = ((vec2(screen_width(), screen_height()) - size) * 0.5).round();
@@ -152,7 +191,7 @@ fn fade(c: Color, a: f32) -> Color {
 /// dos conviven a proposito, porque es lo que hace reproducible la comparacion
 /// de `docs/PERF.md` dentro de un ano.
 pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mut BulletRenderer>) {
-    clear_background(BG);
+    papel();
     draw_arena(
         layout,
         Tema::de(world.baile, world.boss.phase),
@@ -315,25 +354,90 @@ pub fn fin_de_partida(l: &Layout, world: &World) {
             &["el vals entero", "", "R otra vez    ESC volver a la pista"],
         );
     } else {
-        let quien = format!(
-            "caiste bailando {}  ({}/{})",
-            world.boss.phase_name(),
-            world.boss.phase + 1,
-            world.boss.phase_count()
+        sello_de_derrota(l, world);
+    }
+}
+
+/// Cuanto del combate te habias comido, de 0 a 1.
+///
+/// Las figuras anteriores cuentan enteras y la de ahora, por la vida que le
+/// quedaba al jefe. No es exacto —las figuras no duran lo mismo— y da igual:
+/// esto no es una estadistica, es **saber si te quedaste cerca**.
+fn recorrido(world: &World) -> f32 {
+    let total = world.boss.phase_count().max(1) as f32;
+    let hechas = world.boss.phase as f32;
+    ((hechas + (1.0 - world.boss.hp_ratio())) / total).clamp(0.0, 1.0)
+}
+
+/// El sello del KO y la barra de lo que te falto.
+///
+/// La barra es lo mas Cuphead que hay aqui, y no por el dibujo: es que **un
+/// juego duro tiene que decirte si te acercaste**. Si llevas cien intentos en
+/// la coda; cien intentos con esta barra son cien intentos con informacion, y
+/// sin ella son cien intentos a ciegas.
+fn sello_de_derrota(l: &Layout, world: &World) {
+    let o = l.to_screen(0.0, 0.0);
+    let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
+    draw_rectangle(o.x, o.y, w, h, VEIL);
+
+    let cx = o.x + w * 0.5;
+    let mut y = o.y + h * 0.30;
+
+    // El sello: el titulo con una orla alrededor, como un cuno de tinta.
+    let ancho = fuentes::medir("SE ACABO", 64.0, Cara::Titulo).width;
+    let (rw, rh) = (ancho * 0.5 + 34.0, 44.0);
+    for (grosor, alfa) in [(4.0, 1.0), (1.5, 0.6)] {
+        let d = if grosor > 2.0 { 0.0 } else { 7.0 };
+        draw_rectangle_lines(
+            cx - rw - d,
+            y - rh - d,
+            (rw + d) * 2.0,
+            (rh + d) * 2.0,
+            grosor,
+            fade(DEFEAT, alfa),
         );
-        draw_cartel(
-            l,
-            "SE ACABO",
-            DEFEAT,
-            &[
-                &quien,
-                "",
-                // Volver al primer jefe cada vez convertia practicar en un
-                // peaje. Se reintenta ESTE.
-                "R reintentar este baile",
-                "ESC volver a la pista",
-            ],
-        );
+    }
+    fuentes::centrado("SE ACABO", cx, y + 16.0, 64.0, Cara::Titulo, DEFEAT);
+    y += rh + 46.0;
+
+    // Donde caiste.
+    let quien = format!(
+        "{}  ({}/{})",
+        world.boss.phase_name(),
+        world.boss.phase + 1,
+        world.boss.phase_count()
+    );
+    fuentes::centrado(&quien, cx, y, 22.0, Cara::Cuerpo, TEXT);
+    y += 34.0;
+
+    // Y la barra: cuanto del baile te habias comido.
+    let hecho = recorrido(world);
+    let barra = w * 0.56;
+    let x0 = cx - barra * 0.5;
+    draw_rectangle(x0, y, barra, 9.0, HP_BAR_BG);
+    draw_rectangle(x0, y, barra * hecho, 9.0, HP_BAR);
+    draw_rectangle_lines(x0, y, barra, 9.0, 1.5, fade(TEXT_DIM, 0.9));
+    // Las marcas de cada figura, para que la barra diga algo y no solo llene.
+    let figuras = world.boss.phase_count().max(1);
+    for i in 1..figuras {
+        let x = x0 + barra * i as f32 / figuras as f32;
+        draw_line(x, y, x, y + 9.0, 1.5, fade(TEXT_DIM, 0.9));
+    }
+    y += 26.0;
+    let pct = (hecho * 100.0).round() as u32;
+    fuentes::centrado(
+        &format!("te comiste el {pct}% del baile"),
+        cx,
+        y,
+        17.0,
+        Cara::Cuerpo,
+        TEXT_DIM,
+    );
+    y += 40.0;
+
+    for linea in ["R reintentar este baile", "ESC volver a la pista"] {
+        fuentes::centrado(linea, cx, y, 19.0, Cara::Cuerpo, TEXT);
+        y += 25.0;
     }
 }
 
@@ -354,17 +458,21 @@ fn draw_boss(world: &World, alpha: f32, l: &Layout) {
     // El aro de golpeo. El cuerpo dice quien es; el aro dice donde darle.
     // Cuando el jefe era un hexagono las dos cosas eran la misma, y por eso se
     // leia bien pero no contaba nada.
+    // Y va con la tinta de su baile: un cartel de epoca se imprimia a dos o
+    // tres planchas, y aqui cada baile tiene las suyas. Es lo que hace que los
+    // cuatro se distingan de un vistazo, con el sonido quitado.
+    let (tinta_cuerpo, tinta_tela) = paleta::del_baile(world.baile);
     let (pulso, brillo) = bailarines::halo(t, vida);
     let r = l.len(b.radius) * pulso;
     draw_circle(s.x, s.y, r, fade(BOSS_CORE, 0.55));
-    draw_poly_lines(s.x, s.y, 24, r, 0.0, 1.5, fade(BOSS_RING, 0.20 + brillo));
+    draw_poly_lines(s.x, s.y, 24, r, 0.0, 1.5, fade(tinta_cuerpo, 0.20 + brillo));
 
     // Y la figura. El jefe es un bailarin, y baila lo suyo.
     let golpeado = b.hit_flash > 0;
     let (cuerpo, tela) = if golpeado {
         (BOSS_FLASH, BOSS_FLASH)
     } else {
-        (BOSS_RING, BOSS_INNER)
+        (tinta_cuerpo, tinta_tela)
     };
     let ls = l.escalado(bailarines::ESCALA);
     for pose in bailarines::poses(world.boss_index, b.phase, t, vida) {
@@ -465,12 +573,69 @@ pub fn draw_bullets_at(bullets: &Bullets, l: &Layout, phase: f32) {
     }
 }
 
-fn draw_arena(l: &Layout, tema: Tema, t: f32) {
+thread_local! {
+    /// El grano del papel. Se calcula una vez y no se vuelve a tocar.
+    static GRANO: Vec<(f32, f32, f32)> = paleta::grano();
+}
+
+/// El papel: el fondo de todo, con su grano.
+///
+/// Esto es lo que antes era `clear_background` de un negro azulado, o sea nada.
+/// Ahora el marco es **material**: una pagina crema con tooth, y la arena una
+/// lamina impresa encima. Es el cambio que mas se ve del juego entero y son
+/// diez lineas.
+fn papel() {
+    clear_background(paleta::PAPEL);
+    let (w, h) = (screen_width(), screen_height());
+    GRANO.with(|motas| {
+        for (x, y, r) in motas {
+            draw_circle(x * w, y * h, *r, fade(paleta::TINTA, 0.07));
+        }
+    });
+}
+
+/// El marco de la lamina: tinta gruesa y una esquina Deco en cada canto.
+///
+/// El borde sigue siendo informacion —dice hasta donde se puede llegar— y por
+/// eso sigue nitido. Lo que cambia es que ahora tambien dice que lo de dentro
+/// esta impreso.
+fn marco(l: &Layout) {
     let o = l.to_screen(0.0, 0.0);
+    let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
+    let gordo = l.len(5.0);
+    let fino = l.len(1.2);
+    let aire = l.len(4.5);
+
+    draw_rectangle_lines(o.x, o.y, w, h, gordo, paleta::TINTA);
+    // Un filete por fuera, separado: es lo que hace que parezca una orla
+    // impresa y no un rectangulo de programador.
+    draw_rectangle_lines(
+        o.x - aire,
+        o.y - aire,
+        w + aire * 2.0,
+        h + aire * 2.0,
+        fino,
+        fade(paleta::TINTA, 0.55),
+    );
+
+    // Las esquinas. Dos trazos en angulo por canto, hacia dentro.
+    let brazo = l.len(26.0);
+    for (cx, cy, sx, sy) in [
+        (o.x, o.y, 1.0, 1.0),
+        (o.x + w, o.y, -1.0, 1.0),
+        (o.x, o.y + h, 1.0, -1.0),
+        (o.x + w, o.y + h, -1.0, -1.0),
+    ] {
+        let d = l.len(9.0);
+        let (a, b) = (cx + sx * d, cy + sy * d);
+        draw_line(a, b, a + sx * brazo, b, fino * 2.0, paleta::TINTA);
+        draw_line(a, b, a, b + sy * brazo, fino * 2.0, paleta::TINTA);
+    }
+}
+
+fn draw_arena(l: &Layout, tema: Tema, t: f32) {
     salon::dibujar(l, tema, t);
-    // El borde si se queda nitido: es lo unico de todo esto que es informacion
-    // y no decorado. Dice hasta donde se puede llegar.
-    draw_rectangle_lines(o.x, o.y, l.len(ARENA_W), l.len(ARENA_H), 2.0, BORDER);
+    marco(l);
 }
 
 /// La estela. Se muestrea a ritmo de tick en el core, asi que se ve igual a 60
@@ -568,11 +733,14 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
     );
 }
 
-/// Dibuja la figura: falda, huesos con grosor variable, remates y cabeza.
+/// Dibuja la figura: falda, huesos arqueados, manos, zapatos, cabeza y tocado.
 ///
-/// Cada trazo se pinta dos veces, una gruesa y tenue y otra fina y viva. Es un
-/// truco barato que da el contorno de neon sin post-proceso ni una segunda
-/// pasada de render.
+/// **Todo se pinta dos veces: engordado en tinta y luego del tamano real en
+/// color.** Eso es un contorno de verdad —el mismo grosor en cada trazo, sin
+/// post-proceso ni una segunda pasada de render— y es lo que separa un dibujo
+/// de un monigote de neon. Antes eran estas mismas dos pasadas con la gorda
+/// transparente, que es el truco contrario: en vez de recortar la figura contra
+/// el fondo, la difuminaba.
 fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, alfa: f32, cuerpo: Color, tela: Color) {
     // Los jefes no llevan cintas y algunos no llevan falda. En vez de un campo
     // mas en la pose, se mira si la geometria es degenerada: si el ultimo punto
@@ -580,9 +748,11 @@ fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, alfa: f32, cuerpo: Color, tel
     let hay_cintas = p.cintas[0][N_CINTA - 1] != p.cintas[0][0];
     let hay_falda = p.falda[0] != p.falda[N_FALDA - 1];
     let punto = |j: Vec2| centro + vec2(j.x, j.y) * l.scale();
+    let cadera = punto(p.joints[skeleton::CADERA]);
 
     // --- Cintas ---
-    // Van detras de todo: son lo mas lejano y lo mas tenue.
+    // Van detras de todo: son lo mas lejano y lo mas tenue. No llevan contorno
+    // porque son mas finas que la propia tinta.
     for cinta in p.cintas.iter().filter(|_| hay_cintas) {
         for k in 0..N_CINTA - 1 {
             let (a, b) = (punto(cinta[k]), punto(cinta[k + 1]));
@@ -592,73 +762,167 @@ fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, alfa: f32, cuerpo: Color, tel
         }
     }
 
-    // --- Falda, en dos capas ---
-    // La de fuera larga y translucida, la de dentro corta y mas solida. Son dos
-    // pasadas del mismo abanico: el volumen sale de la diferencia entre ambas,
-    // no de mas geometria.
-    let cadera = punto(p.joints[skeleton::CADERA]);
-    for (escala, relleno, borde) in [(1.0, 0.18, 0.70), (0.62, 0.30, 0.95)] {
-        if !hay_falda {
-            break;
+    // La silueta entera a un grosor. `engorde` la infla en unidades logicas:
+    // con engorde y tinta sale el contorno, con cero y color sale el relleno.
+    let silueta = |engorde: f32, c_cuerpo: Color, c_tela: Color| {
+        // --- Falda ---
+        // Plana y opaca, no dos capas translucidas. Un cartel se imprimia a
+        // tintas planas, y ademas asi la falda tapa lo que hay detras en vez de
+        // dejarlo entrever, que es la mitad de lo que hacia parecer esto un
+        // esqueleto.
+        if hay_falda {
+            let bajo: Vec<Vec2> = p
+                .falda
+                .iter()
+                .map(|q| {
+                    let v = punto(*q) - cadera;
+                    cadera + v.normalize_or_zero() * (v.length() + l.len(engorde))
+                })
+                .collect();
+            for i in 0..N_FALDA - 1 {
+                draw_triangle(cadera, bajo[i], bajo[i + 1], c_tela);
+            }
+            // Los costados del abanico son radios de la cadera: engordar hacia
+            // fuera no los ensancha ni un pelo, asi que hay que trazarlos.
+            if engorde > 0.0 {
+                let g = l.len(engorde * 2.0);
+                for extremo in [bajo[0], bajo[N_FALDA - 1]] {
+                    draw_line(cadera.x, cadera.y, extremo.x, extremo.y, g, c_tela);
+                }
+            }
         }
-        for i in 0..N_FALDA - 1 {
-            let a = cadera + (punto(p.falda[i]) - cadera) * escala;
-            let b = cadera + (punto(p.falda[i + 1]) - cadera) * escala;
-            draw_triangle(cadera, a, b, fade(tela, alfa * relleno));
-            let g = l.len(0.85).max(1.0);
-            draw_line(a.x, a.y, b.x, b.y, g, fade(tela, alfa * borde));
-        }
-    }
 
-    // --- Corpino ---
-    // El torso deja de ser una linea y pasa a tener silueta.
-    let c: Vec<Vec2> = p.corpino.iter().map(|q| punto(*q)).collect();
-    draw_triangle(c[0], c[1], c[2], fade(cuerpo, alfa * 0.85));
-    draw_triangle(c[0], c[2], c[3], fade(cuerpo, alfa * 0.85));
+        // --- Corpino ---
+        // El torso deja de ser una linea y pasa a tener silueta. Se engorda
+        // empujando cada esquina desde el centro, que en un cuadrilatero
+        // convexo es exactamente un contorno.
+        let q: Vec<Vec2> = p.corpino.iter().map(|v| punto(*v)).collect();
+        let centroide = (q[0] + q[1] + q[2] + q[3]) * 0.25;
+        let q: Vec<Vec2> = q
+            .iter()
+            .map(|v| *v + (*v - centroide).normalize_or_zero() * l.len(engorde))
+            .collect();
+        draw_triangle(q[0], q[1], q[2], c_cuerpo);
+        draw_triangle(q[0], q[2], q[3], c_cuerpo);
 
-    // --- Cuerpo ---
-    for (grosor, halo) in [(1.9, 0.20), (1.0, 1.0)] {
-        let c = fade(cuerpo, alfa * halo);
-        for (a, b, r0, r1) in HUESOS {
+        // --- Huesos ---
+        for (a, b, r0, r1, arqueo) in HUESOS {
             hueso(
                 punto(p.joints[a]),
                 punto(p.joints[b]),
-                r0 * grosor,
-                r1 * grosor,
+                r0 + engorde,
+                r1 + engorde,
+                arqueo,
                 l,
-                c,
+                c_cuerpo,
             );
         }
+
+        // --- Manos ---
         for (j, r) in REMATES {
-            let q = punto(p.joints[j]);
-            draw_circle(q.x, q.y, l.len(r * grosor), c);
+            let m = punto(p.joints[j]);
+            draw_circle(m.x, m.y, l.len(r + engorde), c_cuerpo);
         }
+
+        // --- Zapatos ---
+        // Un pie redondo se lee como una pelota; uno alargado y cruzado a la
+        // espinilla se lee como un zapato. Apuntan hacia fuera, cada uno al
+        // suyo, que es como se planta una bailarina.
+        for (rodilla, pie, hacia) in [
+            (skeleton::RODILLA_I, skeleton::PIE_I, 1.0),
+            (skeleton::RODILLA_D, skeleton::PIE_D, -1.0),
+        ] {
+            let r = punto(p.joints[rodilla]);
+            let f = punto(p.joints[pie]);
+            let d = (f - r).normalize_or_zero();
+            let delante = vec2(-d.y, d.x) * hacia;
+            let ang = delante.y.atan2(delante.x).to_degrees();
+            let c = f + delante * l.len(skeleton::ZAPATO.0 * 0.3);
+            draw_ellipse(
+                c.x,
+                c.y,
+                l.len(skeleton::ZAPATO.0 + engorde),
+                l.len(skeleton::ZAPATO.1 + engorde),
+                ang,
+                c_cuerpo,
+            );
+        }
+
+        // --- Cabeza y tocado ---
         let cabeza = punto(p.joints[skeleton::CABEZA]);
         draw_circle(
             cabeza.x,
             cabeza.y,
-            l.len(skeleton::RADIO_CABEZA * grosor.min(1.25)),
-            c,
+            l.len(skeleton::RADIO_CABEZA + engorde),
+            c_cuerpo,
         );
-        let mono = punto(p.mono);
-        draw_circle(
-            mono.x,
-            mono.y,
-            l.len(skeleton::RADIO_MONO * grosor.min(1.3)),
-            c,
-        );
+        tocado(p.tocado, cabeza, punto(p.mono), engorde, l, c_cuerpo);
+    };
+
+    let tinta = fade(TINTA, alfa);
+    silueta(TINTA_GRUESA, tinta, tinta);
+    silueta(0.0, fade(cuerpo, alfa), fade(tela, alfa));
+}
+
+/// Lo que lleva en la cabeza, dibujado alrededor del punto `mono`.
+///
+/// Un cartel de epoca no dibuja caras: Toulouse-Lautrec resuelve una bailarina
+/// entera con la silueta y el sombrero. Aqui igual, y sale gratis porque la
+/// pose ya calcula el punto de encima de la cabeza.
+fn tocado(t: skeleton::Tocado, cabeza: Vec2, mono: Vec2, engorde: f32, l: &Layout, c: Color) {
+    use skeleton::{RADIO_CABEZA as R, Tocado};
+
+    let arriba = (mono - cabeza).normalize_or_zero();
+    let lado = vec2(-arriba.y, arriba.x);
+    let grados = lado.y.atan2(lado.x).to_degrees();
+
+    match t {
+        // El rodete alto de la protagonista y del vals.
+        Tocado::Mono => {
+            let r = l.len(skeleton::RADIO_MONO * 1.35 + engorde);
+            draw_circle(mono.x, mono.y, r, c);
+        }
+        // Pelo pegado y partido: el tango se baila con la cabeza quieta.
+        Tocado::Liso => {
+            let cen = cabeza + arriba * l.len(R * 0.42);
+            let (w, h) = (l.len(R * 1.02 + engorde), l.len(R * 0.60 + engorde));
+            draw_ellipse(cen.x, cen.y, w, h, grados, c);
+        }
+        // El casquete de los anos veinte, con la cinta a un lado.
+        Tocado::Casquete => {
+            let cen = cabeza + arriba * l.len(R * 0.34);
+            let (w, h) = (l.len(R * 1.20 + engorde), l.len(R * 0.88 + engorde));
+            draw_ellipse(cen.x, cen.y, w, h, grados, c);
+            let lazo = cen + lado * l.len(R * 1.05);
+            draw_circle(lazo.x, lazo.y, l.len(1.1 + engorde), c);
+        }
+        // El penacho del Moulin Rouge: tres plumas abriendose. Se reusa
+        // `hueso`, asi que salen estrechandose y curvadas sin escribir nada.
+        Tocado::Penacho => {
+            for (sep, alto) in [(-0.55, 3.4), (0.0, 4.6), (0.55, 3.6)] {
+                let dir = (arriba + lado * sep).normalize_or_zero();
+                let punta = mono + dir * l.len(alto);
+                hueso(mono, punta, 1.0 + engorde, 0.3 + engorde, sep * 1.4, l, c);
+            }
+        }
     }
 }
 
-/// Un hueso que se estrecha hacia la punta.
+/// Un hueso que se estrecha hacia la punta y **se arquea**.
 ///
 /// Se traza con circulos solapados en vez de con un poligono: a este tamano se
 /// ve igual, las uniones salen redondeadas gratis y son cuatro lineas.
-fn hueso(a: Vec2, b: Vec2, r0: f32, r1: f32, l: &Layout, color: Color) {
-    const PASOS: usize = 7;
+///
+/// El arqueo desplaza el control de una Bezier cuadratica en perpendicular al
+/// hueso. Es lo que convierte un palo en una manguera: el trazo se curva y el
+/// codo deja de verse, que es como se dibuja un brazo y como no se dibuja un
+/// esqueleto. Con arqueo cero sale exactamente la recta de siempre.
+fn hueso(a: Vec2, b: Vec2, r0: f32, r1: f32, arqueo: f32, l: &Layout, color: Color) {
+    const PASOS: usize = 9;
+    let desvio = l.len(arqueo);
     for i in 0..=PASOS {
         let t = i as f32 / PASOS as f32;
-        let p = a.lerp(b, t);
+        let p = skeleton::trazo(a, b, desvio, t);
         let r = l.len(r0 + (r1 - r0) * t).max(0.6);
         draw_circle(p.x, p.y, r, color);
     }
@@ -744,7 +1008,7 @@ pub fn bench_overlay(
     gpu: Option<&BulletRenderer>,
 ) {
     let mut y = 26.0;
-    put("ESCENA DE STRESS", HITBOX, &mut y);
+    put("ESCENA DE STRESS", TEXT_PAPEL_ROJO, &mut y);
     y += 6.0;
     stats_block(stats, steps, &mut y);
     y += 6.0;
@@ -753,25 +1017,25 @@ pub fn bench_overlay(
         TEXT,
         &mut y,
     );
-    put(&format!("objetivo {:>6}", target), TEXT_DIM, &mut y);
+    put(&format!("objetivo {:>6}", target), TEXT_PAPEL, &mut y);
     put(
         &format!("slots    {:>6}", bullets.scanned_slots()),
-        TEXT_DIM,
+        TEXT_PAPEL,
         &mut y,
     );
     y += 6.0;
     match gpu {
         Some(r) => {
-            put("render  INSTANCIADO", VICTORY, &mut y);
-            put(&format!("instancias {:>6}", r.drawn), TEXT_DIM, &mut y);
-            put(&format!("culling    {:>6}", r.culled), TEXT_DIM, &mut y);
-            put("draw calls      1", METER_FULL, &mut y);
+            put("render  INSTANCIADO", TEXT_PAPEL_FUERTE, &mut y);
+            put(&format!("instancias {:>6}", r.drawn), TEXT_PAPEL, &mut y);
+            put(&format!("culling    {:>6}", r.culled), TEXT_PAPEL, &mut y);
+            put("draw calls      1", TEXT_PAPEL_FUERTE, &mut y);
         }
         None => {
-            put("render  MACROQUAD", HITBOX, &mut y);
+            put("render  MACROQUAD", TEXT_PAPEL_ROJO, &mut y);
             put(
                 &format!("draw calls {:>6}", bullets.live_count() * 2),
-                HITBOX,
+                TEXT_PAPEL_ROJO,
                 &mut y,
             );
         }
@@ -782,7 +1046,7 @@ pub fn bench_overlay(
         screen_height() - 14.0,
         15.0,
         Cara::Cuerpo,
-        TEXT_DIM,
+        TEXT_PAPEL,
     );
 }
 
@@ -797,7 +1061,7 @@ pub fn debug_overlay(
     stats_block(stats, steps, &mut y);
 
     y += 6.0;
-    put(&format!("tick    {}", world.tick), TEXT_DIM, &mut y);
+    put(&format!("tick    {}", world.tick), TEXT_PAPEL, &mut y);
     put(
         &format!(
             "figura  {}/{}  {}",
@@ -805,27 +1069,27 @@ pub fn debug_overlay(
             world.boss.phase_count(),
             world.boss.phase_name()
         ),
-        TEXT_DIM,
+        TEXT_PAPEL,
         &mut y,
     );
-    put(&format!("vidas   {}", world.lives), TEXT_DIM, &mut y);
-    put(&format!("chispas {chispas}"), TEXT_DIM, &mut y);
+    put(&format!("vidas   {}", world.lives), TEXT_PAPEL, &mut y);
+    put(&format!("chispas {chispas}"), TEXT_PAPEL, &mut y);
     put(
         &format!("modo    {}", world.mode.nombre()),
-        TEXT_DIM,
+        TEXT_PAPEL,
         &mut y,
     );
     put(
         &format!("balas   {}", world.bullets.live_count()),
-        TEXT_DIM,
+        TEXT_PAPEL,
         &mut y,
     );
     put(
         &format!("muertes {}", world.player.deaths),
         if world.player.deaths > 0 {
-            HITBOX
+            TEXT_PAPEL_ROJO
         } else {
-            TEXT_DIM
+            TEXT_PAPEL
         },
         &mut y,
     );
@@ -834,9 +1098,9 @@ pub fn debug_overlay(
     put(
         &format!("medidor {:>3.0}%", world.player.meter_ratio() * 100.0),
         if world.player.meter_full() {
-            METER_FULL
+            TEXT_PAPEL_FUERTE
         } else {
-            TEXT_DIM
+            TEXT_PAPEL
         },
         &mut y,
     );
@@ -845,7 +1109,7 @@ pub fn debug_overlay(
             "parry {}  graze {}",
             world.player.parries, world.player.grazes
         ),
-        TEXT_DIM,
+        TEXT_PAPEL,
         &mut y,
     );
 
@@ -854,7 +1118,7 @@ pub fn debug_overlay(
     let d = &world.player.dash;
     put(
         &format!("vel  {:>5.0}", world.player.vel.length()),
-        TEXT_DIM,
+        TEXT_PAPEL,
         &mut y,
     );
     put(
@@ -863,15 +1127,15 @@ pub fn debug_overlay(
             d.ticks_left, world.player.iframes
         ),
         if world.player.is_invulnerable() {
-            HITBOX
+            TEXT_PAPEL_ROJO
         } else {
-            TEXT_DIM
+            TEXT_PAPEL
         },
         &mut y,
     );
     put(
         &format!("cd   {:>2}  buffer  {:>3}", d.cooldown, d.buffer),
-        TEXT_DIM,
+        TEXT_PAPEL,
         &mut y,
     );
 
@@ -892,13 +1156,17 @@ pub fn debug_overlay(
         screen_height() - 14.0,
         15.0,
         Cara::Cuerpo,
-        TEXT_DIM,
+        TEXT_PAPEL,
     );
 }
 
 /// Aviso de una linea. Verde si fue bien, rojo si no.
 pub fn banner(msg: &str, error: bool) {
-    let color = if error { HITBOX } else { VICTORY };
+    let color = if error {
+        TEXT_PAPEL_ROJO
+    } else {
+        TEXT_PAPEL_FUERTE
+    };
     fuentes::texto(msg, X, screen_height() - 38.0, 17.0, Cara::Cuerpo, color);
 }
 
@@ -906,14 +1174,14 @@ pub fn banner(msg: &str, error: bool) {
 pub fn recording_badge(ticks: u64) {
     let texto = format!("REC {:>5}t   F2 guardar", ticks);
     let m = fuentes::medir(&texto, 15.0, Cara::Cuerpo);
-    draw_circle(screen_width() - m.width - 26.0, 20.0, 4.0, HITBOX);
+    draw_circle(screen_width() - m.width - 26.0, 20.0, 4.0, TEXT_PAPEL_ROJO);
     fuentes::derecha(
         &texto,
         screen_width() - 16.0,
         25.0,
         15.0,
         Cara::Cuerpo,
-        TEXT_DIM,
+        TEXT_PAPEL,
     );
 }
 
@@ -931,7 +1199,7 @@ pub fn replay_badge(tick: usize, total: usize, divergencia: Option<u64>) {
         25.0,
         17.0,
         Cara::Cuerpo,
-        VICTORY,
+        TEXT_PAPEL_FUERTE,
     );
 
     if let Some(t) = divergencia {
@@ -942,7 +1210,7 @@ pub fn replay_badge(tick: usize, total: usize, divergencia: Option<u64>) {
             48.0,
             19.0,
             Cara::Cuerpo,
-            HITBOX,
+            TEXT_PAPEL_ROJO,
         );
     }
 }
@@ -1020,17 +1288,13 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32) {
         fade(PISTA_FOCO, alfa * 0.5),
     );
 
-    // El emblema, el mismo que lleva el jefe en combate.
+    // El emblema, con **la tinta de su baile**: el mismo par de colores con el
+    // que se va a pintar ese jefe cuando entres. Asi la pista deja de ser una
+    // lista de nombres y pasa a ser un programa de mano, donde cada numero
+    // tiene su color antes de haberlo bailado.
+    let (tinta, ropa) = paleta::del_baile(nodo.jefe);
     let c = vec2(s.x, s.y - r * 1.5);
-    draw_poly_lines(
-        c.x,
-        c.y,
-        6,
-        r * 1.15,
-        t * 0.4,
-        2.0,
-        fade(BOSS_RING, alfa * 0.6),
-    );
+    draw_poly_lines(c.x, c.y, 6, r * 1.15, t * 0.4, 2.0, fade(tinta, alfa * 0.6));
     draw_poly_lines(
         c.x,
         c.y,
@@ -1038,10 +1302,10 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32) {
         r * 0.85,
         -t * 0.8,
         2.5,
-        fade(BOSS_INNER, alfa * 0.85),
+        fade(ropa, alfa * 0.85),
     );
     draw_circle(c.x, c.y, r * 0.55, fade(BOSS_CORE, alfa));
-    draw_poly_lines(c.x, c.y, 8, r * 0.55, t * 0.18, 1.5, fade(BOSS_RING, alfa));
+    draw_poly_lines(c.x, c.y, 8, r * 0.55, t * 0.18, 1.5, fade(tinta, alfa));
 
     // Un baile cerrado no dice lo dificil que es: eso se descubre bailandolo.
     // Lo unico que necesita saberse de un nodo cerrado es que esta cerrado, y
@@ -1144,4 +1408,43 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
 /// Las chispas, encima de todo.
 pub fn particulas(p: &Particulas, l: &Layout) {
     p.draw(|q| l.to_screen(q.x, q.y), l.scale());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vals_core::{Mode, World};
+
+    #[test]
+    fn el_recorrido_dice_cuanto_te_comiste() {
+        // La barra del KO es lo que convierte cien intentos a ciegas en cien
+        // intentos con informacion, asi que tiene que ser honesta.
+        let mut w = World::with_mode(7, Mode::Flight);
+        let figuras = w.boss.phase_count();
+        assert!(
+            figuras >= 2,
+            "este test necesita un jefe con varias figuras"
+        );
+
+        // Recien empezado, casi nada.
+        assert!(recorrido(&w) < 0.05, "empieza cerca de cero");
+
+        // Y cuanto mas lejos llegas, mas marca. Es lo unico que se le pide: no
+        // es una estadistica, es saber si te quedaste cerca.
+        let mut antes = recorrido(&w);
+        for fase in 1..figuras {
+            w.boss.phase = fase;
+            let ahora = recorrido(&w);
+            assert!(
+                ahora > antes,
+                "la figura {fase} no marca mas que la anterior"
+            );
+            antes = ahora;
+        }
+
+        // Y nunca se sale de la barra, pase lo que pase con los indices.
+        w.boss.phase = figuras + 5;
+        let r = recorrido(&w);
+        assert!((0.0..=1.0).contains(&r), "se ha salido de la barra: {r}");
+    }
 }

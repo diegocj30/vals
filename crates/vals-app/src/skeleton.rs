@@ -38,25 +38,45 @@ pub const RODILLA_D: usize = 9;
 pub const PIE_D: usize = 10;
 pub const N_JOINTS: usize = 11;
 
-/// Que articulaciones une cada hueso, y su grosor en cada extremo.
+/// Que articulaciones une cada hueso, su grosor en cada extremo y **cuanto se
+/// arquea**.
 ///
 /// Los huesos se estrechan hacia la punta. Es la diferencia entre una figura
 /// que parece un cuerpo y una que parece un monigote de palos.
-pub const HUESOS: [(usize, usize, f32, f32); 10] = [
-    (CADERA, PECHO, 2.3, 1.9),
-    (PECHO, CABEZA, 1.7, 1.2),
-    (PECHO, CODO_I, 1.5, 1.1),
-    (CODO_I, MANO_I, 1.1, 0.7),
-    (PECHO, CODO_D, 1.5, 1.1),
-    (CODO_D, MANO_D, 1.1, 0.7),
-    (CADERA, RODILLA_I, 1.9, 1.3),
-    (RODILLA_I, PIE_I, 1.3, 0.8),
-    (CADERA, RODILLA_D, 1.9, 1.3),
-    (RODILLA_D, PIE_D, 1.3, 0.8),
+///
+/// Y el cuarto numero es el que quita lo de "palotes": desplaza el punto medio
+/// del hueso en perpendicular, asi que el trazo deja de ser un segmento y pasa
+/// a ser una curva **sin codo a la vista**. El tronco y el cuello van rectos,
+/// que son huesos de verdad; los brazos y las piernas se arquean, que es lo que
+/// hace un dibujo y no un esqueleto.
+///
+/// El signo importa: el lado derecho lleva el contrario del izquierdo, porque
+/// la perpendicular de un vector espejado apunta al reves. Con el mismo signo
+/// en los dos lados la figura se arquearia hacia el mismo sitio y se veria
+/// torcida.
+pub const HUESOS: [(usize, usize, f32, f32, f32); 10] = [
+    (CADERA, PECHO, 2.3, 1.9, 0.0),
+    (PECHO, CABEZA, 1.7, 1.2, 0.0),
+    (PECHO, CODO_I, 1.5, 1.1, 1.15),
+    (CODO_I, MANO_I, 1.1, 0.7, 1.00),
+    (PECHO, CODO_D, 1.5, 1.1, -1.15),
+    (CODO_D, MANO_D, 1.1, 0.7, -1.00),
+    (CADERA, RODILLA_I, 1.9, 1.3, 0.85),
+    (RODILLA_I, PIE_I, 1.3, 0.8, 0.70),
+    (CADERA, RODILLA_D, 1.9, 1.3, -0.85),
+    (RODILLA_D, PIE_D, 1.3, 0.8, -0.70),
 ];
 
-/// Extremos que llevan un remate redondo: manos y pies.
-pub const REMATES: [(usize, f32); 4] = [(MANO_I, 1.0), (MANO_D, 1.0), (PIE_I, 1.1), (PIE_D, 1.1)];
+/// Las manos, que ahora son manos y no puntas de palo.
+///
+/// Un extremo grande es la mitad de la lectura de un personaje dibujado: por
+/// eso los guantes de los dibujos de los anos veinte son enormes. Los pies no
+/// estan aqui porque no son circulos, son zapatos: los dibuja `draw_figura`
+/// como elipses orientadas segun la espinilla.
+pub const REMATES: [(usize, f32); 2] = [(MANO_I, 2.0), (MANO_D, 2.0)];
+
+/// Largo y ancho del zapato.
+pub const ZAPATO: (f32, f32) = (2.7, 1.4);
 
 // Proporciones, en unidades logicas.
 const TORSO: f32 = 7.0;
@@ -65,6 +85,26 @@ pub const RADIO_CABEZA: f32 = 3.2;
 /// El mono, encima de la cabeza. Un detalle diminuto que dice "bailarina" mas
 /// rapido que cualquier otra cosa de la figura.
 pub const RADIO_MONO: f32 = 1.6;
+
+/// Lo que lleva cada figura en la cabeza.
+///
+/// Es lo unico que distingue una silueta de otra cuando estan quietas, y a
+/// cambio no cuesta ni una articulacion: se dibuja alrededor del punto `mono`,
+/// que la pose ya calcula. Un cartel de epoca no dibuja caras —Toulouse-Lautrec
+/// resuelve una bailarina entera con la silueta y el sombrero—, asi que aqui
+/// tampoco: el tocado hace todo el trabajo que haria una cara.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Tocado {
+    /// El mono de la protagonista y del vals: un rodete alto.
+    #[default]
+    Mono,
+    /// Pelo pegado, partido y liso. El tango.
+    Liso,
+    /// Casquete con cinta, que es el sombrero de los anos veinte.
+    Casquete,
+    /// Penacho de plumas. El cancan.
+    Penacho,
+}
 const BRAZO: f32 = 6.0;
 const ANTEBRAZO: f32 = 5.5;
 const MUSLO: f32 = 7.0;
@@ -99,6 +139,25 @@ pub struct Pose {
     pub corpino: [Vec2; 4],
     /// Cintas que salen de cada mano y se quedan atras.
     pub cintas: [[Vec2; N_CINTA]; 2],
+    /// Lo que lleva en la cabeza.
+    pub tocado: Tocado,
+}
+
+/// Un punto del trazo de un hueso, a lo largo de `t` de 0 a 1.
+///
+/// Es una Bezier cuadratica cuyo control es el punto medio desplazado `desvio`
+/// en perpendicular al hueso. **Con desvio cero sale exactamente
+/// `a.lerp(b, t)`**, o sea la recta de siempre; con desvio, el trazo se arquea
+/// y el codo deja de verse. Eso es lo que convierte un palo en una manguera, y
+/// es todo lo que hace falta para que la figura deje de parecer un esqueleto.
+///
+/// Ojo con la magnitud: la comba en el punto medio es **la mitad** del desvio,
+/// que es como se comporta una cuadratica y no como se espera a primera vista.
+pub fn trazo(a: Vec2, b: Vec2, desvio: f32, t: f32) -> Vec2 {
+    let d = b - a;
+    let control = a.lerp(b, 0.5) + vec2(-d.y, d.x).normalize_or_zero() * desvio;
+    let u = 1.0 - t;
+    a * (u * u) + control * (2.0 * u * t) + b * (t * t)
 }
 
 fn desde(p: Vec2, ang: f32, largo: f32) -> Vec2 {
@@ -279,6 +338,8 @@ pub fn pose(p: &Player, phase: f32, gravity: bool, elegancia: f32) -> Pose {
         mono,
         corpino,
         cintas,
+        // La protagonista lleva mono, y de ahi sale el nombre del punto.
+        tocado: Tocado::Mono,
     }
 }
 
@@ -493,5 +554,70 @@ mod tests {
         let p = pose(&jugador(), 0.0, false, 0.0);
         assert!(p.mono.y < p.joints[CABEZA].y);
         assert!((p.mono - p.joints[CABEZA]).length() < RADIO_CABEZA + RADIO_MONO + 0.5);
+    }
+
+    #[test]
+    fn un_hueso_sin_arqueo_es_la_recta_de_siempre() {
+        // La manguera es una opcion, no un impuesto: el tronco y el cuello
+        // siguen siendo rectos y tienen que salir clavados a como salian.
+        let (a, b) = (vec2(10.0, 20.0), vec2(60.0, -15.0));
+        for k in 0..=10 {
+            let t = k as f32 / 10.0;
+            let recto = a.lerp(b, t);
+            let curvo = trazo(a, b, 0.0, t);
+            assert!(
+                (recto - curvo).length() < 0.0001,
+                "en t={t} la recta se ha movido: {recto} vs {curvo}"
+            );
+        }
+    }
+
+    #[test]
+    fn el_arqueo_comba_el_hueso_en_perpendicular_y_a_la_mitad() {
+        // Dos cosas que se olvidan y luego no cuadra nada: la comba va
+        // perpendicular al hueso, y en el centro vale la MITAD del desvio,
+        // porque asi es una Bezier cuadratica.
+        let (a, b) = (vec2(0.0, 0.0), vec2(40.0, 0.0));
+        let medio = trazo(a, b, 10.0, 0.5);
+        assert!((medio.x - 20.0).abs() < 0.001, "se ha ido a lo largo");
+        assert!((medio.y - 5.0).abs() < 0.001, "la comba no es la mitad");
+        // Y los extremos no se mueven: un hueso arqueado sigue uniendo las dos
+        // articulaciones, que es lo que impide que la pose se rompa.
+        assert!((trazo(a, b, 10.0, 0.0) - a).length() < 0.0001);
+        assert!((trazo(a, b, 10.0, 1.0) - b).length() < 0.0001);
+    }
+
+    #[test]
+    fn los_dos_lados_se_arquean_al_reves() {
+        // La perpendicular de un vector espejado apunta al contrario, asi que
+        // el lado derecho lleva el signo cambiado. Con el mismo signo en los
+        // dos la figura se arquearia toda hacia el mismo sitio y se veria
+        // torcida, que es un fallo facil de meter y dificil de ver leyendo.
+        let arqueo = |desde: usize, hasta: usize| {
+            HUESOS
+                .iter()
+                .find(|(a, b, ..)| *a == desde && *b == hasta)
+                .map(|(.., q)| *q)
+                .expect("ese hueso no esta en la tabla")
+        };
+        for (i, d) in [
+            ((PECHO, CODO_I), (PECHO, CODO_D)),
+            ((CODO_I, MANO_I), (CODO_D, MANO_D)),
+            ((CADERA, RODILLA_I), (CADERA, RODILLA_D)),
+            ((RODILLA_I, PIE_I), (RODILLA_D, PIE_D)),
+        ] {
+            let (qi, qd) = (arqueo(i.0, i.1), arqueo(d.0, d.1));
+            assert!(
+                qi.abs() > 0.1,
+                "un miembro sin arquear sigue siendo un palo"
+            );
+            assert!(
+                (qi + qd).abs() < 0.0001,
+                "los lados no se espejan: {qi} y {qd}"
+            );
+        }
+        // Y lo que es hueso de verdad va recto.
+        assert_eq!(arqueo(CADERA, PECHO), 0.0);
+        assert_eq!(arqueo(PECHO, CABEZA), 0.0);
     }
 }

@@ -123,6 +123,16 @@ impl Mando {
         }
     }
 
+    /// Si **algun** boton se acaba de pulsar en este frame.
+    ///
+    /// Distinto de mirar si hay algo apretado: al entrar a un baile con el
+    /// mando, el boton con el que entras sigue pulsado despues, y confundir las
+    /// dos cosas hacia que la cartela de presentacion se saltara sola.
+    pub fn algo_pulsado(&self) -> bool {
+        let botones = !(CONECTADO | PLAYSTATION);
+        (self.actual & botones) & !(self.anterior & botones) != 0
+    }
+
     /// Si un boton se acaba de pulsar en este frame.
     ///
     /// Lo necesitan el menu y la pista, que reaccionan a la pulsacion y no a
@@ -246,6 +256,24 @@ mod tests {
         };
         assert_eq!(m.frame().bits(), 0);
         assert_eq!(m.botones()[3], "triangulo");
+    }
+
+    #[test]
+    fn algo_pulsado_es_un_flanco_y_no_un_estado() {
+        let mut m = Mando {
+            anterior: 0,
+            actual: 0,
+            #[cfg(not(target_arch = "wasm32"))]
+            gilrs: None,
+        };
+        m.actual = CONECTADO | InputFrame::SHOOT;
+        assert!(m.algo_pulsado(), "el frame en que se pulsa, si");
+        m.anterior = m.actual;
+        assert!(!m.algo_pulsado(), "mantenerlo apretado, no");
+        // Y estar conectado no cuenta como pulsar.
+        m.anterior = 0;
+        m.actual = CONECTADO | PLAYSTATION;
+        assert!(!m.algo_pulsado());
     }
 
     #[test]

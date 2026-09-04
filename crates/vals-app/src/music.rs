@@ -75,13 +75,13 @@ pub enum Tema {
     /// Y la primera otra vez, un tono arriba y corriendo.
     CharlestonFin,
 
-    // --- El Dembow ---
-    /// Un dembow escrito aqui: no hay reggaeton de dominio publico.
-    Bombo,
-    /// Su segunda parte.
-    Perreo,
-    /// Y la primera otra vez, un tono arriba y mas rapida.
-    Bajon,
+    // --- El Cancan ---
+    /// El galop infernal, primera parte. 2/4, y el unico de dos tiempos.
+    Cancan,
+    /// Su segunda parte, en sol.
+    Galop,
+    /// Y la primera otra vez, un tono arriba y desbocada.
+    Infernal,
 }
 
 /// Todos, en el orden en que se sintetizan y se guardan.
@@ -97,9 +97,9 @@ pub const TEMAS: [Tema; 14] = [
     Tema::CharlestonA,
     Tema::CharlestonB,
     Tema::CharlestonFin,
-    Tema::Bombo,
-    Tema::Perreo,
-    Tema::Bajon,
+    Tema::Cancan,
+    Tema::Galop,
+    Tema::Infernal,
 ];
 
 impl Tema {
@@ -120,9 +120,9 @@ impl Tema {
             (2, 0) => Tema::CharlestonA,
             (2, 1) => Tema::CharlestonB,
             (2, _) => Tema::CharlestonFin,
-            (_, 0) => Tema::Bombo,
-            (_, 1) => Tema::Perreo,
-            (_, _) => Tema::Bajon,
+            (_, 0) => Tema::Cancan,
+            (_, 1) => Tema::Galop,
+            (_, _) => Tema::Infernal,
         }
     }
 
@@ -217,10 +217,6 @@ enum Acompanamiento {
     /// marcato en donde caen los golpes y no se parece en nada al oirlo,
     /// porque el bajo se mueve en vez de repetirse.
     Stride,
-    /// Bombo, caja y acorde sostenido, en la reja de semicorcheas del dembow.
-    /// Es el unico acompanamiento con percusion de verdad, porque es el unico
-    /// genero de los cuatro en el que el ritmo **es** la pieza.
-    Dembow,
     /// Ni una cosa ni la otra: notas largas y nada de golpes. Una sala no
     /// tiene compas porque no se esta bailando todavia.
     Sala,
@@ -453,49 +449,56 @@ const RAG_B_ACORDES: [Acorde; 8] = [
     sep(7), sep(7), may(0), may(0),
 ];
 
-/// **El dembow**, escrito aqui. Es la unica musica del juego que no es de
-/// dominio publico, y no por gusto: **no existe reggaeton libre**. El genero es
-/// de los noventa para aca y todo lo que hay tiene dueno.
+/// **El galop infernal** de Offenbach, de "Orfeo en los infiernos" (1858). Lo
+/// que todo el mundo llama el cancan.
 ///
-/// Y no hace falta que lo haya. Lo que identifica a un dembow no es una
-/// melodia, es **el patron**: bombo en las semicorcheas 0 y 8, caja en 3, 6, 11
-/// y 14. Eso es un ritmo, no una obra, y ademas vive en el acompanamiento. La
-/// melodia de aqui es un riff propio en la menor sobre la progresion mas
-/// gastada del genero, i - bVI - bIII - bVII.
+/// Aqui hubo un dembow escrito a mano, y se quito: no casaba con el salon. Lo
+/// que se le pedia —un baile que rompiera el programa educado de la sala— ya
+/// existia dentro de este mundo y ademas es de dominio publico. El cancan
+/// escandalizo a Paris, se bailaba en music-halls y llego a estar prohibido:
+/// hace el mismo papel sin salirse de epoca.
 ///
-/// Un compas son dieciseis unidades, o sea que **cada unidad es una
-/// semicorchea**: la reja de la tabla y la del ritmo son la misma.
+/// Esta transcrito de la notacion ABC en re mayor, y es la unica pieza del
+/// juego **en dos tiempos**. Un compas son ocho unidades, o sea que cada unidad
+/// es una semicorchea y cada corchea son dos; el original esta escrito en 4/4,
+/// pero sus acordes cambian a mitad de compas, que es la propia partitura
+/// diciendo que en realidad va en dos.
 #[rustfmt::skip]
-const RIFF_A: [Nota; 50] = [
-    n(0, 3), n(0, 1), n(3, 2), z(2), n(7, 3), n(5, 1), n(3, 4),             // 1
-    n(2, 3), n(0, 1), n(-2, 2), z(2), n(0, 4), z(4),                        // 2
-    n(8, 3), n(8, 1), n(7, 2), z(2), n(5, 3), n(3, 1), n(2, 4),             // 3
-    n(0, 3), n(2, 1), n(3, 2), z(2), n(2, 4), z(4),                         // 4
-    n(0, 3), n(0, 1), n(3, 2), z(2), n(7, 3), n(5, 1), n(3, 4),             // 5
-    n(2, 3), n(0, 1), n(-2, 2), z(2), n(0, 4), z(4),                        // 6
-    n(12, 3), n(10, 1), n(8, 2), z(2), n(7, 3), n(5, 1), n(3, 4),           // 7
-    n(0, 6), z(2), n(0, 4), z(4),                                           // 8
+const GALOP_A: [Nota; 22] = [
+    n(16, 4), n(12, 4),                                                     // 1
+    n(9, 4), n(7, 4),                                                       // 2
+    n(7, 2), n(2, 2), n(4, 2), n(5, 2),                                     // 3
+    n(4, 2), n(2, 2), n(0, 4),                                              // 4
+    n(16, 4), n(12, 4),                                                     // 5
+    n(9, 4), n(7, 4),                                                       // 6
+    n(6, 2), n(7, 2), n(9, 2), n(11, 2),                                    // 7
+    n(14, 2), n(12, 2), n(12, 4),                                           // 8
 ];
 
-/// La segunda parte: mas arriba y toda a contratiempo.
 #[rustfmt::skip]
-const RIFF_B: [Nota; 47] = [
-    z(2), n(7, 2), n(8, 2), n(7, 2), n(5, 4), z(4),                         // 1
-    z(2), n(3, 2), n(5, 2), n(3, 2), n(2, 4), z(4),                         // 2
-    z(2), n(12, 2), n(10, 2), n(8, 2), n(7, 4), z(4),                       // 3
-    z(2), n(5, 2), n(3, 2), n(2, 2), n(0, 4), z(4),                         // 4
-    n(7, 2), n(7, 1), n(7, 1), n(8, 2), n(7, 2), n(5, 4), z(4),             // 5
-    n(3, 2), n(3, 1), n(3, 1), n(5, 2), n(3, 2), n(2, 4), z(4),             // 6
-    n(12, 2), n(10, 2), n(8, 2), n(7, 2), n(5, 2), n(3, 2), n(2, 4),        // 7
-    n(0, 8), z(8),                                                          // 8
+const GALOP_A_ACORDES: [Acorde; 8] = [
+    may(0), may(0), sep(7), may(0),
+    may(0), may(0), sep(7), may(0),
 ];
 
-/// i - bVI - bIII - bVII, dos veces. La progresion mas gastada del genero, y
-/// esta gastada por algo.
+/// La segunda parte, que en el original cambia a sol mayor. Se transcribe tal
+/// cual y lo que se mueve es la tonica de la partitura, no las notas.
 #[rustfmt::skip]
-const DEMBOW_ACORDES: [Acorde; 8] = [
-    men(0), may(8), may(3), may(10),
-    men(0), may(8), may(3), may(10),
+const GALOP_B: [Nota; 25] = [
+    n(0, 8),                                                                // 1
+    n(2, 2), n(5, 2), n(4, 2), n(2, 2),                                     // 2
+    n(7, 4), n(7, 4),                                                       // 3
+    n(7, 2), n(9, 2), n(4, 2), n(5, 2),                                     // 4
+    n(2, 4), n(2, 4),                                                       // 5
+    n(2, 2), n(5, 2), n(4, 2), n(2, 2),                                     // 6
+    n(0, 2), n(12, 2), n(11, 2), n(9, 2),                                   // 7
+    n(7, 2), n(5, 2), n(4, 2), n(2, 2),                                     // 8
+];
+
+#[rustfmt::skip]
+const GALOP_B_ACORDES: [Acorde; 8] = [
+    may(0), sep(7), may(0), may(0),
+    may(7), sep(7), may(0), sep(7),
 ];
 
 /// Todo lo que hace falta para sonar.
@@ -646,38 +649,43 @@ fn partitura(t: Tema) -> Partitura {
         // Y otra vez la primera, un tono arriba y corriendo. Los tres bailes
         // cierran igual, y no es pereza: volver al tema del principio para
         // acabar es lo que hacen las tres musicas de verdad.
-        Tema::Bombo => Partitura {
-            titulo: "Dembow - escrito para esto",
-            bpm: 90.0,
-            tiempos: 4,
-            acompanamiento: Acompanamiento::Dembow,
-            tonica: 12, // la
-            melodia: &RIFF_A,
-            acordes: &DEMBOW_ACORDES,
+        // El cancan. `OomPahPah` en DOS tiempos es exactamente el oom-pah de
+        // un galop: grave al uno, acorde al dos. El mismo acompanamiento del
+        // vals metido en un compas de dos suena a otra cosa entera, que es lo
+        // que hace que no haga falta inventarse uno nuevo.
+        Tema::Cancan => Partitura {
+            titulo: "El galop infernal - Offenbach, 1858",
+            bpm: 150.0,
+            tiempos: 2,
+            acompanamiento: Acompanamiento::OomPahPah,
+            tonica: 17, // re
+            melodia: &GALOP_A,
+            acordes: &GALOP_A_ACORDES,
             espejo: false,
             swing: false,
         },
-        Tema::Perreo => Partitura {
-            titulo: "Dembow, segunda parte",
-            bpm: 92.0,
-            tiempos: 4,
-            acompanamiento: Acompanamiento::Dembow,
-            tonica: 12,
-            melodia: &RIFF_B,
-            acordes: &DEMBOW_ACORDES,
+        Tema::Galop => Partitura {
+            titulo: "El galop infernal, segunda parte",
+            bpm: 150.0,
+            tiempos: 2,
+            acompanamiento: Acompanamiento::OomPahPah,
+            tonica: 22, // sol: el original tambien cambia de tono aqui
+            melodia: &GALOP_B,
+            acordes: &GALOP_B_ACORDES,
             espejo: false,
             swing: false,
         },
         // Los cuatro bailes cierran igual: el tema del principio, un tono
-        // arriba y mas rapido. Aqui ademas es lo que hace un bajon.
-        Tema::Bajon => Partitura {
-            titulo: "Dembow, el bajon",
-            bpm: 104.0,
-            tiempos: 4,
-            acompanamiento: Acompanamiento::Dembow,
-            tonica: 14,
-            melodia: &RIFF_A,
-            acordes: &DEMBOW_ACORDES,
+        // arriba y mas rapido. Aqui ademas es lo que hace un galop de verdad,
+        // que es una carrera hasta que alguien se cae.
+        Tema::Infernal => Partitura {
+            titulo: "El galop infernal, desbocado",
+            bpm: 180.0,
+            tiempos: 2,
+            acompanamiento: Acompanamiento::OomPahPah,
+            tonica: 19, // mi
+            melodia: &GALOP_A,
+            acordes: &GALOP_A_ACORDES,
             espejo: false,
             swing: false,
         },
@@ -926,34 +934,6 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
                     }
                 }
             }
-            // El dembow. Bombo en las semicorcheas 0 y 8, caja en 3, 6, 11 y
-            // 14: eso **es** el genero, y es lo unico que hace falta para que
-            // se reconozca. La reja de aqui es la misma que la del RON, asi que
-            // las balas y la percusion caen juntas.
-            Acompanamiento::Dembow => {
-                let semi = t / 4.0;
-                let hondo = frecuencia(bajo(raiz));
-                for s in [0, 8] {
-                    let cuando = t0 + s as f32 * semi;
-                    // Un bombo es un barrido que cae de tono, no una nota
-                    // grave: el golpe esta en la caida.
-                    v.push(
-                        Voz::barrido(Wave::Sine, hondo * 2.4, hondo * 0.55, semi * 3.0, 0.40, 3.0)
-                            .tras(cuando),
-                    );
-                }
-                for s in [3, 6, 11, 14] {
-                    let cuando = t0 + s as f32 * semi;
-                    // La caja es ruido. La frecuencia no la usa la sintesis del
-                    // ruido, pero se declara alta para que no la confundan con
-                    // un grave los tests que miran el registro.
-                    v.push(Voz::nota(Wave::Noise, 900.0, semi * 1.4, 0.085, 6.0).tras(cuando));
-                }
-                // Y el acorde debajo, sostenido: lo unico melodico del ritmo.
-                for f in triada() {
-                    v.push(Voz::nota(Wave::Sine, f, t * 3.4, 0.045, 1.1).tras(t0));
-                }
-            }
             // Sin golpes: el grave y el acorde duran el compas entero. No hay
             // compas que marcar porque todavia no se esta bailando.
             Acompanamiento::Sala => {
@@ -1065,13 +1045,7 @@ mod tests {
         // El bajo vive por debajo de 150 Hz y la melodia por encima de 200.
         // Es lo que deja sitio en medio para los acordes.
         //
-        // El dembow queda fuera, y no por hacerle un hueco: **su bombo no es
-        // una nota, es un barrido**. Empieza arriba y cae, asi que cruza esa
-        // franja a proposito. Hablar de su registro no significa nada.
         for b in TODOS {
-            if partitura(b).acompanamiento == Acompanamiento::Dembow {
-                continue;
-            }
             for voz in tema(b) {
                 let f = voz.frecuencia();
                 assert!(
@@ -1195,42 +1169,31 @@ mod tests {
     }
 
     #[test]
-    fn la_caja_del_dembow_cae_donde_tiene_que_caer() {
-        // El patron ES el genero. Bombo en las semicorcheas 0 y 8, caja en 3,
-        // 6, 11 y 14. Si esto se mueve deja de sonar a dembow y pasa a sonar a
-        // "cuatro por cuatro con ruido", que es otra cosa.
-        for t in [Tema::Bombo, Tema::Perreo, Tema::Bajon] {
-            let p = partitura(t);
-            assert!(p.acompanamiento == Acompanamiento::Dembow);
-            let semi = 60.0 / p.bpm / 4.0;
-            let sitios: Vec<u32> = tema(t)
-                .iter()
-                .filter(|v| matches!(v.forma(), Wave::Noise))
-                .map(|v| (v.inicio() / semi).round() as u32 % 16)
-                .collect();
-            assert_eq!(
-                sitios.len(),
-                p.acordes.len() * 4,
-                "{t:?}: cuatro cajas por compas"
-            );
-            for (i, s) in sitios.iter().enumerate() {
-                assert_eq!(
-                    *s,
-                    [3, 6, 11, 14][i % 4],
-                    "{t:?}: la caja {i} esta fuera de sitio"
-                );
-            }
+    fn el_cancan_es_el_unico_de_dos_tiempos() {
+        // Es lo que le da su aire, y no cuesta una linea de sintesis: el mismo
+        // `OomPahPah` del vals metido en un compas de dos es el oom-pah de un
+        // galop. Si esto se va a cuatro, el cancan pasa a sonar a marcha.
+        for t in TEMAS {
+            let esperado = match t {
+                Tema::Cancan | Tema::Galop | Tema::Infernal => 2,
+                Tema::PasoBase | Tema::Espejo | Tema::Molinete | Tema::Coda => 3,
+                _ => 4,
+            };
+            assert_eq!(partitura(t).tiempos, esperado, "{t:?}");
         }
     }
 
     #[test]
-    fn el_dembow_es_el_unico_con_percusion() {
-        // Es el unico genero de los cuatro en el que el ritmo es la pieza. En
-        // los otros tres, meter ruido seria ponerle una bateria a un vals.
+    fn no_hay_percusion_en_ninguna_pieza() {
+        // Hubo un dembow con bombo y caja de ruido, y se fue con el. Los cuatro
+        // bailes que quedan son de banda de salon: meter ruido aqui seria
+        // ponerle una bateria a un vals. El `Wave::Noise` sigue siendo de los
+        // efectos, que es de donde salio.
         for t in TEMAS {
-            let hay_ruido = tema(t).iter().any(|v| matches!(v.forma(), Wave::Noise));
-            let es_dembow = matches!(t, Tema::Bombo | Tema::Perreo | Tema::Bajon);
-            assert_eq!(hay_ruido, es_dembow, "{t:?}");
+            assert!(
+                !tema(t).iter().any(|v| matches!(v.forma(), Wave::Noise)),
+                "{t:?}: percusion en la musica"
+            );
         }
     }
 
@@ -1268,8 +1231,8 @@ mod tests {
         assert_ne!(Tema::de(0, 0), Tema::de(1, 0));
         // Una fase que no existe cae en la ultima figura de SU baile.
         assert_eq!(Tema::de(2, 1), Tema::CharlestonB);
-        assert_eq!(Tema::de(3, 1), Tema::Perreo);
-        assert_eq!(Tema::de(3, 99), Tema::Bajon);
+        assert_eq!(Tema::de(3, 1), Tema::Galop);
+        assert_eq!(Tema::de(3, 99), Tema::Infernal);
         assert_eq!(Tema::de(0, 99), Tema::Coda);
         assert_eq!(Tema::de(1, 99), Tema::Quebrada);
         assert_eq!(Tema::de(2, 99), Tema::CharlestonFin);

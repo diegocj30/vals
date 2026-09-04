@@ -26,7 +26,7 @@ use vals_core::math::{PI, TAU, sin_cos};
 
 use crate::skeleton::{
     CABEZA, CADERA, CODO_D, CODO_I, MANO_D, MANO_I, N_CINTA, N_FALDA, N_JOINTS, PECHO, PIE_D,
-    PIE_I, Pose, RADIO_CABEZA, RADIO_MONO, RODILLA_D, RODILLA_I,
+    PIE_I, Pose, RADIO_CABEZA, RADIO_MONO, RODILLA_D, RODILLA_I, Tocado,
 };
 
 /// Cuanto mas grande que la protagonista se dibuja un jefe.
@@ -58,6 +58,9 @@ pub struct Cuerpo {
     pub falda: f32,
     /// Lo que se abre la falda. Un vestido de vals cae; unos flecos vuelan.
     pub vuelo: f32,
+    /// Lo que lleva en la cabeza. Sin caras, el tocado es lo unico que
+    /// distingue una silueta de otra estando quieta.
+    pub tocado: Tocado,
 }
 
 /// Alto y estrecho, de vestido largo.
@@ -72,6 +75,7 @@ const CUERPO_VALS: Cuerpo = Cuerpo {
     cintura: 2.0,
     falda: 13.0,
     vuelo: 0.30,
+    tocado: Tocado::Mono,
 };
 
 /// Compacto y anguloso. Sin falda el que lleva, con falda corta el que sigue.
@@ -86,6 +90,8 @@ const CUERPO_TANGO: Cuerpo = Cuerpo {
     cintura: 2.6,
     falda: 0.0,
     vuelo: 0.0,
+    // Pelo pegado y partido: el tango se baila con la cabeza quieta.
+    tocado: Tocado::Liso,
 };
 
 const CUERPO_TANGO_PAREJA: Cuerpo = Cuerpo {
@@ -107,21 +113,26 @@ const CUERPO_CHARLESTON: Cuerpo = Cuerpo {
     cintura: 3.4,
     falda: 7.0,
     vuelo: 0.85,
+    // El casquete con cinta de los anos veinte.
+    tocado: Tocado::Casquete,
 };
 
-/// El mas bajo y el mas ancho de los cuatro. Piernas separadas y centro de
-/// gravedad por los suelos: un perreo no se baila de puntillas.
-const CUERPO_DEMBOW: Cuerpo = Cuerpo {
-    torso: 5.6,
-    cuello: 4.2,
-    brazo: 6.0,
-    antebrazo: 5.2,
-    muslo: 6.4,
-    pantorrilla: 6.0,
-    hombros: 4.8,
-    cintura: 3.8,
-    falda: 4.5,
-    vuelo: 0.25,
+/// Piernas larguisimas y falda enorme: en el cancan la pierna es el numero y la
+/// falda es lo que la ensena.
+const CUERPO_CANCAN: Cuerpo = Cuerpo {
+    torso: 5.4,
+    cuello: 4.0,
+    brazo: 6.2,
+    antebrazo: 5.4,
+    // Es el unico jefe donde la ropa hace tanto trabajo como el esqueleto.
+    muslo: 7.4,
+    pantorrilla: 7.0,
+    hombros: 4.4,
+    cintura: 3.6,
+    falda: 7.5,
+    vuelo: 0.75,
+    // El penacho de plumas del Moulin Rouge.
+    tocado: Tocado::Penacho,
 };
 
 /// Los angulos que decide un baile. Lo que `montar` convierte en una figura.
@@ -235,6 +246,7 @@ fn montar(c: &Cuerpo, p: &Postura) -> Pose {
         corpino,
         // Las cintas son de la protagonista: los jefes no llevan.
         cintas: [[Vec2::ZERO; N_CINTA]; 2],
+        tocado: c.tocado,
     };
 
     // El giro. Aplastar la figura a lo ancho es la forma barata de que una
@@ -266,7 +278,7 @@ pub fn poses(jefe: usize, fase: usize, t: f32, vida: f32) -> Vec<Pose> {
         0 => vec![vals(fase, t, vida)],
         1 => tango(fase, t, vida),
         2 => vec![charleston(fase, t, vida)],
-        _ => vec![dembow(fase, t, vida)],
+        _ => vec![cancan(fase, t, vida)],
     }
 }
 
@@ -394,45 +406,41 @@ fn charleston(fase: usize, t: f32, vida: f32) -> Pose {
     )
 }
 
-/// **El Dembow**: baja en el bombo. Es lo contrario del vals.
+/// **El Cancan**: patea, y la patada se va sola.
 ///
-/// El vals sube y gira; este se hunde. El tema va a 90 negras en 4/4 —40 ticks
-/// por tiempo, 160 por compas, 10 por semicorchea— y el bombo cae en 0 y 80,
-/// que es cuando baja la cadera. La caja, en 3, 6, 11 y 14, da un tiron corto
-/// de hombros: la misma reja que usan sus balas y su percusion.
-fn dembow(fase: usize, t: f32, vida: f32) -> Pose {
-    const COMPAS: f32 = 160.0;
-    const SEMI: f32 = 10.0;
+/// Es lo contrario del dembow que hubo aqui: aquel se hundia en el bombo, este
+/// **sube**. El galop va a 150 negras en 2/4 —24 ticks por tiempo, 48 por
+/// compas— y en cada tiempo se levanta una pierna: la izquierda en el uno, la
+/// derecha en el dos. Eso es la fila del music-hall, y es la misma reja en la
+/// que caen sus balas.
+fn cancan(fase: usize, t: f32, vida: f32) -> Pose {
+    const TIEMPO: f32 = 24.0;
+    const COMPAS: f32 = 48.0;
     let dentro = t.rem_euclid(COMPAS);
+    let cual = (dentro / TIEMPO).floor();
+    let desde = dentro - cual * TIEMPO;
+    // Sube de golpe y baja despacio, que es como es una patada.
+    let patada = (1.0 - desde / 14.0).max(0.0);
+    let izquierda = cual == 0.0;
+    let lado = if izquierda { 1.0 } else { -1.0 };
 
-    // El bombo: en 0 y en 80.
-    let desde_bombo = if dentro < 80.0 { dentro } else { dentro - 80.0 };
-    let bombo = (1.0 - desde_bombo / 24.0).max(0.0);
-
-    // La caja: en 3, 6, 11 y 14 de las dieciseis semicorcheas.
-    let semi = (dentro / SEMI).floor() as i32 % 16;
-    let caja = if [3, 6, 11, 14].contains(&semi) {
-        (1.0 - dentro.rem_euclid(SEMI) / 8.0).max(0.0)
-    } else {
-        0.0
-    };
-
-    let brio = 1.0 + fase as f32 * 0.16 + (1.0 - vida) * 0.25;
-    let (vaiven, _) = sin_cos(t * 0.04);
+    let brio = 1.0 + fase as f32 * 0.20 + (1.0 - vida) * 0.30;
+    let (vaiven, _) = sin_cos(t * 0.05);
 
     montar(
-        &CUERPO_DEMBOW,
+        &CUERPO_CANCAN,
         &Postura {
-            // La y crece hacia abajo: en el bombo se HUNDE.
-            centro: vec2(vaiven * 2.4, bombo * 3.2 * brio),
-            lean: vaiven * 0.16 + caja * 0.10,
-            // Brazos bajos y sueltos, con un tiron en cada caja.
-            brazo_i: (0.55 + caja * 0.40, 0.55),
-            brazo_d: (-0.55 - caja * 0.40, 0.55),
-            // Piernas muy abiertas y rodillas dobladas, que es la postura.
-            pierna_i: (0.62, 0.55 + bombo * 0.45),
-            pierna_d: (-0.62, 0.55 + bombo * 0.45),
-            arrastre: vec2(-vaiven * 2.5, 1.5),
+            // La y crece hacia abajo, asi que en la patada SUBE.
+            centro: vec2(vaiven * 3.0 + lado * 1.5, -patada * 2.0 * brio),
+            // Y se echa hacia atras, que es lo que contrapesa la pierna.
+            lean: lado * 0.16 + patada * 0.26,
+            // Un brazo en alto y el otro sujetando la falda.
+            brazo_i: (1.30 + patada * 0.30, -1.05),
+            brazo_d: (-0.55, 0.65),
+            // Sube la pierna del lado que toca; la otra aguanta el peso.
+            pierna_i: (0.15 + patada * 1.50 * brio * lado.max(0.0), 0.08),
+            pierna_d: (-0.15 - patada * 1.50 * brio * (-lado).max(0.0), 0.08),
+            arrastre: vec2(-lado * patada * 5.0, -1.0),
             giro: 1.0,
             fase: t,
         },
@@ -496,9 +504,17 @@ mod tests {
                             pose.joints[CABEZA].y < cadera.y,
                             "jefe {jefe}: la cabeza no esta arriba"
                         );
+                        // El cancan es la excepcion, y a proposito: su numero
+                        // **es** el pie por encima de la cadera. Lo que si
+                        // sigue cumpliendo es que un pie esta siempre en el
+                        // suelo, que es lo que separa una patada de un salto.
+                        let ambos =
+                            pose.joints[PIE_I].y > cadera.y && pose.joints[PIE_D].y > cadera.y;
+                        let alguno =
+                            pose.joints[PIE_I].y > cadera.y || pose.joints[PIE_D].y > cadera.y;
                         assert!(
-                            pose.joints[PIE_I].y > cadera.y && pose.joints[PIE_D].y > cadera.y,
-                            "jefe {jefe}: los pies no estan abajo"
+                            if jefe == 3 { alguno } else { ambos },
+                            "jefe {jefe}: los pies no estan donde deben"
                         );
                         for (i, j) in pose.joints.iter().enumerate() {
                             assert!(j.is_finite(), "jefe {jefe}: la articulacion {i} es NaN");
@@ -524,7 +540,7 @@ mod tests {
         let (v, t, c, d) = (alto(0), alto(1), alto(2), alto(3));
         assert!(
             v > t && t > c && c > d,
-            "alturas iguales: vals {v}, tango {t}, charleston {c}, dembow {d}"
+            "alturas iguales: vals {v}, tango {t}, charleston {c}, cancan {d}"
         );
     }
 
@@ -556,18 +572,24 @@ mod tests {
     }
 
     #[test]
-    fn el_dembow_se_hunde_en_el_bombo() {
-        // Lo contrario del vals: el vals sube y gira, este baja. El bombo cae
-        // en las semicorcheas 0 y 8 de cada compas de 160 ticks.
-        let altura = |t: f32| poses(3, 0, t, 1.0)[0].joints[CADERA].y;
-        for bombo in [0.0, 80.0] {
-            let en_bombo = altura(bombo);
-            let entre = altura(bombo + 45.0);
-            assert!(
-                en_bombo > entre,
-                "no se hunde en el bombo {bombo}: {en_bombo} vs {entre}"
-            );
-        }
+    fn el_cancan_levanta_una_pierna_en_cada_tiempo() {
+        // Su verbo, llevado al cuerpo: el pie que sube alterna con el compas.
+        // Izquierda en el uno, derecha en el dos, cada 24 ticks. Si esto se
+        // desincroniza, la bailarina deja de bailar lo que suena.
+        let pie = |t: f32, i: usize| poses(3, 0, t, 1.0)[0].joints[i].y;
+        // En el uno sube la izquierda, y esta mas arriba que la derecha.
+        assert!(
+            pie(0.0, PIE_I) < pie(0.0, PIE_D),
+            "el uno no levanta la izquierda"
+        );
+        // En el dos, al reves.
+        assert!(
+            pie(24.0, PIE_D) < pie(24.0, PIE_I),
+            "el dos no levanta la derecha"
+        );
+        // Y entre patada y patada el pie vuelve abajo: la patada se va sola,
+        // igual que sus balas.
+        assert!(pie(20.0, PIE_I) > pie(0.0, PIE_I), "la patada no baja");
     }
 
     #[test]
@@ -583,6 +605,20 @@ mod tests {
                 en_golpe < entre,
                 "no hay patada en el golpe {golpe}: {en_golpe} vs {entre}"
             );
+        }
+    }
+
+    #[test]
+    fn cada_jefe_lleva_un_tocado_distinto() {
+        // Sin caras, el tocado es lo unico que distingue una silueta de otra
+        // estando quieta: es lo que hace un cartel, que resuelve un personaje
+        // con la forma y el sombrero. Si dos coinciden, dos jefes se convierten
+        // en el mismo munequito con otra animacion.
+        let suyo: Vec<Tocado> = (0..4).map(|j| poses(j, 0, 0.0, 1.0)[0].tocado).collect();
+        for i in 0..suyo.len() {
+            for k in i + 1..suyo.len() {
+                assert_ne!(suyo[i], suyo[k], "los jefes {i} y {k} llevan lo mismo");
+            }
         }
     }
 }

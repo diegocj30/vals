@@ -20,6 +20,7 @@ mod guardado;
 mod hot;
 mod mando;
 mod music;
+mod paleta;
 mod particulas;
 mod replay_io;
 mod salon;
@@ -262,9 +263,14 @@ async fn run_game() {
         // La cartela de entrada para el mundo mientras se lee: una cartela que
         // hay que leer esquivando no se lee. Y se salta con cualquier tecla,
         // porque la segunda vez ya te la sabes.
+        //
+        // Ojo con el mando: hay que mirar el **flanco**, no si hay algo
+        // apretado. Se entra a un baile pulsando un boton y ese boton sigue
+        // pulsado despues, asi que mirando el estado la cartela se saltaba sola
+        // y no daba tiempo a leerla.
         if let Some(c) = cartela.as_mut()
             && c.para_el_mundo()
-            && (get_last_key_pressed().is_some() || mando.frame().bits() != 0)
+            && (get_last_key_pressed().is_some() || mando.algo_pulsado())
         {
             c.saltar();
         }
@@ -438,7 +444,7 @@ async fn run_game() {
                 chispas.reaccionar(&eventos, &world);
                 zumo.reaccionar(&eventos);
                 if eventos.phase_changed && !world.boss.defeated {
-                    cartela = Some(Cartela::figura(world.boss.phase_name()));
+                    cartela = Some(Cartela::figura(world.boss.phase_name(), world.boss.phase));
                 }
             }
             (Escena::Menu, Some(a)) => chispas.reaccionar(&eventos, &a.world),

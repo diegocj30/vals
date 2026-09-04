@@ -1,30 +1,36 @@
-// EL DEMBOW. El cuarto baile, y el que rompe el programa del salon.
+// EL CANCAN. El cuarto baile, y el que escandaliza al salon.
 //
-// El baile es el perreo y el ritmo es el dembow, que es como lo llama todo el
-// mundo. Es el momento en que el programa clasico de la sala se acaba y entra
-// algo de este siglo: por eso suena distinto a todo lo demas y por eso su
-// musica es la unica que no es de dominio publico, sino escrita aqui.
+// Aqui hubo un dembow y se quito: no casaba, hacia el juego mas vulgar. Pero lo
+// que se buscaba con el -un baile que rompiera el programa educado de la sala-
+// ya existia dentro de este mundo. El cancan escandalizo a Paris en 1858, se
+// bailaba en music-halls y no en salones, y llego a estar prohibido. Hace el
+// mismo papel sin salirse de epoca.
 //
-// SU VERBO ES LA ONDA EXPANSIVA. El vals gira (`Turn`), el tango frena y vuelve
-// (`accel` negativa), el charleston curva (`spin`); este apila **capas**:
-// `rings` alto con `speed_step` grande hace muros gruesos que se abren, con
-// huecos por los que hay que colarse antes de que se cierren. Es lo que hace un
-// bajo de reggaeton en una sala: te empuja hacia fuera.
+// SU VERBO ES LA PATADA, Y LA PATADA SE DESVANECE. El vals gira (`Turn`), el
+// tango frena y vuelve (`accel` negativa), el charleston curva (`spin`); este
+// usa `ttl` CORTO, asi que sus balas salen, cruzan un trozo de pantalla y
+// desaparecen. Una patada dura lo que dura la patada. Es lo que le deja ser el
+// mas denso del juego y seguir siendo legible: hay que aguantar el momento, no
+// el compas entero.
 //
-// EL PATRON DEL DEMBOW ES DE VERDAD. El tema va a 90 negras en 4/4: 40 ticks
-// por tiempo, 160 por compas, 10 por semicorchea. El bombo cae en 0 y 80; la
-// caja, en 30, 60, 110 y 140. Todas las esperas de este fichero salen de esa
-// reja, asi que las balas caen con el ritmo. Es la misma disciplina que el 3/4
-// del vals y la clave 3-3-2 del charleston.
+// Y van en abanicos ESTRECHOS disparados en fila, uno detras de otro, barriendo:
+// una fila de piernas levantandose por turnos.
 //
-// El movimiento va con ease Out, como el charleston, pero mas corto y mas
-// seguido: aqui no se salta, se arrastra.
+// EL COMPAS ES DE VERDAD, y ademas es el unico de DOS tiempos. El galop va a
+// 150 negras en 2/4: 24 ticks por tiempo, 48 por compas, 12 por corchea. Todas
+// las esperas de este fichero son multiplos de 12.
+//
+// El movimiento va con ease Out y muy corto: aqui no se desliza, se brinca.
 //
 // Las tres figuras:
 //
-//   1. El bombo    67 b/s   la onda en cada golpe de bombo.
-//   2. El perreo  107 b/s   dos ondas encontradas.
-//   3. El bajon   173 b/s   todo a la vez. Techo del baile: 190.
+//   1. La patada    54 b/s   patadas sueltas, alternando lado.
+//   2. La fila      80 b/s   la fila entera barriendo, y luego un compas de nada.
+//   3. El infierno 168 b/s   el galop infernal. Techo del baile: 190.
+//
+// Ojo con esos numeros: cuentan balas DISPARADAS, no balas en pantalla. Como
+// las patadas se desvanecen, este baile tiene menos balas vivas a la vez que
+// cualquier otro con la misma cifra. Se nota jugando y es justo la gracia.
 //
 // Guia rapida de pasos:
 //   Wait(n)               espera n ticks (60 ticks = 1 segundo)
@@ -37,512 +43,244 @@
 //
 // En el emisor: arc 6.28 es un anillo completo, menos es un abanico centrado
 // en la mira. aim: Fixed(rad) o AtPlayer. kind: 0 pequena, 1 media, 2 grande,
-// 3 aguja. accel negativa frena la bala y la hace volver. spin la curva.
-// rings apila capas separadas por speed_step. flags: 1 = parryable (rosa).
+// 3 aguja. accel negativa frena la bala y la hace volver. spin la curva. ttl
+// son segundos de vida. flags: 1 = parryable (rosa).
 (
-  name: "El Dembow",
-  // Se lee bien: las ondas son gruesas pero los huecos son grandes.
+  name: "El Cancan",
+  // Denso, pero se desvanece. Lo que hay que leer es el turno, no la pantalla.
   nivel: Media,
   pos: (320.0, 150.0),
   radius: 46.0,
   phases: [
-    // --- El bombo. La onda cae con el bombo, y solo con el bombo.
+    // --- La patada. Sueltas, alternando lado, para ensenar que se van solas.
     (
-      name: "El bombo",
+      name: "La patada",
       hp: 480,
       steps: [
         Parallel([
           [
-            // Se arrastra de lado a lado. Ni gira ni salta.
             Forever([
-              MoveTo(pos: (190.0, 150.0), dur: 80, ease: Out),
-              Wait(80),
-              MoveTo(pos: (450.0, 150.0), dur: 80, ease: Out),
-              Wait(80),
-            ]),
-          ],
-          [
-            // LA ONDA. Cuatro capas a distinta velocidad: un muro grueso con
-            // huecos por los que hay que colarse antes de que se cierren.
-            Forever([
-              Fire((
-                count: 9,
-                arc: 6.2831855,
-                aim: Fixed(0.0),
-                speed: 120.0,
-                rings: 4,
-                speed_step: 90.0,
-                ring_offset: 0.17,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Wait(80),
-            ]),
-          ],
-          [
-            // La caja: 30, 60, 110 y 140. Agujas rectas al jugador.
-            Forever([
-              Wait(30),
-              Fire((
-                count: 5,
-                arc: 0.55,
-                aim: AtPlayer,
-                speed: 290.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
-              )),
-              Wait(30),
-              Fire((
-                count: 5,
-                arc: 0.55,
-                aim: AtPlayer,
-                speed: 290.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
-              )),
-              Wait(50),
-              Fire((
-                count: 5,
-                arc: 0.55,
-                aim: AtPlayer,
-                speed: 290.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
-              )),
-              Wait(30),
-              Fire((
-                count: 5,
-                arc: 0.55,
-                aim: AtPlayer,
-                speed: 290.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
-              )),
-              Wait(20),
+              MoveTo(pos: (200.0, 145.0), dur: 24, ease: Out),
+              Wait(72),
+              MoveTo(pos: (440.0, 145.0), dur: 24, ease: Out),
+              Wait(72),
             ]),
           ],
           [
             Forever([
               Fire((
-                count: 14,
-                arc: 6.2831855,
-                aim: Fixed(1.7),
-                speed: 175.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 7, arc: 0.16, aim: Fixed(1.05), speed: 250.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.5, kind: 3, flags: 0,
               )),
-              Wait(40),
+              Wait(24),
+              Fire((
+                count: 7, arc: 0.16, aim: Fixed(2.09), speed: 250.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.5, kind: 3, flags: 0,
+              )),
+              Wait(24),
             ]),
           ],
           [
             Forever([
-              Wait(20),
+              Wait(12),
               Fire((
-                count: 6,
-                arc: 1.3,
-                aim: AtPlayer,
-                speed: 200.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 12, arc: 6.2831855, aim: Fixed(0.4), speed: 165.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(20),
+              Wait(12),
             ]),
           ],
           [
             Forever([
-              Wait(320),
+              Wait(24),
               Fire((
-                count: 3,
-                arc: 1.0,
-                aim: AtPlayer,
-                speed: 120.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 2,
-                flags: 1,
+                count: 5, arc: 0.2, aim: AtPlayer, speed: 300.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.8, kind: 3, flags: 0,
+              )),
+              Wait(24),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(288),
+              Fire((
+                count: 3, arc: 1.0, aim: AtPlayer, speed: 120.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 2, flags: 1,
               )),
             ]),
           ],
         ]),
       ],
     ),
-    // --- El perreo. Dos ondas encontradas: una va y la otra viene.
+    // --- La fila. Cinco patadas en corcheas barriendo, y un compas de nada.
+    //     El silencio de despues es la mitad del efecto.
     (
-      name: "El perreo",
+      name: "La fila",
       hp: 620,
       steps: [
         Parallel([
           [
             Forever([
-              MoveTo(pos: (440.0, 130.0), dur: 40, ease: Out),
-              Wait(120),
-              MoveTo(pos: (200.0, 180.0), dur: 40, ease: Out),
-              Wait(120),
+              MoveTo(pos: (430.0, 130.0), dur: 24, ease: Out),
+              Wait(72),
+              MoveTo(pos: (210.0, 180.0), dur: 24, ease: Out),
+              Wait(72),
             ]),
           ],
           [
             Forever([
               Fire((
-                count: 13,
-                arc: 6.2831855,
-                aim: Fixed(0.0),
-                speed: 115.0,
-                rings: 4,
-                speed_step: 95.0,
-                ring_offset: 0.15,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 8, arc: 0.15, aim: Fixed(0.75), speed: 265.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.5, kind: 3, flags: 0,
               )),
-              Wait(80),
-            ]),
-          ],
-          [
-            // La segunda onda, a contratiempo y girada: entre las dos no hay
-            // un hueco fijo, hay que buscarlo cada vez.
-            Forever([
-              Wait(40),
+              Wait(12),
               Fire((
-                count: 11,
-                arc: 6.2831855,
-                aim: Fixed(0.35),
-                speed: 140.0,
-                rings: 3,
-                speed_step: 85.0,
-                ring_offset: 0.2,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 8, arc: 0.15, aim: Fixed(1.15), speed: 265.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.5, kind: 3, flags: 0,
               )),
-              Wait(40),
-            ]),
-          ],
-          [
-            Forever([
-              Wait(30),
+              Wait(12),
               Fire((
-                count: 7,
-                arc: 0.5,
-                aim: AtPlayer,
-                speed: 310.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
+                count: 8, arc: 0.15, aim: Fixed(1.57), speed: 265.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.5, kind: 3, flags: 0,
               )),
-              Wait(30),
+              Wait(12),
               Fire((
-                count: 7,
-                arc: 0.5,
-                aim: AtPlayer,
-                speed: 310.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
+                count: 8, arc: 0.15, aim: Fixed(1.99), speed: 265.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.5, kind: 3, flags: 0,
               )),
-              Wait(50),
+              Wait(12),
               Fire((
-                count: 7,
-                arc: 0.5,
-                aim: AtPlayer,
-                speed: 310.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
+                count: 8, arc: 0.15, aim: Fixed(2.39), speed: 265.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.5, kind: 3, flags: 0,
               )),
-              Wait(30),
-              Fire((
-                count: 7,
-                arc: 0.5,
-                aim: AtPlayer,
-                speed: 310.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
-              )),
-              Wait(20),
+              Wait(60),
             ]),
           ],
           [
             Forever([
               Fire((
-                count: 21,
-                arc: 6.2831855,
-                aim: Fixed(2.4),
-                speed: 195.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 16, arc: 6.2831855, aim: Fixed(2.2), speed: 180.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(24),
             ]),
           ],
           [
             Forever([
-              Wait(320),
+              Wait(12),
               Fire((
-                count: 5,
-                arc: 1.2,
-                aim: AtPlayer,
-                speed: 125.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 2,
-                flags: 1,
+                count: 6, arc: 0.22, aim: AtPlayer, speed: 310.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.8, kind: 3, flags: 0,
+              )),
+              Wait(12),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(288),
+              Fire((
+                count: 4, arc: 1.2, aim: AtPlayer, speed: 125.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 2, flags: 1,
               )),
             ]),
           ],
         ]),
       ],
     ),
-    // --- El bajon. Todo a la vez.
+    // --- El infierno. El galop, a lo que da.
     (
-      name: "El bajon",
+      name: "El infierno",
       hp: 900,
       steps: [
         Parallel([
           [
             Forever([
-              MoveTo(pos: (170.0, 120.0), dur: 40, ease: Out),
-              Wait(40),
-              MoveTo(pos: (470.0, 190.0), dur: 40, ease: Out),
-              Wait(40),
+              MoveTo(pos: (170.0, 120.0), dur: 24, ease: Out),
+              Wait(24),
+              MoveTo(pos: (470.0, 190.0), dur: 24, ease: Out),
+              Wait(24),
             ]),
           ],
           [
             Forever([
               Fire((
-                count: 15,
-                arc: 6.2831855,
-                aim: Fixed(0.0),
-                speed: 125.0,
-                rings: 5,
-                speed_step: 90.0,
-                ring_offset: 0.13,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 9, arc: 0.14, aim: Fixed(0.65), speed: 285.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.5, kind: 3, flags: 0,
               )),
-              Wait(80),
-            ]),
-          ],
-          [
-            Forever([
-              Wait(40),
+              Wait(12),
               Fire((
-                count: 13,
-                arc: 6.2831855,
-                aim: Fixed(0.28),
-                speed: 150.0,
-                rings: 4,
-                speed_step: 90.0,
-                ring_offset: 0.18,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 9, arc: 0.14, aim: Fixed(1.26), speed: 285.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.5, kind: 3, flags: 0,
               )),
-              Wait(40),
-            ]),
-          ],
-          [
-            Forever([
-              Wait(30),
+              Wait(12),
               Fire((
-                count: 9,
-                arc: 0.55,
-                aim: AtPlayer,
-                speed: 320.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
+                count: 9, arc: 0.14, aim: Fixed(1.88), speed: 285.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.5, kind: 3, flags: 0,
               )),
-              Wait(30),
+              Wait(12),
               Fire((
-                count: 9,
-                arc: 0.55,
-                aim: AtPlayer,
-                speed: 320.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
+                count: 9, arc: 0.14, aim: Fixed(2.49), speed: 285.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.5, kind: 3, flags: 0,
               )),
-              Wait(50),
-              Fire((
-                count: 9,
-                arc: 0.55,
-                aim: AtPlayer,
-                speed: 320.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
-              )),
-              Wait(30),
-              Fire((
-                count: 9,
-                arc: 0.55,
-                aim: AtPlayer,
-                speed: 320.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
-              )),
-              Wait(20),
+              Wait(12),
             ]),
           ],
           [
             Forever([
               Fire((
-                count: 23,
-                arc: 6.2831855,
-                aim: Fixed(3.6),
-                speed: 205.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 22, arc: 6.2831855, aim: Fixed(0.0), speed: 195.0,
+                rings: 2, speed_step: 60.0, ring_offset: 0.11,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
             ]),
           ],
           [
             Forever([
-              Wait(20),
+              Wait(12),
               Fire((
-                count: 18,
-                arc: 6.2831855,
-                aim: Fixed(5.0),
-                speed: 240.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 18, arc: 6.2831855, aim: Fixed(3.1), speed: 225.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(20),
+              Wait(12),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(12),
+              Fire((
+                count: 8, arc: 0.22, aim: AtPlayer, speed: 325.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 1.8, kind: 3, flags: 0,
+              )),
+              Wait(12),
             ]),
           ],
           [
             Forever([
               Wait(240),
               Fire((
-                count: 6,
-                arc: 1.4,
-                aim: AtPlayer,
-                speed: 130.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 2,
-                flags: 1,
+                count: 5, arc: 1.4, aim: AtPlayer, speed: 130.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 2, flags: 1,
               )),
             ]),
           ],
