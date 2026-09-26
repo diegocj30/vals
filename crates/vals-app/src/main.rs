@@ -202,12 +202,12 @@ async fn run_game() {
     let mut escena = Escena::Menu;
     // La pista se monta con un nodo por jefe: anadir el tango sera anadir su
     // RON, y aparecera solo.
-    let mut pista = Pista::new(
-        BossDef::default_bosses()
-            .into_iter()
-            .map(|d| (d.name, d.nivel))
-            .collect(),
-    );
+    let bailes = BossDef::default_bosses();
+    let mut pista = Pista::new(bailes.iter().map(|d| (d.name.clone(), d.nivel)).collect());
+    // Y cual se baila en el suelo, que el mapa lo ensena.
+    for n in pista.nodos.iter_mut() {
+        n.suelo = bailes[n.jefe].suelo;
+    }
     // El progreso de partidas anteriores. Se aplica por nombre, asi que un
     // guardado de cuando habia dos bailes sigue valiendo con cuatro.
     let mut progreso = Guardado::cargar();

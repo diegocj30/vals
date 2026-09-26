@@ -357,6 +357,32 @@ fn dibujar_atrezo(l: &Layout, x: f32, y: f32, que: Atrezo, t: f32) {
     }
 }
 
+/// Como se baila: alas si es en el aire, un zapato si es en el suelo.
+///
+/// Cambia el juego entero —en el suelo se salta y no se vuela—, asi que tiene
+/// que verse antes de entrar, igual que el mapa de Cuphead marca con un
+/// avioncito los niveles de avion. Un icono y no una palabra: se lee de un
+/// vistazo y no ocupa la placa.
+fn modo(c: Vec2, suelo: bool, cerrado: bool) {
+    let color = if cerrado { TINTA_TENUE } else { PAPEL };
+    if suelo {
+        // Un zapato de baile: la suela, el empeine y el tacon.
+        draw_ellipse(c.x, c.y + 2.0, 9.0, 4.5, 0.0, TINTA);
+        draw_ellipse(c.x, c.y + 2.0, 7.0, 3.0, 0.0, color);
+        draw_rectangle(c.x + 3.0, c.y + 2.0, 4.0, 6.0, TINTA);
+        draw_circle(c.x - 3.0, c.y - 1.0, 4.0, TINTA);
+        draw_circle(c.x - 3.0, c.y - 1.0, 2.5, color);
+    } else {
+        // Dos alas, una a cada lado.
+        for lado in [-1.0, 1.0] {
+            let (x, rot) = (c.x + lado * 5.0, lado * 25.0);
+            draw_ellipse(x, c.y, 6.5, 3.5, rot, TINTA);
+            draw_ellipse(x, c.y, 5.0, 2.2, rot, color);
+        }
+        draw_circle(c.x, c.y, 2.0, TINTA);
+    }
+}
+
 /// Un color de baile cerrado: casi gris y mas oscuro. **Se mezcla, no se
 /// transparenta**: con alfa, la tinta de debajo de cada pieza se veria a
 /// traves y el dibujo se ensuciaria.
@@ -635,6 +661,7 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32) {
     };
     draw_rectangle(x - 2.0, y - 2.0, w + 4.0, h + 4.0, TINTA);
     draw_rectangle(x, y, w, h, fondo);
+    modo(vec2(x - 13.0, y + h * 0.5), nodo.suelo, cerrado);
     // Dos pasadas separadas medio pixel: una negrita de imprenta. A este
     // tamano la letra sola salia gris.
     for dx in [0.0, 0.6] {
@@ -768,7 +795,14 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
 
     let pie_y = l.to_screen(0.0, ARENA_H).y - 16.0;
     let aviso = match p.nodo_cerca() {
-        Some(i) if p.abierto(i) => format!("Z    bailar {}", p.nodos[i].nombre),
+        Some(i) if p.abierto(i) => {
+            let donde = if p.nodos[i].suelo {
+                "en el suelo"
+            } else {
+                "volando"
+            };
+            format!("Z    bailar {}, {donde}", p.nodos[i].nombre)
+        }
         // Un baile cerrado dice **por que** lo esta. "Bloqueado" a secas manda
         // a probar cosas al azar; decir que falta el nivel de antes no.
         Some(i) => format!(

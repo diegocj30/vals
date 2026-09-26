@@ -47,6 +47,10 @@ pub struct Nodo {
     pub jefe: usize,
     pub pos: Vec2,
     pub vencido: bool,
+    /// Si se baila en el suelo (modo plataformas) y no en el aire. Lo pone
+    /// quien monta la pista a partir de cada `BossDef`: el mapa lo ensena,
+    /// como el de Cuphead marca los niveles de avion.
+    pub suelo: bool,
 }
 
 /// El mapa.
@@ -80,6 +84,7 @@ impl Pista {
                     jefe: *i,
                     pos: sitio(nivel, sitio_en_fila, fila.len()),
                     vencido: false,
+                    suelo: false,
                 });
             }
         }

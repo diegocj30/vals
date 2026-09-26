@@ -335,13 +335,13 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 4]>) 
         format!("   ({intentos} intentos)")
     };
 
-    // Las dos primeras lineas son como se entra; el resto, los controles. Van
+    // La primera linea es como se entra; el resto, los controles. Van
     // separadas porque no pesan lo mismo: lo primero es una invitacion y lo
-    // segundo una chuleta.
+    // segundo una chuleta. Antes eran dos (volando o con salto), pero desde la
+    // ultima version el modo lo trae cada baile y no se elige aqui.
     let lineas: Vec<String> = match mando {
         Some(b) => vec![
-            format!("{}   entrar a la pista, volando{cola}", b[0]),
-            format!("{}   entrar a la pista, con salto", b[1]),
+            format!("{}   entrar a la pista{cola}", b[0]),
             "stick o cruceta   mover".to_owned(),
             format!("{}  disparar     {}  dash", b[0], b[1]),
             format!("{}  parry        {}  super", b[2], b[3]),
@@ -350,8 +350,7 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 4]>) 
             format!("llena, {} limpia la pantalla y hace mucho dano.", b[3]),
         ],
         None => vec![
-            format!("Z   entrar a la pista, volando{cola}"),
-            "X   entrar a la pista, con salto".to_owned(),
+            format!("Z   entrar a la pista{cola}"),
             "flechas mover    Z disparar    X dash".to_owned(),
             "C parry    SHIFT focus    M mudo".to_owned(),
             "Parriar las balas ROSAS llena la barra SUPER.".to_owned(),
@@ -404,7 +403,7 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 4]>) 
     // La invitacion, latiendo: es lo unico que hay que hacer en esta pantalla.
     let latido = 0.65 + 0.35 * (get_time() as f32 * 3.0).sin();
     let mut y = o.y + h * 0.60;
-    for linea in &lineas[..2] {
+    for linea in &lineas[..1] {
         con_sombra(
             |dx, c| fuentes::centrado(linea, cx + dx, y + dx, 21.0, Cara::Cuerpo, c),
             fade(TITLE, latido),
@@ -413,12 +412,12 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 4]>) 
     }
 
     // Y la chuleta, en una carta abajo, pequena.
-    let (cw, ch) = (w * 0.86, 24.0 + 21.0 * (lineas.len() - 2) as f32);
+    let (cw, ch) = (w * 0.86, 24.0 + 21.0 * (lineas.len() - 1) as f32);
     let (x0, y0) = (cx - cw * 0.5, o.y + h - ch - 40.0);
     draw_rectangle(x0, y0, cw, ch, fade(paleta::TINTA, 0.55));
     draw_rectangle_lines(x0, y0, cw, ch, 1.5, fade(METER_FULL, 0.7));
     let mut y = y0 + 26.0;
-    for linea in &lineas[2..] {
+    for linea in &lineas[1..] {
         fuentes::centrado(linea, cx, y, 16.0, Cara::Cuerpo, TEXT);
         y += 21.0;
     }
@@ -654,10 +653,29 @@ fn draw_boss(world: &World, alpha: f32, l: &Layout) {
         (tinta_cuerpo, tinta_tela)
     };
     let ls = l.escalado(bailarines::ESCALA);
-    for pose in bailarines::poses(bailarin(world), b.phase, t, vida) {
-        // Los pies del bailarin caen por debajo del aro: la figura se planta
-        // sobre su sitio en vez de flotar en el centro.
-        draw_figura(&pose, s, &ls, 1.0, cuerpo, tela);
+    let poses = bailarines::poses(bailarin(world), b.phase, t, vida);
+    // Los pies del bailarin caen por debajo del aro: la figura se planta sobre
+    // su sitio en vez de flotar en el centro.
+    //
+    // Pero en el suelo tiene que pisar el proscenio, no atravesarlo. El cancan
+    // baja al borde del escenario para patear a ras de tablas, y con el cuerpo
+    // colgado de su hitbox los pies se le hundian por debajo de las
+    // candilejas. Se la sube lo justo; la hitbox no se mueve, asi que la
+    // patada sigue saliendo a la altura de la pierna, que es de donde tiene
+    // que salir para llegar a los pies de la jugadora.
+    let mut centro = s;
+    if world.mode == Mode::Platform {
+        let tablas = l
+            .to_screen(0.0, player::GROUND_Y + player::PLAYER_SPRITE_RADIUS)
+            .y;
+        let pies = poses
+            .iter()
+            .flat_map(|p| [p.joints[skeleton::PIE_I].y, p.joints[skeleton::PIE_D].y])
+            .fold(f32::MIN, f32::max);
+        centro.y -= (s.y + pies * ls.scale() - tablas).max(0.0);
+    }
+    for pose in &poses {
+        draw_figura(pose, centro, &ls, 1.0, cuerpo, tela);
     }
 }
 
