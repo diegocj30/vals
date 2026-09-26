@@ -89,7 +89,6 @@ const VEIL: Color = color_u8!(20, 13, 15, 205);
 const TITLE: Color = color_u8!(244, 232, 204, 255);
 const DEFEAT: Color = color_u8!(214, 78, 84, 255);
 
-
 /// La tarima de la pista, y el foco que planta a cada bailarin en el suelo.
 const PISTA_SUELO: Color = color_u8!(42, 29, 28, 255);
 const PISTA_FOCO: Color = color_u8!(255, 212, 148, 60);

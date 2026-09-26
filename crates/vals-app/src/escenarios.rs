@@ -163,6 +163,10 @@ fn arrabal(l: &Layout, alto: f32, brillo: f32) {
             fade(luz, 0.75 + 0.25 * brillo),
         );
     }
+
+    // Y bajo la farola de la izquierda, el bandoneonista: el tango lo toca
+    // alguien, y ese alguien esta en la esquina.
+    musico(l, 150.0, alto, Instrumento::Bandoneon, brillo);
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +222,11 @@ fn club(l: &Layout, alto: f32, t: f32, brillo: f32) {
         circulo(l, centro.0 + c * r, centro.1 + s * r, 5.0, TINTA);
         circulo(l, centro.0 + c * r, centro.1 + s * r, 3.6, color);
     }
+
+    // El trio, delante del sol: contrabajo, trompeta y bateria.
+    musico(l, 210.0, alto, Instrumento::Contrabajo, brillo);
+    musico(l, 318.0, alto, Instrumento::Trompeta, brillo);
+    musico(l, 400.0, alto, Instrumento::Bateria, brillo);
 }
 
 // ---------------------------------------------------------------------------
@@ -305,6 +314,137 @@ fn moulin_rouge(l: &Layout, alto: f32, t: f32, brillo: f32) {
         2.5,
         fade(oro, 0.7 + 0.3 * brillo),
     );
+}
+
+// ---------------------------------------------------------------------------
+// Los musicos: siluetas de tinta que tocan al compas.
+//
+// Un decorado quieto es un papel pintado. Cuphead llena sus fondos de gente que
+// se mueve, y aqui la gente obvia es la que toca: la musica que suena la esta
+// tocando alguien. Son siluetas planas —cabeza, torso y el instrumento—, que es
+// como un cartel resuelve una orquesta, y cabecean con el mismo pulso que
+// mueve los focos.
+// ---------------------------------------------------------------------------
+
+/// Que toca cada uno. Cambia el instrumento y la postura, nada mas.
+#[derive(Clone, Copy)]
+enum Instrumento {
+    Bandoneon,
+    Contrabajo,
+    Trompeta,
+    Bateria,
+}
+
+/// Un musico con los pies en `(x, suelo)`. `brillo` es el pulso del compas: en
+/// el golpe cabecea, y es lo que hace que parezca que esta tocando.
+fn musico(l: &Layout, x: f32, suelo: f32, que: Instrumento, brillo: f32) {
+    let c = TINTA;
+    let golpe = brillo * 2.5;
+    let sentado = matches!(que, Instrumento::Bandoneon | Instrumento::Bateria);
+    // Sentado, las caderas bajan y se ve la silla.
+    let cadera = if sentado { suelo - 20.0 } else { suelo - 30.0 };
+    let hombros = cadera - 26.0;
+    let cabeza = (x + golpe * 0.4, hombros - 9.0 + golpe);
+
+    // Piernas y, si esta sentado, la silla.
+    if sentado {
+        rect(l, x - 12.0, cadera, 24.0, 4.0, c);
+        linea(l, (x - 10.0, cadera), (x - 10.0, suelo), 2.5, c);
+        linea(l, (x + 10.0, cadera), (x + 10.0, suelo), 2.5, c);
+        linea(l, (x - 4.0, cadera), (x + 6.0, cadera + 4.0), 4.0, c);
+        linea(l, (x + 6.0, cadera + 4.0), (x + 6.0, suelo), 4.0, c);
+    } else {
+        linea(l, (x - 4.0, cadera), (x - 6.0, suelo), 4.5, c);
+        linea(l, (x + 4.0, cadera), (x + 6.0, suelo), 4.5, c);
+    }
+    // El torso, un trapecio, y la cabeza.
+    tri(
+        l,
+        (x - 9.0, hombros),
+        (x + 9.0, hombros),
+        (x + 6.0, cadera),
+        c,
+    );
+    tri(
+        l,
+        (x - 9.0, hombros),
+        (x + 6.0, cadera),
+        (x - 6.0, cadera),
+        c,
+    );
+    circulo(l, cabeza.0, cabeza.1, 7.0, c);
+
+    match que {
+        // El fuelle se abre y se cierra con el compas: es EL gesto del tango.
+        Instrumento::Bandoneon => {
+            let abre = 10.0 + brillo * 8.0;
+            let y = cadera - 12.0;
+            rect(l, x - abre - 7.0, y - 7.0, 7.0, 14.0, c);
+            rect(l, x + abre, y - 7.0, 7.0, 14.0, c);
+            let pliegues = 5;
+            for k in 0..pliegues {
+                let f0 = k as f32 / pliegues as f32;
+                let f1 = (k as f32 + 0.5) / pliegues as f32;
+                let xa = x - abre + 2.0 * abre * f0;
+                let xb = x - abre + 2.0 * abre * f1;
+                linea(l, (xa, y - 6.0), (xb, y + 6.0), 1.5, c);
+                linea(
+                    l,
+                    (xb, y + 6.0),
+                    (xb + abre / pliegues as f32, y - 6.0),
+                    1.5,
+                    c,
+                );
+            }
+        }
+        // El contrabajo, mas alto que el que lo toca, y el arco.
+        Instrumento::Contrabajo => {
+            let (bx, by) = (x + 14.0, suelo - 22.0);
+            circulo(l, bx, by, 13.0, c);
+            circulo(l, bx, by - 18.0, 10.0, c);
+            linea(l, (bx, by - 26.0), (bx - 3.0, by - 62.0), 3.0, c);
+            linea(l, (bx, suelo - 8.0), (bx, suelo), 2.0, c);
+            let arco = (x - 2.0, cadera - 6.0 + golpe * 2.0);
+            linea(l, arco, (bx + 16.0, by + 2.0), 1.5, c);
+        }
+        // La trompeta, apuntando arriba en el golpe.
+        Instrumento::Trompeta => {
+            let boca = (cabeza.0 + 6.0, cabeza.1 + 2.0);
+            let pabellon = (boca.0 + 26.0, boca.1 - 6.0 - brillo * 10.0);
+            linea(l, boca, pabellon, 3.0, c);
+            let (dx, dy) = (pabellon.0 - boca.0, pabellon.1 - boca.1);
+            let n = (dx * dx + dy * dy).sqrt().max(0.001);
+            let (px, py) = (-dy / n * 7.0, dx / n * 7.0);
+            tri(
+                l,
+                (pabellon.0 - dx / n * 8.0, pabellon.1 - dy / n * 8.0),
+                (pabellon.0 + px, pabellon.1 + py),
+                (pabellon.0 - px, pabellon.1 - py),
+                c,
+            );
+        }
+        // La bateria: el bombo delante y el platillo, que salta en el golpe.
+        Instrumento::Bateria => {
+            circulo(l, x + 20.0, suelo - 13.0, 13.0, c);
+            circulo(
+                l,
+                x + 20.0,
+                suelo - 13.0,
+                8.0,
+                fade(color_u8!(214, 170, 84, 255), 0.8),
+            );
+            let platillo = suelo - 50.0 - golpe;
+            linea(l, (x + 34.0, suelo), (x + 34.0, platillo), 2.0, c);
+            linea(l, (x + 24.0, platillo), (x + 44.0, platillo - 2.0), 3.0, c);
+            linea(
+                l,
+                (x + 6.0, hombros + 6.0),
+                (x + 26.0, platillo + 4.0),
+                2.5,
+                c,
+            );
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
