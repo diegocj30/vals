@@ -4,7 +4,6 @@
 
 use macroquad::prelude::*;
 use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
-use vals_core::pista::{Nodo, Pista};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bailarines;
@@ -22,13 +21,10 @@ use vals_core::rng::Pcg32;
 // El arte del juego es procedural: no se dibuja nada a mano. Lo que cambia
 // respecto al neon de antes no es el detalle, es el material: esto es un cartel
 // impreso, y por eso hay papel, tinta y colores de epoca. Ver `paleta.rs`.
-const BG: Color = paleta::PAPEL;
-const ARENA_BG: Color = paleta::TARIMA;
-const GRID: Color = paleta::VETA;
 const PLAYER_GLOW: Color = color_u8!(255, 226, 170, 40);
 /// La protagonista va en hueso sobre la tarima oscura: es lo que mas tiene que
 /// destacar de la pantalla despues de las balas.
-const PLAYER_BODY: Color = color_u8!(240, 232, 212, 255);
+pub(crate) const PLAYER_BODY: Color = color_u8!(240, 232, 212, 255);
 /// Lo que se agranda la protagonista respecto a su esqueleto.
 const TALLA: f32 = 1.4;
 const TRAIL: Color = color_u8!(214, 198, 164, 255);
@@ -75,7 +71,6 @@ const BOSS_FLASH: Color = color_u8!(255, 255, 255, 255);
 const HP_BAR: Color = color_u8!(206, 66, 74, 255);
 const HP_BAR_BG: Color = color_u8!(52, 34, 32, 255);
 const SHOT: Color = color_u8!(248, 238, 206, 255);
-const VICTORY: Color = color_u8!(198, 214, 148, 255);
 
 // Las parryables. Rosa brillante y con un anillo que late: tienen que gritar
 // "ven a por mi" desde el otro lado de la pantalla, porque en eso consiste el
@@ -83,21 +78,18 @@ const VICTORY: Color = color_u8!(198, 214, 148, 255);
 const PARRYABLE: Color = color_u8!(238, 112, 158, 255);
 const PARRY_RING: Color = color_u8!(255, 255, 255, 255);
 const METER: Color = color_u8!(110, 182, 172, 255);
-const METER_FULL: Color = color_u8!(246, 206, 104, 255);
+pub(crate) const METER_FULL: Color = color_u8!(246, 206, 104, 255);
 
 const VEIL: Color = color_u8!(20, 13, 15, 205);
-const TITLE: Color = color_u8!(244, 232, 204, 255);
+pub(crate) const TITLE: Color = color_u8!(244, 232, 204, 255);
 const DEFEAT: Color = color_u8!(214, 78, 84, 255);
 
-/// La tarima de la pista, y el foco que planta a cada bailarin en el suelo.
-const PISTA_SUELO: Color = color_u8!(42, 29, 28, 255);
-const PISTA_FOCO: Color = color_u8!(255, 212, 148, 60);
 /// La falda va mas fria que el cuerpo: separa la tela de la piel sin necesidad
 /// de dibujar ni una linea de detalle.
-const FALDA: Color = color_u8!(196, 178, 148, 255);
+pub(crate) const FALDA: Color = color_u8!(196, 178, 148, 255);
 
 const TEXT: Color = color_u8!(216, 200, 170, 255);
-const TEXT_DIM: Color = color_u8!(142, 124, 102, 255);
+pub(crate) const TEXT_DIM: Color = color_u8!(142, 124, 102, 255);
 
 // Y los mismos, para lo que se imprime **sobre el papel**: los avisos, las
 // chapas y el overlay de F1, que viven en coordenadas de pantalla y por tanto
@@ -173,7 +165,7 @@ impl Layout {
     /// La pista la usa para la perspectiva: dibujar una figura al fondo es
     /// dibujarla con un `Layout` mas pequeno, sin que ni `draw_figura` ni nada
     /// de lo que llama tenga que enterarse de que existe una perspectiva.
-    fn escalado(&self, k: f32) -> Self {
+    pub(crate) fn escalado(&self, k: f32) -> Self {
         Self {
             origin: self.origin,
             scale: self.scale * k,
@@ -181,7 +173,7 @@ impl Layout {
     }
 }
 
-fn fade(c: Color, a: f32) -> Color {
+pub(crate) fn fade(c: Color, a: f32) -> Color {
     Color { a: c.a * a, ..c }
 }
 
@@ -909,7 +901,7 @@ fn orla(x: f32, y: f32, w: f32, h: f32) {
 /// mundo, el papel de alrededor se vuelve a poner encima y lo tapa, y luego el
 /// grano y el marco. Mas barato que un scissor y no toca el render instanciado
 /// de las balas, que va por su cuenta.
-fn paspartu(l: &Layout) {
+pub(crate) fn paspartu(l: &Layout) {
     let o = l.to_screen(0.0, 0.0);
     let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
     let (sw, sh) = (screen_width(), screen_height());
@@ -1087,7 +1079,14 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
 /// de un monigote de neon. Antes eran estas mismas dos pasadas con la gorda
 /// transparente, que es el truco contrario: en vez de recortar la figura contra
 /// el fondo, la difuminaba.
-fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, alfa: f32, cuerpo: Color, tela: Color) {
+pub(crate) fn draw_figura(
+    p: &Pose,
+    centro: Vec2,
+    l: &Layout,
+    alfa: f32,
+    cuerpo: Color,
+    tela: Color,
+) {
     // Los jefes no llevan cintas y algunos no llevan falda. En vez de un campo
     // mas en la pose, se mira si la geometria es degenerada: si el ultimo punto
     // esta donde el primero, esa parte no existe.
@@ -1646,197 +1645,6 @@ pub fn replay_badge(tick: usize, total: usize, divergencia: Option<u64>) {
             TEXT_PAPEL_ROJO,
         );
     }
-}
-
-// ---------------------------------------------------------------------------
-// La pista de baile
-// ---------------------------------------------------------------------------
-
-/// Altura en pantalla del fondo de la pista. Por encima queda la pared.
-const HORIZONTE: f32 = ARENA_H * 0.20;
-/// Cuanto se estrecha la pista al fondo. Es lo unico que hace falta para que
-/// se lea como un suelo y no como una pared.
-const FONDO_ANCHO: f32 = 0.42;
-/// Y cuanto encogen las figuras alli.
-const FONDO_ESCALA: f32 = 0.52;
-/// Lineas de la tarima, por eje.
-const TABLAS: usize = 9;
-
-/// Lleva un punto de la pista a la pantalla. Devuelve tambien cuanto encoge
-/// alli lo que se dibuje.
-fn suelo(l: &Layout, px: f32, py: f32) -> (Vec2, f32) {
-    // 0 al fondo, 1 delante. La curva junta las lineas cerca del horizonte,
-    // que es lo que da la sensacion de profundidad.
-    let t = (py / ARENA_H).clamp(0.0, 1.0).powf(1.35);
-    let ancho = FONDO_ANCHO + (1.0 - FONDO_ANCHO) * t;
-    let x = ARENA_W * 0.5 + (px - ARENA_W * 0.5) * ancho;
-    let y = HORIZONTE + (ARENA_H - 24.0 - HORIZONTE) * t;
-    (l.to_screen(x, y), FONDO_ESCALA + (1.0 - FONDO_ESCALA) * t)
-}
-
-/// La tarima: un trapecio con vetas.
-fn dibujar_tarima(l: &Layout) {
-    let esquina = |x: f32, y: f32| suelo(l, x, y).0;
-    let (fi, fd) = (esquina(0.0, 0.0), esquina(ARENA_W, 0.0));
-    let (ci, cd) = (esquina(0.0, ARENA_H), esquina(ARENA_W, ARENA_H));
-    draw_triangle(fi, fd, cd, PISTA_SUELO);
-    draw_triangle(fi, cd, ci, PISTA_SUELO);
-
-    // Vetas a lo ancho: se van juntando hacia el fondo solas, porque la
-    // perspectiva ya esta en `suelo`.
-    for i in 0..=TABLAS {
-        let y = ARENA_H * i as f32 / TABLAS as f32;
-        let (a, b) = (esquina(0.0, y), esquina(ARENA_W, y));
-        let cerca = i as f32 / TABLAS as f32;
-        draw_line(a.x, a.y, b.x, b.y, 1.0, fade(GRID, 0.35 + cerca * 0.5));
-    }
-    // Y a lo largo, que son las que apuntan al fondo.
-    for i in 0..=TABLAS {
-        let x = ARENA_W * i as f32 / TABLAS as f32;
-        let (a, b) = (esquina(x, 0.0), esquina(x, ARENA_H));
-        draw_line(a.x, a.y, b.x, b.y, 1.0, fade(GRID, 0.55));
-    }
-}
-
-/// Un baile plantado en la pista.
-fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32) {
-    let (s, escala) = suelo(l, nodo.pos.x, nodo.pos.y);
-    let r = l.len(30.0) * escala;
-    let alfa = if !abierto {
-        0.28
-    } else if nodo.vencido {
-        0.45
-    } else {
-        1.0
-    };
-
-    // El foco: es lo que planta la figura en el suelo en vez de dejarla
-    // flotando.
-    draw_ellipse(
-        s.x,
-        s.y,
-        r * 1.9,
-        r * 0.55,
-        0.0,
-        fade(PISTA_FOCO, alfa * 0.5),
-    );
-
-    // El emblema, con **la tinta de su baile**: el mismo par de colores con el
-    // que se va a pintar ese jefe cuando entres. Asi la pista deja de ser una
-    // lista de nombres y pasa a ser un programa de mano, donde cada numero
-    // tiene su color antes de haberlo bailado.
-    let (tinta, ropa) = paleta::del_baile(nodo.jefe);
-    let c = vec2(s.x, s.y - r * 1.5);
-    draw_poly_lines(c.x, c.y, 6, r * 1.15, t * 0.4, 2.0, fade(tinta, alfa * 0.6));
-    draw_poly_lines(
-        c.x,
-        c.y,
-        3,
-        r * 0.85,
-        -t * 0.8,
-        2.5,
-        fade(ropa, alfa * 0.85),
-    );
-    draw_circle(c.x, c.y, r * 0.55, fade(BOSS_CORE, alfa));
-    draw_poly_lines(c.x, c.y, 8, r * 0.55, t * 0.18, 1.5, fade(tinta, alfa));
-
-    // Un baile cerrado no dice lo dificil que es: eso se descubre bailandolo.
-    // Lo unico que necesita saberse de un nodo cerrado es que esta cerrado, y
-    // eso ya lo dice que se vea mas apagado que los demas.
-    let etiqueta = if nodo.vencido {
-        format!("{}  (bailado)", nodo.nombre)
-    } else {
-        nodo.nombre.clone()
-    };
-    let color = if nodo.vencido { VICTORY } else { TEXT };
-    fuentes::centrado(
-        &etiqueta,
-        s.x,
-        s.y + 22.0,
-        20.0,
-        Cara::Titulo,
-        fade(color, alfa),
-    );
-}
-
-/// El mapa entero.
-pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
-    clear_background(BG);
-    let o = l.to_screen(0.0, 0.0);
-    draw_rectangle(o.x, o.y, l.len(ARENA_W), l.len(ARENA_H), ARENA_BG);
-    dibujar_tarima(l);
-
-    let t = p.tick as f32 + alpha;
-    let respeto = p.respeto();
-
-    // De fondo a frente, para que lo cercano tape a lo lejano.
-    let mut orden: Vec<(usize, &Nodo)> = p.nodos.iter().enumerate().collect();
-    orden.sort_by(|a, b| a.1.pos.y.total_cmp(&b.1.pos.y));
-    for (i, nodo) in orden {
-        dibujar_nodo(l, nodo, p.abierto(i), t);
-    }
-
-    // --- La bailarina ---
-    // Es la misma figura del combate: se le pasa la velocidad para que la
-    // falda y las cintas se queden atras al andar, y se pone entera de
-    // elegancia porque aqui no esta esquivando nada.
-    let pos = p.render_pos(alpha);
-    let (s, escala) = suelo(l, pos.x, pos.y);
-    // Bailas mejor cuanto mas llevas hecho. Es el mismo numero que mueve al
-    // publico: la sala y tu subis juntas.
-    let pose = skeleton::pose(&p.figura(), t, false, respeto);
-    let ls = l.escalado(escala);
-
-    // Los pies van justo donde pisa, no el centro del cuerpo: si no, la
-    // bailarina flota y se despega de su sombra.
-    let pie = pose.joints.iter().map(|j| j.y).fold(f32::MIN, f32::max);
-    let centro = s - vec2(0.0, pie * ls.scale());
-
-    draw_ellipse(
-        s.x,
-        s.y,
-        l.len(26.0) * escala,
-        l.len(7.0) * escala,
-        0.0,
-        fade(PISTA_FOCO, 0.55),
-    );
-    draw_figura(&pose, centro, &ls, 1.0, PLAYER_BODY, FALDA);
-
-    // --- Cartel de arriba y ayuda de abajo ---
-    let cx = l.to_screen(ARENA_W * 0.5, 0.0).x;
-    fuentes::centrado(
-        "LA PISTA",
-        cx,
-        o.y + 44.0,
-        40.0,
-        Cara::Titulo,
-        fade(TITLE, 0.9),
-    );
-
-    let hechos = p.nodos.iter().filter(|n| n.vencido).count();
-    let cuenta = format!("{hechos} / {} bailes", p.nodos.len());
-    fuentes::centrado(&cuenta, cx, o.y + 66.0, 15.0, Cara::Cuerpo, TEXT_DIM);
-
-    let pie_y = l.to_screen(0.0, ARENA_H).y - 16.0;
-    let aviso = match p.nodo_cerca() {
-        Some(i) if p.abierto(i) => format!("Z    bailar {}", p.nodos[i].nombre),
-        // Un baile cerrado dice **por que** lo esta. "Bloqueado" a secas manda
-        // a probar cosas al azar; decir que falta el nivel de antes no.
-        Some(i) => format!(
-            "{} todavia no: antes hay que sacar lo anterior",
-            p.nodos[i].nombre
-        ),
-        None => "flechas andar    ESC menu".to_string(),
-    };
-    let color = if p.nodo_cerca().is_some_and(|i| p.abierto(i)) {
-        // Late, para que se vea que ahi hay algo que hacer.
-        let pulso = 0.7 + 0.3 * (t * 0.12).sin();
-        fade(METER_FULL, pulso)
-    } else {
-        TEXT_DIM
-    };
-    fuentes::centrado(&aviso, cx, pie_y, 19.0, Cara::Cuerpo, color);
-    paspartu(l);
 }
 
 /// Las chispas, encima de todo.

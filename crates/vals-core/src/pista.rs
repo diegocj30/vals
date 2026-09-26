@@ -227,7 +227,10 @@ fn sitio(nivel: Nivel, i: usize, n: usize) -> Vec2 {
         return vec2(ARENA_W * 0.5, y);
     }
     let hueco = ARENA_W - 2.0 * MARGEN - 2.0 * RADIO_NODO;
-    let paso = (hueco / (n - 1) as f32).min(160.0);
+    // El tope era 160 cuando cada baile era un emblema de sesenta de ancho.
+    // Desde que es un monumento (`mapa.rs` en la app) hace falta mas aire entre
+    // los dos de una fila, o se tapan uno al otro con la perspectiva.
+    let paso = (hueco / (n - 1) as f32).min(220.0);
     let x = ARENA_W * 0.5 + (i as f32 - (n - 1) as f32 * 0.5) * paso;
     let zigzag = if i % 2 == 1 { -40.0 } else { 0.0 };
     vec2(x, y + zigzag)

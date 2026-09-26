@@ -20,6 +20,7 @@ mod fuentes;
 mod guardado;
 mod hot;
 mod mando;
+mod mapa;
 mod music;
 mod paleta;
 mod particulas;
@@ -485,7 +486,7 @@ async fn run_game() {
         let t1 = get_time();
         let layout = draw::Layout::compute().sacudido(zumo.desplazamiento());
         if escena == Escena::Pista {
-            draw::pista(&pista, alpha, &layout);
+            mapa::pista(&pista, alpha, &layout);
         } else {
             let mostrado = match (escena, attract.as_ref()) {
                 (Escena::Menu, Some(a)) => &a.world,
