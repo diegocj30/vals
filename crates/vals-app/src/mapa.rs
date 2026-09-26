@@ -254,6 +254,109 @@ impl Lapiz {
     }
 }
 
+// ---------------------------------------------------------------------------
+// El atrezo
+// ---------------------------------------------------------------------------
+
+/// Lo que hay por la pista que no es un baile.
+///
+/// Sin esto la tarima es un tablero con cuatro fichas. Farolas, bancos,
+/// palmeras en maceta y un templete la convierten en un paseo de 1900, que es
+/// lo que hacen los arboles y las casitas del mapa de Cuphead: que el camino
+/// entre dos combates sea un sitio.
+#[derive(Clone, Copy)]
+enum Atrezo {
+    Farola,
+    Banco,
+    Palmera,
+    Templete,
+}
+
+/// Donde va cada cosa, en coordenadas de la pista. Por los lados, que el
+/// centro es de los bailes y de sus caminos.
+const ATREZO: [(f32, f32, Atrezo); 13] = [
+    (70.0, 640.0, Atrezo::Farola),
+    (570.0, 640.0, Atrezo::Farola),
+    (82.0, 470.0, Atrezo::Farola),
+    (558.0, 470.0, Atrezo::Farola),
+    (98.0, 310.0, Atrezo::Farola),
+    (542.0, 310.0, Atrezo::Farola),
+    (100.0, 560.0, Atrezo::Banco),
+    (540.0, 560.0, Atrezo::Banco),
+    (58.0, 745.0, Atrezo::Palmera),
+    (582.0, 745.0, Atrezo::Palmera),
+    (122.0, 222.0, Atrezo::Palmera),
+    (520.0, 226.0, Atrezo::Palmera),
+    (470.0, 170.0, Atrezo::Templete),
+];
+
+const HIERRO: Color = color_u8!(44, 36, 40, 255);
+const MADERA: Color = color_u8!(128, 84, 56, 255);
+const TERRACOTA: Color = color_u8!(172, 90, 64, 255);
+const PALMA: Color = color_u8!(74, 116, 74, 255);
+const TRONCO: Color = color_u8!(100, 72, 50, 255);
+const TEJADO: Color = color_u8!(78, 116, 96, 255);
+
+fn dibujar_atrezo(l: &Layout, x: f32, y: f32, que: Atrezo, t: f32) {
+    let (s, escala) = suelo(l, x, y);
+    let k = l.len(TAMANO) * escala;
+    // La sombra, que es lo que lo planta en el suelo.
+    draw_ellipse(s.x, s.y, 16.0 * k, 4.5 * k, 0.0, fade(TINTA, 0.35));
+    let lp = Lapiz::new(s, k, false);
+    match que {
+        Atrezo::Farola => {
+            // La luz primero, para que el farol quede encima de su halo.
+            let farol = lp.p(0.0, -72.0);
+            let pulso = 0.8 + 0.2 * (t * 0.04 + x).sin();
+            draw_circle(farol.x, farol.y, 20.0 * k, fade(LUZ, 0.10 * pulso));
+            lp.caja(-4.0, -4.0, 8.0, 4.0, HIERRO);
+            lp.caja(-1.5, -64.0, 3.0, 60.0, HIERRO);
+            lp.caja(-7.0, -67.0, 14.0, 3.0, HIERRO);
+            lp.caja(-5.0, -79.0, 10.0, 12.0, lp.luz(t));
+            lp.tri_tinta((-7.0, -79.0), (7.0, -79.0), (0.0, -86.0), HIERRO);
+        }
+        Atrezo::Banco => {
+            lp.linea((-13.0, -11.0), (-13.0, 0.0), 2.5, HIERRO);
+            lp.linea((13.0, -11.0), (13.0, 0.0), 2.5, HIERRO);
+            lp.caja(-17.0, -24.0, 34.0, 4.0, MADERA);
+            lp.caja(-17.0, -13.0, 34.0, 4.0, MADERA);
+            lp.linea((-15.0, -20.0), (-15.0, -13.0), 2.0, HIERRO);
+            lp.linea((15.0, -20.0), (15.0, -13.0), 2.0, HIERRO);
+        }
+        Atrezo::Palmera => {
+            // Las hojas se mecen un poco, cada palmera a su aire.
+            let (cx, cy) = (2.0, -48.0);
+            let brisa = (t * 0.03 + x * 0.1).sin() * 2.0;
+            for (dx, dy) in [
+                (-22.0, -4.0),
+                (-14.0, -18.0),
+                (0.0, -24.0),
+                (14.0, -18.0),
+                (22.0, -4.0),
+            ] {
+                let punta = (cx + dx + brisa, cy + dy);
+                let lado = if dx < 0.0 { 4.0 } else { -4.0 };
+                lp.tri_tinta((cx, cy - 3.0), (cx + lado * 0.5, cy + 3.0), punta, PALMA);
+            }
+            lp.linea((0.0, -14.0), (cx, cy), 4.0, TRONCO);
+            lp.tri_tinta((-9.0, -16.0), (9.0, -16.0), (6.0, 0.0), TERRACOTA);
+            lp.tri_tinta((-9.0, -16.0), (6.0, 0.0), (-6.0, 0.0), TERRACOTA);
+            lp.caja(-10.0, -18.0, 20.0, 3.0, TERRACOTA);
+        }
+        Atrezo::Templete => {
+            // El templete de musica del paseo: tarima, columnas, tejado y
+            // la bola dorada arriba.
+            lp.caja(-36.0, -10.0, 72.0, 10.0, PAPEL);
+            for cx in [-30.0, -11.0, 8.0, 27.0] {
+                lp.caja(cx, -46.0, 3.0, 36.0, PAPEL);
+            }
+            lp.linea((-34.0, -22.0), (34.0, -22.0), 1.5, HIERRO);
+            lp.tri_tinta((-42.0, -46.0), (42.0, -46.0), (0.0, -72.0), TEJADO);
+            lp.disco(0.0, -75.0, 3.5, ORO);
+        }
+    }
+}
+
 /// Un color de baile cerrado: casi gris y mas oscuro. **Se mezcla, no se
 /// transparenta**: con alfa, la tinta de debajo de cada pieza se veria a
 /// traves y el dibujo se ensuciaria.
@@ -616,17 +719,37 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
     // De fondo a frente, para que lo cercano tape a lo lejano, **y la
     // bailarina entre medias**: con monumentos altos, pintarla siempre encima
     // la pondria delante de un palacio que tiene delante.
-    let mut orden: Vec<(usize, &Nodo)> = p.nodos.iter().enumerate().collect();
-    orden.sort_by(|a, b| a.1.pos.y.total_cmp(&b.1.pos.y));
+    // El atrezo entra en el mismo orden: una farola puede quedar delante o
+    // detras de ella segun por donde pase.
+    enum Pieza {
+        Baile(usize),
+        Atrezo(usize),
+    }
+    let mut orden: Vec<(f32, Pieza)> = p
+        .nodos
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (n.pos.y, Pieza::Baile(i)))
+        .chain(
+            ATREZO
+                .iter()
+                .enumerate()
+                .map(|(k, a)| (a.1, Pieza::Atrezo(k))),
+        )
+        .collect();
+    orden.sort_by(|a, b| a.0.total_cmp(&b.0));
     let ella = p.render_pos(alpha).y;
-    let detras = orden.iter().take_while(|(_, n)| n.pos.y <= ella).count();
-    for (i, nodo) in &orden[..detras] {
-        dibujar_nodo(l, nodo, p.abierto(*i), t);
-    }
+    let detras = orden.iter().take_while(|(y, _)| *y <= ella).count();
+    let pinta = |pieza: &Pieza| match *pieza {
+        Pieza::Baile(i) => dibujar_nodo(l, &p.nodos[i], p.abierto(i), t),
+        Pieza::Atrezo(k) => {
+            let (x, y, que) = ATREZO[k];
+            dibujar_atrezo(l, x, y, que, t);
+        }
+    };
+    orden[..detras].iter().for_each(|(_, pieza)| pinta(pieza));
     dibujar_bailarina(p, alpha, t, l);
-    for (i, nodo) in &orden[detras..] {
-        dibujar_nodo(l, nodo, p.abierto(*i), t);
-    }
+    orden[detras..].iter().for_each(|(_, pieza)| pinta(pieza));
 
     // --- Cartel de arriba y ayuda de abajo ---
     let cx = l.to_screen(ARENA_W * 0.5, 0.0).x;
@@ -669,6 +792,28 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
 mod tests {
     use super::*;
     use vals_core::boss::Nivel;
+
+    #[test]
+    fn el_atrezo_no_pisa_ningun_baile() {
+        // Las farolas y las palmeras van por los lados, pero los bailes se
+        // recolocan solos segun cuantos haya de cada nivel: en cuanto entre un
+        // quinto, una farola podria acabar encima de un palacio.
+        let bailes = vals_core::boss::BossDef::default_bosses()
+            .into_iter()
+            .map(|d| (d.name, d.nivel))
+            .collect();
+        let p = Pista::new(bailes);
+        for (x, y, _) in ATREZO {
+            for n in &p.nodos {
+                let d = vec2(x - n.pos.x, y - n.pos.y).length();
+                assert!(
+                    d > vals_core::pista::RADIO_NODO,
+                    "el atrezo en ({x}, {y}) pisa {} (a {d:.0})",
+                    n.nombre
+                );
+            }
+        }
+    }
 
     fn indice(p: &Pista, nombre: &str) -> usize {
         p.nodos.iter().position(|n| n.nombre == nombre).unwrap()
