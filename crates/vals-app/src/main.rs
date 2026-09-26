@@ -229,6 +229,10 @@ async fn run_game() {
     let mut chispas = Particulas::new();
     let mut zumo = Zumo::new();
     let mut cartela: Option<Cartela> = None;
+    // Donde murio la jugadora y cuando: de ahi sube su fantasma. Hay que
+    // guardarlo antes del paso, porque `die` la devuelve a la salida en el
+    // mismo tick en que muere.
+    let mut fantasma: Option<((f32, f32), f64)> = None;
     let mut fundido = Fundido::nuevo();
 
     loop {
@@ -414,7 +418,11 @@ async fn run_game() {
                 }
                 Escena::Pista => pista.step(input),
                 Escena::Combate => {
+                    let antes = (world.player.pos.x, world.player.pos.y);
                     world.step(input);
+                    if world.events.player_died {
+                        fantasma = Some((antes, get_time()));
+                    }
                     recorder.record(input, &world);
                     eventos.merge(&world.events);
                 }
@@ -485,6 +493,11 @@ async fn run_game() {
             };
             draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut());
             draw::particulas(&chispas, &layout);
+            if let Some((donde, cuando)) = fantasma
+                && escena == Escena::Combate
+            {
+                draw::fantasma(&world, donde, (get_time() - cuando) as f32, &layout);
+            }
             if escena == Escena::Menu {
                 draw::menu(
                     &layout,

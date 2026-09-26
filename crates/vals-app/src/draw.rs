@@ -89,7 +89,6 @@ const VEIL: Color = color_u8!(20, 13, 15, 205);
 const TITLE: Color = color_u8!(244, 232, 204, 255);
 const DEFEAT: Color = color_u8!(214, 78, 84, 255);
 
-const GROUND: Color = color_u8!(120, 84, 66, 255);
 
 /// La tarima de la pista, y el foco que planta a cada bailarin en el suelo.
 const PISTA_SUELO: Color = color_u8!(42, 29, 28, 255);
@@ -209,7 +208,7 @@ pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mu
         world.tick as f32 + alpha,
     );
     if world.mode == Mode::Platform {
-        draw_ground(layout);
+        draw_ground(layout, world.tick as f32 + alpha);
     }
     draw_boss(world, alpha, layout);
     draw_player_shots(world, layout);
@@ -230,13 +229,40 @@ pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mu
     draw_super_flash(world, layout);
 }
 
-/// El suelo del modo plataformas.
-fn draw_ground(l: &Layout) {
+/// El proscenio: el borde del escenario, con candilejas.
+///
+/// En el modo con salto el suelo era una linea azul. Ahora es el canto de un
+/// escenario de 1900, una tabla con su fila de candilejas alumbrando hacia
+/// arriba: es donde se planta una bailarina que no vuela.
+fn draw_ground(l: &Layout, t: f32) {
     let o = l.to_screen(0.0, player::GROUND_Y + player::PLAYER_SPRITE_RADIUS);
     let w = l.len(ARENA_W);
     let alto = l.to_screen(0.0, ARENA_H).y - o.y;
-    draw_rectangle(o.x, o.y, w, alto, ARENA_BG);
-    draw_line(o.x, o.y, o.x + w, o.y, 2.0, GROUND);
+
+    // La tabla del proscenio, con sus vetas y el canto en tinta.
+    draw_rectangle(o.x, o.y, w, alto, color_u8!(62, 38, 32, 255));
+    for k in 1..3 {
+        let y = o.y + alto * k as f32 / 3.0;
+        draw_line(o.x, y, o.x + w, y, 1.0, fade(TINTA, 0.35));
+    }
+    draw_line(o.x, o.y, o.x + w, o.y, 3.0, TINTA);
+
+    // Las candilejas: una fila de luces en el borde que alumbran hacia arriba.
+    // Tiemblan un poco cada una a su aire, que es lo que hace una llama de gas.
+    let n = 9;
+    for i in 0..n {
+        let x = o.x + w * (i as f32 + 0.5) / n as f32;
+        let brillo = 0.75 + 0.25 * (t * 0.05 + i as f32 * 1.3).sin();
+        let (ancho, subida) = (l.len(26.0), l.len(70.0));
+        draw_triangle(
+            vec2(x, o.y),
+            vec2(x - ancho, o.y - subida),
+            vec2(x + ancho, o.y - subida),
+            fade(paleta::LUZ, 0.05 * brillo),
+        );
+        draw_rectangle(x - l.len(9.0), o.y + 2.0, l.len(18.0), l.len(7.0), TINTA);
+        draw_circle(x, o.y + 2.0, l.len(5.0), fade(paleta::LUZ, brillo));
+    }
 }
 
 /// Fogonazo del super. Es la unica cosa que ocupa la pantalla entera, y por eso
@@ -1183,6 +1209,43 @@ fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, alfa: f32, cuerpo: Color, tel
     let tinta = fade(TINTA, alfa);
     silueta(TINTA_GRUESA, tinta, tinta);
     silueta(0.0, fade(cuerpo, alfa), fade(tela, alfa));
+}
+
+/// El fantasma: al morir, la bailarina sube flotando, se mece y se desvanece.
+///
+/// Es lo que hace Cuphead, y es lo mas amable que se puede hacer con una
+/// muerte: no es un castigo, es una salida de escena. Dura poco mas de un
+/// segundo, es casi transparente y no tapa balas. Lleva aureola, porque un
+/// fantasma de dibujo animado sin aureola es una sabana.
+pub fn fantasma(world: &World, donde: (f32, f32), edad: f32, l: &Layout) {
+    const DURA: f32 = 1.4;
+    if !(0.0..DURA).contains(&edad) {
+        return;
+    }
+    let k = edad / DURA;
+    let alfa = (1.0 - k) * 0.6;
+    let vaiven = (edad * 6.0).sin() * 7.0;
+    let centro = l.to_screen(donde.0, donde.1 - k * 110.0) + vec2(vaiven, 0.0);
+    let ls = l.escalado(TALLA);
+    let pose = skeleton::pose(&world.player, world.tick as f32, false, 1.0);
+    let alma = color_u8!(250, 244, 226, 255);
+    draw_figura(&pose, centro, &ls, alfa, alma, alma);
+
+    let cabeza = centro
+        + vec2(
+            pose.joints[skeleton::CABEZA].x,
+            pose.joints[skeleton::CABEZA].y,
+        ) * ls.scale();
+    let r = ls.len(skeleton::RADIO_CABEZA);
+    draw_ellipse_lines(
+        cabeza.x,
+        cabeza.y - r * 2.2,
+        r * 1.3,
+        r * 0.45,
+        0.0,
+        2.0,
+        fade(METER_FULL, alfa * 1.4),
+    );
 }
 
 /// Que bailarin sale en el combate.
