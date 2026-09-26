@@ -179,6 +179,22 @@ impl Default for Postura {
 }
 
 /// De angulos a figura. Cinematica directa, igual que en la protagonista.
+/// El cuerpo de una figura: el de siempre, con la falda mas grande y mas
+/// suelta cuanto mas avanzado va el baile.
+///
+/// Un jefe de Cuphead cambia de cuerpo entre fases, no solo de pose. Aqui es el
+/// vestido el que se enciende: con cada figura la falda crece y vuela mas.
+/// **Solo la falda**: el esqueleto no se toca, y la hitbox es un circulo del
+/// core, asi que nada de esto cambia donde hay que disparar.
+fn crece(c: Cuerpo, fase: usize) -> Cuerpo {
+    let f = fase.min(3) as f32;
+    Cuerpo {
+        falda: c.falda * (1.0 + 0.15 * f),
+        vuelo: c.vuelo + 0.12 * f,
+        ..c
+    }
+}
+
 fn montar(c: &Cuerpo, p: &Postura) -> Pose {
     let cadera = p.centro;
     let pecho = desde(cadera, ARRIBA + p.lean, c.torso);
@@ -300,7 +316,7 @@ fn vals(fase: usize, t: f32, vida: f32) -> Pose {
     let (bal, _) = sin_cos(t * 0.075);
 
     montar(
-        &CUERPO_VALS,
+        &crece(CUERPO_VALS, fase),
         &Postura {
             centro: vec2(0.0, bal * 0.8),
             lean: bal * 0.14,
@@ -339,7 +355,7 @@ fn tango(fase: usize, t: f32, vida: f32) -> Vec<Pose> {
     };
 
     let lleva = montar(
-        &CUERPO_TANGO,
+        &crece(CUERPO_TANGO, fase),
         &Postura {
             centro: vec2(-apertura, 0.0),
             lean: 0.16 * alterna + golpe * 0.10,
@@ -353,7 +369,7 @@ fn tango(fase: usize, t: f32, vida: f32) -> Vec<Pose> {
         },
     );
     let sigue = montar(
-        &CUERPO_TANGO_PAREJA,
+        &crece(CUERPO_TANGO_PAREJA, fase),
         &Postura {
             centro: vec2(apertura, 0.0),
             lean: -0.22 * alterna - golpe * 0.12,
@@ -394,7 +410,7 @@ fn charleston(fase: usize, t: f32, vida: f32) -> Pose {
     let (rebote, _) = sin_cos(t * 0.22);
 
     montar(
-        &CUERPO_CHARLESTON,
+        &crece(CUERPO_CHARLESTON, fase),
         &Postura {
             centro: vec2(lado * patada * 2.0, -patada * 2.2 * brio + rebote * 0.6),
             lean: -lado * patada * 0.22,
@@ -434,7 +450,7 @@ fn cancan(fase: usize, t: f32, vida: f32) -> Pose {
     let (vaiven, _) = sin_cos(t * 0.05);
 
     montar(
-        &CUERPO_CANCAN,
+        &crece(CUERPO_CANCAN, fase),
         &Postura {
             // La y crece hacia abajo, asi que en la patada SUBE.
             centro: vec2(vaiven * 3.0 + lado * 1.5, -patada * 2.0 * brio),
@@ -626,5 +642,29 @@ mod tests {
                 assert_ne!(suyo[i], suyo[k], "los jefes {i} y {k} llevan lo mismo");
             }
         }
+    }
+
+    #[test]
+    fn la_falda_crece_con_cada_figura_y_el_que_no_lleva_no_la_estrena() {
+        // Lo lejos que llega el bajo de la falda desde la cadera.
+        let vuelo = |jefe: usize, fase: usize| {
+            let p = &poses(jefe, fase, 0.0, 1.0)[0];
+            let cadera = p.joints[CADERA];
+            p.falda
+                .iter()
+                .map(|q| (*q - cadera).length())
+                .fold(0.0, f32::max)
+        };
+        assert!(
+            vuelo(0, 3) > vuelo(0, 0) * 1.3,
+            "el vals no se enciende en la coda"
+        );
+        // El que lleva en el tango va sin falda, y crecer no puede ponersela.
+        let p = &poses(1, 2, 0.0, 1.0)[0];
+        assert_eq!(
+            p.falda[0],
+            p.falda[N_FALDA - 1],
+            "al del tango le ha salido falda"
+        );
     }
 }
