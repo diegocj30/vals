@@ -759,7 +759,7 @@ pub fn draw_bullets_at(bullets: &Bullets, l: &Layout, phase: f32) {
         let giro = eje[1].atan2(eje[0]).to_degrees();
         draw_circle(s.x, s.y, r * 1.9, fade(color, 0.16));
         draw_ellipse(s.x, s.y, r * largo, r * ancho, giro, TINTA);
-        draw_ellipse(s.x, s.y, r * largo * 0.72, r * ancho * 0.72, giro, color);
+        draw_ellipse(s.x, s.y, r * largo * 0.9, r * ancho * 0.9, giro, color);
 
         if parryable {
             // El anillo es lo que de verdad las distingue del resto a simple

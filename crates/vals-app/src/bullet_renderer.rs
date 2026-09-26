@@ -74,7 +74,7 @@ pub(crate) fn estiramiento(kind: u8, vel_x: f32, vel_y: f32) -> ([f32; 2], [f32;
 /// El tipo de bala que es una aguja, en `BULLET_KINDS`.
 const KIND_AGUJA: u8 = 3;
 /// A lo largo y a lo ancho de una aguja, respecto a su radio.
-pub(crate) const AGUJA: (f32, f32) = (1.9, 0.62);
+pub(crate) const AGUJA: (f32, f32) = (1.6, 0.8);
 
 /// Uniforms del frame.
 ///
@@ -325,15 +325,18 @@ void main() {
     float d = length(v_uv);
     float borde = 1.0 / 2.2;
 
-    // La silueta entera, contorno incluido, mide lo mismo que media la bala
-    // antes: la tinta se come el canto del nucleo en vez de engordarla. Una
-    // bala que se ve mas gorda que lo que te mata es una bala tramposa.
+    // La silueta mide lo mismo que la bala: nada de engordarla, que una bala
+    // que se ve mas gorda que lo que te mata es tramposa.
     float silueta = smoothstep(borde, borde * 0.86, d);
-    // El nucleo de color, dentro del contorno de tinta. Es lo que hace que una
-    // bala se lea como algo dibujado y no como una luz.
-    float nucleo = smoothstep(borde * 0.76, borde * 0.64, d);
+    // El nucleo de color ocupa casi toda la silueta, y la tinta es solo un
+    // filo en el ultimo 10 %. Hubo un intento con un contorno grueso (un tercio
+    // del radio) y fue a peor: sobre la tarima oscura la tinta no se ve, asi
+    // que solo encogia la parte brillante y apagaba la bala. Se notaba sin
+    // saber que habia cambiado. El filo fino si sirve: separa la bala de los
+    // decorados claros, como el sol dorado del club.
+    float nucleo = smoothstep(borde * 0.93, borde * 0.84, d);
     // Halo que cae rapido: al cubo para que no manche la pantalla cuando hay
-    // miles de balas encima. Solo por fuera de la silueta.
+    // miles de balas encima.
     float halo = pow(max(0.0, 1.0 - d), 3.0) * (1.0 - silueta);
 
     // Anillo de las parryables, latiendo. Va en el shader y no como un draw
@@ -344,7 +347,7 @@ void main() {
         anillo = smoothstep(0.055, 0.0, abs(d - rr)) * (0.35 + 0.45 * u_pulse);
     }
 
-    float a = clamp(silueta + halo * 0.22 + anillo, 0.0, 1.0) * v_color.a;
+    float a = clamp(silueta + halo * 0.28 + anillo, 0.0, 1.0) * v_color.a;
 
     // El realce se queda en un punto blanco pequeno en el centro, y no se
     // aplica al conjunto. Realzar con el halo entero —que es maximo justo en
