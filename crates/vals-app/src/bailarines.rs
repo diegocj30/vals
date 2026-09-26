@@ -31,9 +31,15 @@ use crate::skeleton::{
 
 /// Cuanto mas grande que la protagonista se dibuja un jefe.
 ///
-/// La arena mide 640x800 y el radio de golpeo del jefe es 46: a esta escala el
-/// cuerpo ocupa mas o menos eso, asi que lo que ves es lo que le das.
-pub const ESCALA: f32 = 2.1;
+/// La arena mide 640x800 y el radio de golpeo del jefe es 46, o sea un aro de
+/// 92 de diametro. Una bailarina mide unas 32 unidades de pies a cabeza, asi
+/// que a 3.2 el cuerpo **llena** el aro: lo que ves es lo que le das.
+///
+/// Antes estaba a 2.1 con este mismo comentario, y era falso: la figura se
+/// quedaba en dos tercios del aro. Un jefe que no llena su propio aro se lee
+/// como un marcianito dentro de un circulo, que es justo lo que se estaba
+/// intentando dejar de parecer.
+pub const ESCALA: f32 = 3.2;
 
 /// Arriba, en coordenadas de pantalla (la y crece hacia abajo).
 const ARRIBA: f32 = -PI / 2.0;

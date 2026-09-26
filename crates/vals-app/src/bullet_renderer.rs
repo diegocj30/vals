@@ -283,11 +283,16 @@ void main() {
     float d = length(v_uv);
     float borde = 1.0 / 2.2;
 
-    // Nucleo solido, con el canto suavizado.
-    float nucleo = smoothstep(borde, borde * 0.78, d);
+    // La silueta entera, contorno incluido, mide lo mismo que media la bala
+    // antes: la tinta se come el canto del nucleo en vez de engordarla. Una
+    // bala que se ve mas gorda que lo que te mata es una bala tramposa.
+    float silueta = smoothstep(borde, borde * 0.86, d);
+    // El nucleo de color, dentro del contorno de tinta. Es lo que hace que una
+    // bala se lea como algo dibujado y no como una luz.
+    float nucleo = smoothstep(borde * 0.76, borde * 0.64, d);
     // Halo que cae rapido: al cubo para que no manche la pantalla cuando hay
-    // miles de balas encima.
-    float halo = pow(max(0.0, 1.0 - d), 3.0);
+    // miles de balas encima. Solo por fuera de la silueta.
+    float halo = pow(max(0.0, 1.0 - d), 3.0) * (1.0 - silueta);
 
     // Anillo de las parryables, latiendo. Va en el shader y no como un draw
     // aparte, que es justo lo que hacia lento el render anterior.
@@ -297,14 +302,18 @@ void main() {
         anillo = smoothstep(0.055, 0.0, abs(d - rr)) * (0.35 + 0.45 * u_pulse);
     }
 
-    float a = clamp(nucleo + halo * 0.28 + anillo, 0.0, 1.0) * v_color.a;
+    float a = clamp(silueta + halo * 0.22 + anillo, 0.0, 1.0) * v_color.a;
 
     // El realce se queda en un punto blanco pequeno en el centro, y no se
     // aplica al conjunto. Realzar con el halo entero —que es maximo justo en
     // el centro— lavaba la bala a blanco y borraba su color, que con la
     // pantalla llena es la unica pista de que tipo viene.
     float centro = smoothstep(borde * 0.5, 0.0, d) * 0.6;
-    vec3 rgb = clamp(v_color.rgb + vec3(centro + anillo * 0.5), 0.0, 1.0);
+    vec3 tinta = vec3(0.10, 0.07, 0.08);
+    vec3 dentro = mix(tinta, v_color.rgb + vec3(centro), nucleo);
+    // Fuera de la silueta solo queda el halo, y el halo es del color de la
+    // bala, no de la tinta.
+    vec3 rgb = clamp(mix(v_color.rgb, dentro, silueta) + vec3(anillo * 0.5), 0.0, 1.0);
 
     gl_FragColor = vec4(rgb * a, a);
 }

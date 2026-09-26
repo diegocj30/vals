@@ -15,6 +15,7 @@ mod bailarines;
 mod bullet_renderer;
 mod cartela;
 mod draw;
+mod escenarios;
 mod fuentes;
 mod guardado;
 mod hot;
@@ -22,6 +23,7 @@ mod mando;
 mod music;
 mod paleta;
 mod particulas;
+mod pelicula;
 mod replay_io;
 mod salon;
 mod skeleton;
@@ -189,7 +191,8 @@ async fn run_game() {
     let mut recorder = Recorder::for_world(&world);
     let mut stats = FrameStats::new();
     let mut accumulator = 0.0f32;
-    let mut show_debug = true;
+    // Apagado de serie: es una herramienta, no parte del juego. F1 lo trae.
+    let mut show_debug = false;
     let mut hot = HotReload::new();
     let mut frames: u32 = 0;
     let mut aviso: Option<(String, bool, u32)> = None;
@@ -500,6 +503,8 @@ async fn run_game() {
             c.dibujar(&layout);
         }
         fundido.dibujar();
+        // La pelicula va encima de todo: es la copia la que tiene grano.
+        pelicula::dibujar();
         if let Some((msg, error)) = hot.aviso() {
             draw::banner(msg, error);
         } else if let Some((msg, error, restantes)) = &mut aviso {

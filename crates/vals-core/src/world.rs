@@ -1636,3 +1636,51 @@ mod tests {
         assert_eq!(w.bullets.live_count(), 0);
     }
 }
+
+#[cfg(test)]
+mod medida_suelo {
+    use super::*;
+    use crate::player::GROUND_Y;
+
+    /// Cuanta presion llega al suelo en cada figura de cada baile.
+    ///
+    /// Un baile solo se puede bailar en tierra si sus balas llegan a tierra.
+    /// Las patadas del cancan, por ejemplo, se desvanecen a mitad de camino:
+    /// en modo plataformas serian decorado. Esto mide balas por segundo en la
+    /// franja del suelo con la jugadora quieta, figura a figura.
+    ///
+    /// `cargo test -p vals-core presion_en_el_suelo -- --nocapture --ignored`
+    #[test]
+    #[ignore]
+    fn presion_en_el_suelo() {
+        for baile in 0..crate::boss::DEFAULT_BOSS_RONS.len() {
+            let w0 = World::empezar_en(7, Mode::Platform, baile);
+            println!("{}", w0.boss.name);
+            for fase in 0..w0.boss.phase_count() {
+                let mut w = World::empezar_en(7, Mode::Platform, baile);
+                // Saltar a la figura: se le quita la vida de las anteriores
+                // por el mismo camino que un disparo, que es el que cambia de
+                // fase.
+                while w.boss.phase < fase && !w.boss.defeated {
+                    let hp = w.boss.hp.max(1);
+                    w.boss.damage(hp);
+                }
+                let (mut abajo, ticks) = (0usize, 1200);
+                for _ in 0..ticks {
+                    w.lives = 99;
+                    w.step(InputFrame::default());
+                    abajo += w
+                        .bullets
+                        .iter_live()
+                        .filter(|b| b.pos.y > GROUND_Y - 60.0)
+                        .count();
+                }
+                println!(
+                    "  {:<14} {:>6.1} balas en el suelo por tick",
+                    w.boss.phase_name(),
+                    abajo as f32 / ticks as f32
+                );
+            }
+        }
+    }
+}

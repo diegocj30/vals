@@ -59,7 +59,10 @@ tinta, y **una tinta por baile** —el vals azul de Prusia, el tango carmin, el
 charleston mostaza, el cancan rosa Moulin Rouge—, asi que los cuatro se
 distinguen de un vistazo con el sonido quitado. Las balas son la excepcion y a
 proposito: su color dice el tamano y la velocidad de lo que viene, y eso no
-puede cambiar de un baile a otro.
+puede cambiar de un baile a otro. **Cada baile tiene su decorado** —Viena de
+noche, un arrabal de Buenos Aires, un club Art Deco y el Moulin Rouge con las
+aspas girando—, y todo se ve **a traves de una pelicula** con grano, parpadeo y
+rayas a 24 fotogramas por segundo.
 
 Las balas salen de un shader a partir de la distancia al centro. Los personajes
 —la protagonista y los jefes— son esqueletos de articulaciones animados por

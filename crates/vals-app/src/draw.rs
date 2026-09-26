@@ -9,6 +9,7 @@ use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bailarines;
 use crate::bullet_renderer::BulletRenderer;
+use crate::cartela;
 use crate::fuentes::{self, Cara};
 use crate::music::Tema;
 use crate::paleta;
@@ -80,7 +81,6 @@ const PARRYABLE: Color = color_u8!(238, 112, 158, 255);
 const PARRY_RING: Color = color_u8!(255, 255, 255, 255);
 const METER: Color = color_u8!(110, 182, 172, 255);
 const METER_FULL: Color = color_u8!(246, 206, 104, 255);
-const METER_BG: Color = color_u8!(46, 34, 32, 255);
 
 const VEIL: Color = color_u8!(20, 13, 15, 205);
 const TITLE: Color = color_u8!(244, 232, 204, 255);
@@ -184,6 +184,13 @@ fn fade(c: Color, a: f32) -> Color {
     Color { a: c.a * a, ..c }
 }
 
+/// Pinta un texto dos veces: desplazado en tinta y encima en su color. Es el
+/// rotulo de un cartel, que lleva sombra para leerse sobre cualquier fondo.
+fn con_sombra(pinta: impl Fn(f32, Color), color: Color) {
+    pinta(1.6, fade(TINTA, 0.85));
+    pinta(0.0, color);
+}
+
 /// Dibuja un frame de juego.
 ///
 /// `bullets_gpu` decide el camino de render: con `Some` va el instanciado de un
@@ -194,6 +201,7 @@ pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mu
     papel();
     draw_arena(
         layout,
+        world.baile,
         Tema::de(world.baile, world.boss.phase),
         world.tick as f32 + alpha,
     );
@@ -211,8 +219,10 @@ pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mu
         None => draw_bullets_at(&world.bullets, layout, phase),
     }
     draw_player(world, alpha, layout);
+    paspartu(layout);
+    paneles(world, alpha, layout);
     draw_hp_bar(world, layout);
-    draw_meter(world, layout);
+    draw_cartas(world, layout);
     draw_hud(world, layout);
     draw_super_flash(world, layout);
 }
@@ -256,33 +266,38 @@ fn draw_hud(world: &World, l: &Layout) {
             world.boss.phase + 1,
             world.boss.phase_count()
         );
-        fuentes::derecha(
-            &etiqueta,
-            o.x + w - 8.0,
-            o.y + 34.0,
-            19.0,
-            Cara::Titulo,
+        // Con sombra de tinta: encima ya no hay una pared lisa sino un
+        // decorado, y el sol dorado del club se comia el texto crema.
+        con_sombra(
+            |dx, c| {
+                fuentes::derecha(
+                    &etiqueta,
+                    o.x + w - 8.0 + dx,
+                    o.y + 34.0 + dx,
+                    19.0,
+                    Cara::Titulo,
+                    c,
+                )
+            },
             TEXT,
         );
 
         // Y debajo, que vals suena. "Cada jefe es un baile" se entiende mejor
         // si el baile tiene nombre y autor.
         let baile = Tema::de(world.baile, world.boss.phase).titulo();
-        fuentes::derecha(
-            baile,
-            o.x + w - 8.0,
-            o.y + 52.0,
-            14.0,
-            Cara::Cuerpo,
-            fade(TEXT_DIM, 0.9),
+        con_sombra(
+            |dx, c| {
+                fuentes::derecha(
+                    baile,
+                    o.x + w - 8.0 + dx,
+                    o.y + 52.0 + dx,
+                    14.0,
+                    Cara::Cuerpo,
+                    c,
+                )
+            },
+            TEXT,
         );
-    }
-
-    // Vidas, abajo a la derecha junto al medidor. Un punto por vida: contar
-    // tres puntos es mas rapido que leer un numero.
-    let y = l.to_screen(0.0, ARENA_H).y - 22.0;
-    for i in 0..world.lives {
-        draw_circle(o.x + w - 10.0 - i as f32 * 13.0, y, 4.0, HITBOX);
     }
 }
 
@@ -475,7 +490,7 @@ fn draw_boss(world: &World, alpha: f32, l: &Layout) {
         (tinta_cuerpo, tinta_tela)
     };
     let ls = l.escalado(bailarines::ESCALA);
-    for pose in bailarines::poses(world.boss_index, b.phase, t, vida) {
+    for pose in bailarines::poses(bailarin(world), b.phase, t, vida) {
         // Los pies del bailarin caen por debajo del aro: la figura se planta
         // sobre su sitio en vez de flotar en el centro.
         draw_figura(&pose, s, &ls, 1.0, cuerpo, tela);
@@ -556,8 +571,10 @@ pub fn draw_bullets_at(bullets: &Bullets, l: &Layout, phase: f32) {
         let (color, parryable) = bullet_style(b.kind, b.flags);
         let r = l.len(BULLET_KINDS[b.kind as usize].draw_radius);
 
-        draw_circle(s.x, s.y, r * 1.9, fade(color, 0.18));
-        draw_circle(s.x, s.y, r, color);
+        // Lo mismo que el shader: halo fuera, tinta en el canto, color dentro.
+        draw_circle(s.x, s.y, r * 1.9, fade(color, 0.16));
+        draw_circle(s.x, s.y, r, TINTA);
+        draw_circle(s.x, s.y, r * 0.72, color);
 
         if parryable {
             // El anillo es lo que de verdad las distingue del resto a simple
@@ -586,12 +603,157 @@ thread_local! {
 /// diez lineas.
 fn papel() {
     clear_background(paleta::PAPEL);
-    let (w, h) = (screen_width(), screen_height());
+}
+
+/// Los paneles de los lados, cuando la ventana deja sitio.
+///
+/// Un shmup vertical en una pantalla apaisada deja dos franjas de papel vacio,
+/// y las recreativas las llenaban de arte. Aqui: a la izquierda el cartel del
+/// baile, con su bailarina en grande; a la derecha el programa, con sus
+/// figuras. En una ventana vertical no caben y no se dibujan: nada de esto hace
+/// falta para jugar.
+fn paneles(world: &World, alpha: f32, l: &Layout) {
+    let o = l.to_screen(0.0, 0.0);
+    let margen = o.x;
+    if margen < 170.0 {
+        return;
+    }
+    let ancho = (margen - 44.0).min(250.0);
+    let alto = l.len(ARENA_H);
+    cartel_del_baile(world, alpha, margen * 0.5, o.y, ancho, alto);
+    programa(world, o.x + l.len(ARENA_W) + margen * 0.5, o.y, ancho, alto);
+}
+
+/// El cartel: el nombre del baile arriba, la bailarina bailando en su tinta, y
+/// la pieza al pie. Es la carta de presentacion de cada jefe en Cuphead, hecha
+/// a la manera de un cartel de 1900.
+fn cartel_del_baile(world: &World, alpha: f32, cx: f32, y0: f32, ancho: f32, alto: f32) {
+    let x0 = cx - ancho * 0.5;
+    let h = alto * 0.78;
+    orla(x0, y0, ancho, h);
+
+    // El nombre, encogido hasta que quepa: "EL CHARLESTON" no mide lo que
+    // "EL VALS".
+    let nombre = world.boss.name.to_uppercase();
+    let mut tam = 40.0;
+    while tam > 18.0 && fuentes::medir(&nombre, tam, Cara::Titulo).width > ancho - 24.0 {
+        tam -= 2.0;
+    }
+    fuentes::centrado(&nombre, cx, y0 + 52.0, tam, Cara::Titulo, TINTA);
+
+    // El escenario del cartel: un campo plano de la tinta del baile, y la
+    // bailarina encima en silueta. Es el recurso de Toulouse-Lautrec: color
+    // plano y una figura negra, y se lee desde el otro lado de la calle.
+    let (tinta, ropa) = paleta::del_baile(world.baile);
+    let (sx, sy, sw, sh) = (x0 + 14.0, y0 + 74.0, ancho - 28.0, h - 150.0);
+    draw_rectangle(sx, sy, sw, sh, tinta);
+    draw_rectangle_lines(sx, sy, sw, sh, 2.5, TINTA);
+
+    let t = world.tick as f32 + alpha;
+    let escala = (sh / 44.0).min(sw / 30.0);
+    let figura = Layout {
+        origin: Vec2::ZERO,
+        scale: escala,
+    };
+    let centro = vec2(cx, sy + sh * 0.56);
+    for pose in bailarines::poses(bailarin(world), world.boss.phase, t, world.boss.hp_ratio()) {
+        draw_figura(&pose, centro, &figura, 1.0, TINTA, ropa);
+    }
+
+    // La pieza, partida por el guion si no cabe: "El Danubio azul" arriba y
+    // "Johann Strauss II, 1866" debajo.
+    let pieza = Tema::de(world.baile, world.boss.phase).titulo();
+    let mut y = sy + sh + 28.0;
+    for trozo in pieza.split(" - ") {
+        fuentes::centrado(trozo, cx, y, 15.0, Cara::Cuerpo, TEXT_PAPEL_FUERTE);
+        y += 19.0;
+    }
+}
+
+/// El programa de mano: las figuras del baile, con la que suena marcada.
+///
+/// Es informacion de verdad y no adorno: en un jefe de cuatro figuras, saber
+/// por cual vas es saber cuanto queda.
+fn programa(world: &World, cx: f32, y0: f32, ancho: f32, alto: f32) {
+    let x0 = cx - ancho * 0.5;
+    let h = alto * 0.78;
+    orla(x0, y0, ancho, h);
+
+    fuentes::centrado("PROGRAMA", cx, y0 + 46.0, 28.0, Cara::Titulo, TINTA);
+    draw_line(
+        x0 + 30.0,
+        y0 + 60.0,
+        x0 + ancho - 30.0,
+        y0 + 60.0,
+        1.5,
+        TINTA,
+    );
+
+    let b = &world.boss;
+    let mut y = y0 + 100.0;
+    for i in 0..b.phase_count() {
+        let (color, tachada) = match i.cmp(&b.phase) {
+            std::cmp::Ordering::Less => (TEXT_PAPEL, true),
+            std::cmp::Ordering::Equal => (TEXT_PAPEL_FUERTE, false),
+            std::cmp::Ordering::Greater => (fade(TEXT_PAPEL, 0.7), false),
+        };
+        fuentes::centrado(&cartela::ordinal(i), cx, y, 12.0, Cara::Cuerpo, color);
+        let nombre = b.figura(i);
+        fuentes::centrado(nombre, cx, y + 24.0, 22.0, Cara::Titulo, color);
+        if tachada {
+            // Lo ya bailado, tachado a pluma, como en un programa usado.
+            let mitad = fuentes::medir(nombre, 22.0, Cara::Titulo).width * 0.5 + 6.0;
+            draw_line(cx - mitad, y + 17.0, cx + mitad, y + 17.0, 2.0, color);
+        }
+        if i == b.phase {
+            // Y la que suena, senalada con una mano de imprenta: un triangulo.
+            let ax = x0 + 16.0;
+            draw_triangle(
+                vec2(ax, y + 8.0),
+                vec2(ax, y + 24.0),
+                vec2(ax + 11.0, y + 16.0),
+                TINTA,
+            );
+        }
+        y += 64.0;
+    }
+}
+
+/// Una orla de cartel: papel un punto mas claro, tinta gruesa y un filete.
+fn orla(x: f32, y: f32, w: f32, h: f32) {
+    draw_rectangle(x, y, w, h, fade(WHITE, 0.18));
+    draw_rectangle_lines(x, y, w, h, 3.5, TINTA);
+    draw_rectangle_lines(x - 6.0, y - 6.0, w + 12.0, h + 12.0, 1.2, fade(TINTA, 0.55));
+}
+
+/// El paspartu: el papel de alrededor, puesto **encima** de lo que se sale.
+///
+/// Lo que desborda la lamina —balas que escapan, el sol del club, los tejados
+/// del arrabal, la bambalina del Moulin Rouge— manchaba el papel. En un cartel
+/// nada se sale de la plancha, asi que aqui tampoco: despues de pintar el
+/// mundo, el papel de alrededor se vuelve a poner encima y lo tapa, y luego el
+/// grano y el marco. Mas barato que un scissor y no toca el render instanciado
+/// de las balas, que va por su cuenta.
+fn paspartu(l: &Layout) {
+    let o = l.to_screen(0.0, 0.0);
+    let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
+    let (sw, sh) = (screen_width(), screen_height());
+    let papel = paleta::PAPEL;
+    draw_rectangle(0.0, 0.0, sw, o.y, papel);
+    draw_rectangle(0.0, o.y + h, sw, sh - o.y - h, papel);
+    draw_rectangle(0.0, o.y, o.x, h, papel);
+    draw_rectangle(o.x + w, o.y, sw - o.x - w, h, papel);
+
+    let dentro = |x: f32, y: f32| x > o.x && x < o.x + w && y > o.y && y < o.y + h;
     GRANO.with(|motas| {
         for (x, y, r) in motas {
-            draw_circle(x * w, y * h, *r, fade(paleta::TINTA, 0.07));
+            let (px, py) = (x * sw, y * sh);
+            if !dentro(px, py) {
+                draw_circle(px, py, *r, fade(paleta::TINTA, 0.07));
+            }
         }
     });
+    marco(l);
 }
 
 /// El marco de la lamina: tinta gruesa y una esquina Deco en cada canto.
@@ -633,9 +795,8 @@ fn marco(l: &Layout) {
     }
 }
 
-fn draw_arena(l: &Layout, tema: Tema, t: f32) {
-    salon::dibujar(l, tema, t);
-    marco(l);
+fn draw_arena(l: &Layout, baile: usize, tema: Tema, t: f32) {
+    salon::dibujar(l, baile, tema, t);
 }
 
 /// La estela. Se muestrea a ritmo de tick en el core, asi que se ve igual a 60
@@ -864,6 +1025,18 @@ fn draw_figura(p: &Pose, centro: Vec2, l: &Layout, alfa: f32, cuerpo: Color, tel
     silueta(0.0, fade(cuerpo, alfa), fade(tela, alfa));
 }
 
+/// Que bailarin sale en el combate.
+///
+/// **Es `baile`, no `boss_index`**, y la diferencia se paso por alto varios
+/// trozos. Desde que se entra a los bailes por la pista, `World::empezar_en`
+/// deja un solo jefe en la lista, asi que `boss_index` vale siempre 0: los
+/// cuatro jefes se dibujaban con el cuerpo y la coreografia del vals, solo
+/// cambiados de color. La pareja del tango y las patadas del cancan no salian
+/// en ninguna partida. La musica ya leia `baile`; el cuerpo no.
+fn bailarin(world: &World) -> usize {
+    world.baile
+}
+
 /// Lo que lleva en la cabeza, dibujado alrededor del punto `mono`.
 ///
 /// Un cartel de epoca no dibuja caras: Toulouse-Lautrec resuelve una bailarina
@@ -928,44 +1101,82 @@ fn hueso(a: Vec2, b: Vec2, r0: f32, r1: f32, arqueo: f32, l: &Layout, color: Col
     }
 }
 
-/// Medidor del super, abajo. Simetrico con la vida del jefe, que va arriba:
-/// lo suyo arriba, lo tuyo abajo.
-fn draw_meter(world: &World, l: &Layout) {
+/// Las cartas del HUD: la de vida y las del super, como en Cuphead.
+///
+/// Tres puntos y una barra son un HUD de programador. Una carta con "HP 3"
+/// impresa se lee igual de rapido y dice de que epoca es el juego. Cuando queda
+/// una vida la carta se pone roja y parpadea, que es lo que hace la de Cuphead,
+/// y por lo mismo: es el unico momento en que hay que mirarla.
+fn draw_cartas(world: &World, l: &Layout) {
     let o = l.to_screen(0.0, ARENA_H);
-    let w = l.len(ARENA_W);
-    let alto = 6.0;
-    let y = o.y - alto - 8.0;
-    let lleno = world.player.meter_full();
+    let (x0, y) = (o.x + 12.0, o.y - 42.0);
 
-    draw_rectangle(o.x, y, w, alto, METER_BG);
-    let color = if lleno { METER_FULL } else { METER };
-    draw_rectangle(o.x, y, w * world.player.meter_ratio(), alto, color);
-
-    // La barra no lleva etiqueta desde H4, y en las primeras partidas de
-    // verdad el jugador no supo nunca para que servia. Una palabra lo arregla.
-    fuentes::texto(
-        "SUPER",
-        o.x,
-        y - 6.0,
-        16.0,
-        Cara::Cuerpo,
-        if lleno { METER_FULL } else { TEXT_DIM },
+    let vidas = world.lives;
+    let critico = vidas <= 1 && !world.is_over();
+    let parpadea = critico && (get_time() * 3.0).fract() < 0.5;
+    carta(
+        x0,
+        y,
+        54.0,
+        30.0,
+        if parpadea { DEFEAT } else { paleta::PAPEL },
+    );
+    fuentes::centrado(
+        &format!("HP {vidas}"),
+        x0 + 27.0,
+        y + 22.0,
+        19.0,
+        Cara::Titulo,
+        TINTA,
     );
 
+    // El super en cinco cartas que se llenan de abajo arriba. Una barra
+    // continua dice lo mismo, pero cinco cartas dicen ademas cuanto falta de
+    // un vistazo.
+    let m = world.player.meter_ratio();
+    let lleno = world.player.meter_full();
+    let relleno = if lleno { METER_FULL } else { METER };
+    let (cw, ch) = (17.0, 26.0);
+    for i in 0..5 {
+        let x = x0 + 64.0 + i as f32 * (cw + 5.0);
+        let (cy, k) = (y + 2.0, (m * 5.0 - i as f32).clamp(0.0, 1.0));
+        carta(x, cy, cw, ch, paleta::PAPEL);
+        if k > 0.0 {
+            let alto = (ch - 4.0) * k;
+            draw_rectangle(x + 2.0, cy + ch - 2.0 - alto, cw - 4.0, alto, relleno);
+        }
+    }
+
+    // La etiqueta se queda: en las primeras partidas de verdad nadie supo para
+    // que servia la barra hasta que dijo "SUPER".
+    let tx = x0 + 64.0 + 5.0 * (cw + 5.0) + 4.0;
+    con_sombra(
+        |dx, c| fuentes::texto("SUPER", tx + dx, y + 21.0 + dx, 15.0, Cara::Cuerpo, c),
+        if lleno { METER_FULL } else { TEXT },
+    );
     if lleno {
-        draw_rectangle_lines(o.x, y, w, alto, 2.0, METER_FULL);
         // Latido y aviso explicito de la tecla: si no lo dice, no existe.
         let t = (get_time() as f32 * 6.0).sin() * 0.5 + 0.5;
-        let aviso = "ESPACIO";
-        fuentes::derecha(
-            aviso,
-            o.x + w,
-            y - 6.0,
-            19.0,
-            Cara::Cuerpo,
+        con_sombra(
+            |dx, c| {
+                fuentes::texto(
+                    "ESPACIO",
+                    tx + 50.0 + dx,
+                    y + 21.0 + dx,
+                    19.0,
+                    Cara::Cuerpo,
+                    c,
+                )
+            },
             fade(METER_FULL, 0.55 + 0.45 * t),
         );
     }
+}
+
+/// Una carta: papel con borde de tinta.
+fn carta(x: f32, y: f32, w: f32, h: f32, fondo: Color) {
+    draw_rectangle(x, y, w, h, fondo);
+    draw_rectangle_lines(x, y, w, h, 2.0, TINTA);
 }
 
 const X: f32 = 14.0;
@@ -1403,6 +1614,7 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
         TEXT_DIM
     };
     fuentes::centrado(&aviso, cx, pie_y, 19.0, Cara::Cuerpo, color);
+    paspartu(l);
 }
 
 /// Las chispas, encima de todo.
@@ -1414,6 +1626,17 @@ pub fn particulas(p: &Particulas, l: &Layout) {
 mod tests {
     use super::*;
     use vals_core::{Mode, World};
+
+    #[test]
+    fn cada_baile_se_dibuja_con_su_bailarin() {
+        // El bug que vigila: se elegia el cuerpo con `boss_index`, que al entrar
+        // por la pista vale siempre 0, y los cuatro jefes salian como el vals.
+        for baile in 0..4 {
+            let w = World::empezar_en(7, Mode::Flight, baile);
+            assert_eq!(w.boss_index, 0, "la premisa: la pista deja un solo jefe");
+            assert_eq!(bailarin(&w), baile, "el baile {baile} sale con otro cuerpo");
+        }
+    }
 
     #[test]
     fn el_recorrido_dice_cuanto_te_comiste() {

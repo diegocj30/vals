@@ -235,10 +235,14 @@ impl Boss {
 
     /// La figura que se esta bailando ahora mismo.
     pub fn phase_name(&self) -> &str {
-        self.phases
-            .get(self.phase)
-            .map(|p| p.name.as_str())
-            .unwrap_or("")
+        self.figura(self.phase)
+    }
+
+    /// El nombre de cualquier figura del baile, para el programa de mano. Una
+    /// que no existe no tiene nombre: el programa es presentacion y no puede
+    /// tumbar nada.
+    pub fn figura(&self, i: usize) -> &str {
+        self.phases.get(i).map(|p| p.name.as_str()).unwrap_or("")
     }
 
     pub fn phase_max_hp(&self) -> i32 {

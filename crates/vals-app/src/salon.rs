@@ -20,10 +20,16 @@ use vals_core::math::{TAU, sin_cos};
 use vals_core::{ARENA_H, ARENA_W};
 
 use crate::draw::Layout;
+use crate::escenarios;
 use crate::music::{self, Tema};
 
-/// Altura del horizonte. Por encima esta la pared; por debajo, la tarima.
-const HORIZONTE: f32 = ARENA_H * 0.13;
+/// Altura del horizonte. Por encima esta el decorado; por debajo, la tarima.
+///
+/// Estuvo a 0.13 cuando encima solo habia una pared lisa: bastaba una franja.
+/// Desde que cada baile tiene su decorado (`escenarios`), la franja tiene que
+/// ser lo bastante alta como para que se vea **detras del jefe**, que es donde
+/// Cuphead pone el suyo.
+const HORIZONTE: f32 = ARENA_H * 0.30;
 /// Lo que se estrecha la tarima al fondo.
 const FONDO: f32 = 0.34;
 /// Vetas de la tarima, por eje.
@@ -63,8 +69,8 @@ fn latido(tema: Tema, t: f32) -> (f32, bool) {
     ((1.0 - dentro).powf(2.2), cual == 0)
 }
 
-/// El fondo entero.
-pub fn dibujar(l: &Layout, tema: Tema, t: f32) {
+/// El fondo entero. `baile` elige el decorado; `tema`, el compas al que late.
+pub fn dibujar(l: &Layout, baile: usize, tema: Tema, t: f32) {
     let (pulso, fuerte) = latido(tema, t);
     let brillo = pulso * if fuerte { 1.0 } else { 0.45 };
 
@@ -74,26 +80,30 @@ pub fn dibujar(l: &Layout, tema: Tema, t: f32) {
     let o = l.to_screen(0.0, 0.0);
     draw_rectangle(o.x, o.y, l.len(ARENA_W), l.len(ARENA_H), PARED);
 
-    pared(l, brillo);
+    escenarios::dibujar(l, baile, HORIZONTE, t, brillo);
+    horizonte(l, brillo);
     tarima(l);
     focos(l, t, brillo);
-    lampara(l, brillo);
+    // La lampara es de un salon de Viena: en un arrabal o en el Moulin Rouge
+    // no pinta nada.
+    if baile == 0 {
+        lampara(l, brillo);
+    }
     vineta(l);
 }
 
-/// La pared del fondo, con un resplandor en el horizonte que la separa del
-/// suelo sin necesidad de dibujar un zocalo.
-fn pared(l: &Layout, brillo: f32) {
+/// El resplandor del horizonte, que separa el decorado del suelo sin tener
+/// que dibujar un zocalo.
+fn horizonte(l: &Layout, brillo: f32) {
     let o = l.to_screen(0.0, 0.0);
     let alto = l.len(HORIZONTE);
-    draw_rectangle(o.x, o.y, l.len(ARENA_W), alto, PARED);
 
     // Un degradado a mano: cuatro franjas bastan a esta altura, y evitan tener
     // que montar un shader para el fondo.
     for i in 0..4 {
         let f = i as f32 / 4.0;
-        let y = o.y + alto * (0.55 + 0.45 * f);
-        let h = alto * 0.45 / 4.0 + 1.0;
+        let y = o.y + alto * (0.70 + 0.30 * f);
+        let h = alto * 0.30 / 4.0 + 1.0;
         draw_rectangle(
             o.x,
             y,
@@ -157,7 +167,7 @@ fn lampara(l: &Layout, brillo: f32) {
     // Pequena y tenue a proposito: comparte sitio con el nombre del jefe, y
     // sobre todo no puede competir con el jefe por la atencion. Es un detalle
     // que dice "salon", no un elemento de la escena.
-    let c = l.to_screen(ARENA_W * 0.5, HORIZONTE * 0.44);
+    let c = l.to_screen(ARENA_W * 0.5, 46.0);
     let r = l.len(17.0);
     let intensidad = 0.22 + brillo * 0.40;
 

@@ -64,7 +64,7 @@ const ORDINALES: [&str; 4] = [
 /// El ordinal de una figura. Si algun dia un jefe tiene mas de cuatro, se queda
 /// sin ordinal en vez de reventar: una cartela es presentacion, y la
 /// presentacion nunca debe tumbar el juego.
-fn ordinal(numero: usize) -> String {
+pub(crate) fn ordinal(numero: usize) -> String {
     ORDINALES.get(numero).unwrap_or(&"").to_string()
 }
 
