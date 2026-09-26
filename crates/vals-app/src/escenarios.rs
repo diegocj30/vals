@@ -88,6 +88,10 @@ fn viena(l: &Layout, alto: f32, brillo: f32) {
         linea(l, (x - 12.0, 0.0), (x - 12.0, alto), 2.0, TINTA);
         linea(l, (x + 12.0, 0.0), (x + 12.0, alto), 2.0, TINTA);
     }
+
+    // Y la orquesta del salon, contra la noche: un violin y un violonchelo.
+    musico(l, 270.0, alto, Instrumento::Violin, brillo);
+    musico(l, 372.0, alto, Instrumento::Violonchelo, brillo);
 }
 
 // ---------------------------------------------------------------------------
@@ -314,6 +318,43 @@ fn moulin_rouge(l: &Layout, alto: f32, t: f32, brillo: f32) {
         2.5,
         fade(oro, 0.7 + 0.3 * brillo),
     );
+
+    publico(l, alto, t, brillo);
+}
+
+/// El publico del Moulin Rouge, en primer termino y de espaldas.
+///
+/// Es EL recurso de Toulouse-Lautrec: la sala vista por detras de las cabezas
+/// de los que miran, con sus chisteras y sus sombreros de plumas recortados en
+/// negro. Aqui ademas cabecean al compas, que es lo que hace un publico que se
+/// lo esta pasando bien.
+fn publico(l: &Layout, alto: f32, t: f32, brillo: f32) {
+    let mut rng = Pcg32::new(0xA7_7E5D);
+    let mut x = -6.0;
+    let mut i = 0;
+    while x < ARENA_W + 6.0 {
+        let paso = 26.0 + rng.next_f32() * 14.0;
+        let sombrero = rng.next_f32();
+        // Cada uno cabecea a su aire, pero todos en el golpe.
+        let vaiven = (t * 0.07 + i as f32 * 1.9).sin() * 1.5 + brillo * 2.0 * (i % 2) as f32;
+        let (cx, cy) = (x + paso * 0.5, alto - 16.0 + vaiven);
+        // Los hombros y la cabeza.
+        circulo(l, cx, alto + 2.0, 17.0, TINTA);
+        circulo(l, cx, cy, 9.0, TINTA);
+        if sombrero < 0.4 {
+            // Chistera.
+            rect(l, cx - 7.0, cy - 24.0, 14.0, 16.0, TINTA);
+            rect(l, cx - 11.0, cy - 10.0, 22.0, 3.0, TINTA);
+        } else if sombrero < 0.7 {
+            // Sombrero de ala con pluma, que se mece.
+            rect(l, cx - 13.0, cy - 9.0, 26.0, 4.0, TINTA);
+            circulo(l, cx, cy - 10.0, 7.0, TINTA);
+            let punta = (cx + 12.0 + vaiven * 2.0, cy - 26.0);
+            linea(l, (cx + 4.0, cy - 12.0), punta, 3.0, TINTA);
+        }
+        x += paso;
+        i += 1;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -333,6 +374,8 @@ enum Instrumento {
     Contrabajo,
     Trompeta,
     Bateria,
+    Violin,
+    Violonchelo,
 }
 
 /// Un musico con los pies en `(x, suelo)`. `brillo` es el pulso del compas: en
@@ -340,7 +383,10 @@ enum Instrumento {
 fn musico(l: &Layout, x: f32, suelo: f32, que: Instrumento, brillo: f32) {
     let c = TINTA;
     let golpe = brillo * 2.5;
-    let sentado = matches!(que, Instrumento::Bandoneon | Instrumento::Bateria);
+    let sentado = matches!(
+        que,
+        Instrumento::Bandoneon | Instrumento::Bateria | Instrumento::Violonchelo
+    );
     // Sentado, las caderas bajan y se ve la silla.
     let cadera = if sentado { suelo - 20.0 } else { suelo - 30.0 };
     let hombros = cadera - 26.0;
@@ -420,6 +466,37 @@ fn musico(l: &Layout, x: f32, suelo: f32, que: Instrumento, brillo: f32) {
                 (pabellon.0 - dx / n * 8.0, pabellon.1 - dy / n * 8.0),
                 (pabellon.0 + px, pabellon.1 + py),
                 (pabellon.0 - px, pabellon.1 - py),
+                c,
+            );
+        }
+        // El violin, al hombro, y el arco que va y viene con el compas.
+        Instrumento::Violin => {
+            let hombro = (x - 4.0, hombros + 2.0);
+            let voluta = (hombro.0 - 22.0, hombro.1 + 8.0);
+            linea(l, hombro, voluta, 6.0, c);
+            circulo(l, hombro.0 - 4.0, hombro.1 + 2.0, 5.0, c);
+            let ida = brillo * 14.0;
+            linea(
+                l,
+                (x - 20.0 + ida, hombro.1 - 10.0),
+                (x + 8.0 + ida, hombro.1 + 8.0),
+                1.5,
+                c,
+            );
+        }
+        // El violonchelo, entre las rodillas, y su arco en horizontal.
+        Instrumento::Violonchelo => {
+            let (bx, by) = (x - 8.0, suelo - 14.0);
+            circulo(l, bx, by, 9.0, c);
+            circulo(l, bx, by - 13.0, 7.0, c);
+            linea(l, (bx, by - 18.0), (bx - 1.0, by - 44.0), 2.5, c);
+            linea(l, (bx, suelo - 5.0), (bx, suelo), 2.0, c);
+            let ida = brillo * 12.0;
+            linea(
+                l,
+                (bx - 16.0 + ida, by - 8.0),
+                (bx + 14.0 + ida, by - 11.0),
+                1.5,
                 c,
             );
         }
