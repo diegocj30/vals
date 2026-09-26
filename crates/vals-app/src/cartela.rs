@@ -29,6 +29,8 @@ use crate::fuentes::{self, Cara};
 const ENTRADA: f32 = 2.5;
 /// Y la de figura, que solo tiene una linea.
 const FIGURA: f32 = 1.35;
+/// Y el grito de salida, que tiene que ser un golpe y no un letrero.
+const GRITO: f32 = 0.9;
 /// Aparicion y desaparicion.
 const ENTRA: f32 = 0.36;
 const SALE: f32 = 0.5;
@@ -111,6 +113,25 @@ impl Cartela {
             total: FIGURA,
             para: false,
         }
+    }
+
+    /// El grito de salida, al acabar la cartela de entrada. Corto, grande y sin
+    /// parar el mundo: el combate ya ha empezado.
+    pub fn a_bailar() -> Self {
+        Self {
+            baile: "¡A BAILAR!".to_owned(),
+            orden: String::new(),
+            figura: String::new(),
+            pieza: String::new(),
+            restante: GRITO,
+            total: GRITO,
+            para: false,
+        }
+    }
+
+    /// Si es la de entrada a un baile, que es la que para el mundo.
+    pub fn es_de_entrada(&self) -> bool {
+        self.para
     }
 
     /// Un frame. Devuelve `false` cuando se ha acabado.
@@ -330,6 +351,17 @@ mod tests {
             c.step(1.0 / 60.0);
         }
         assert!(c.se_puede_saltar(), "pasada la gracia si");
+    }
+
+    #[test]
+    fn el_grito_sale_tras_la_entrada_y_no_se_encadena() {
+        // Tras la de entrada viene el grito; tras el grito, nada. Si el grito
+        // contase como entrada, se volveria a lanzar a si mismo para siempre.
+        assert!(Cartela::entrada("El Vals", "El paso base", "x").es_de_entrada());
+        let grito = Cartela::a_bailar();
+        assert!(!grito.es_de_entrada(), "el grito se encadenaria");
+        assert!(!grito.para_el_mundo(), "el combate ya ha empezado");
+        assert!(!Cartela::figura("El espejo", 1).es_de_entrada());
     }
 
     #[test]

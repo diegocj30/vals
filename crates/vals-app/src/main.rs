@@ -291,7 +291,10 @@ async fn run_game() {
             if world.defeat {
                 world.retry_current_boss();
             } else {
-                world = World::with_mode(SEED, world.mode);
+                // Otra vez **este** baile. Era `World::with_mode`, de antes de
+                // la pista: empezaba desde el vals, asi que ganar el tango y
+                // pulsar "otra vez" te ponia a bailar el vals.
+                world = World::empezar_en(SEED, world.mode, world.baile);
             }
             recorder = Recorder::for_world(&world);
             accumulator = 0.0;
@@ -436,7 +439,10 @@ async fn run_game() {
         if let Some(c) = cartela.as_mut()
             && !c.step(frame_dt)
         {
-            cartela = None;
+            // Al acabar la presentacion, el grito: el "WALLOP!" de Cuphead. Es
+            // lo que convierte el final de una cartela en el principio de un
+            // combate.
+            cartela = c.es_de_entrada().then(Cartela::a_bailar);
         }
         stats.push_sim((get_time() - t0) as f32);
         // En el menu no suena nada ni sacude nada: el atractor es un fondo, no
@@ -482,6 +488,7 @@ async fn run_game() {
             if escena == Escena::Menu {
                 draw::menu(
                     &layout,
+                    mostrado,
                     intentos,
                     mando.conectado().then(|| mando.botones()),
                 );

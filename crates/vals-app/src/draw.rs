@@ -17,6 +17,7 @@ use crate::particulas::Particulas;
 use crate::salon;
 use crate::skeleton::{self, HUESOS, N_CINTA, N_FALDA, Pose, REMATES};
 use crate::stats::FrameStats;
+use vals_core::rng::Pcg32;
 
 // El arte del juego es procedural: no se dibuja nada a mano. Lo que cambia
 // respecto al neon de antes no es el detalle, es el material: esto es un cartel
@@ -28,6 +29,8 @@ const PLAYER_GLOW: Color = color_u8!(255, 226, 170, 40);
 /// La protagonista va en hueso sobre la tarima oscura: es lo que mas tiene que
 /// destacar de la pantalla despues de las balas.
 const PLAYER_BODY: Color = color_u8!(240, 232, 212, 255);
+/// Lo que se agranda la protagonista respecto a su esqueleto.
+const TALLA: f32 = 1.4;
 const TRAIL: Color = color_u8!(214, 198, 164, 255);
 const TRAIL_DASH: Color = color_u8!(232, 96, 142, 255);
 const HITBOX: Color = color_u8!(226, 58, 92, 255);
@@ -301,23 +304,6 @@ fn draw_hud(world: &World, l: &Layout) {
     }
 }
 
-/// Velo mas titulo mas subtitulo. Lo comparten menu, victoria y derrota.
-fn draw_cartel(l: &Layout, titulo: &str, color: Color, lineas: &[&str]) {
-    let o = l.to_screen(0.0, 0.0);
-    draw_rectangle(o.x, o.y, l.len(ARENA_W), l.len(ARENA_H), VEIL);
-
-    let cx = l.to_screen(ARENA_W * 0.5, 0.0).x;
-    let mut y = l.to_screen(0.0, ARENA_H * 0.34).y;
-
-    fuentes::centrado(titulo, cx, y, 64.0, Cara::Titulo, color);
-    y += 52.0;
-
-    for linea in lineas {
-        fuentes::centrado(linea, cx, y, 19.0, Cara::Cuerpo, TEXT);
-        y += 25.0;
-    }
-}
-
 /// Menu. De fondo corre el replay dorado, que es el modo atractor.
 /// El menu, con los controles del mando que haya puesto.
 ///
@@ -325,51 +311,212 @@ fn draw_cartel(l: &Layout, titulo: &str, color: Color, lineas: &[&str]) {
 /// que el super era el triangulo probando los cuatro botones es exactamente lo
 /// que una pantalla de controles existe para evitar, y una lista doble se lee
 /// peor que la que toca.
-pub fn menu(l: &Layout, intentos: u32, mando: Option<[&str; 4]>) {
+pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 4]>) {
     let cola = if intentos == 0 {
         String::new()
     } else {
         format!("   ({intentos} intentos)")
     };
 
+    // Las dos primeras lineas son como se entra; el resto, los controles. Van
+    // separadas porque no pesan lo mismo: lo primero es una invitacion y lo
+    // segundo una chuleta.
     let lineas: Vec<String> = match mando {
         Some(b) => vec![
             format!("{}   entrar a la pista, volando{cola}", b[0]),
             format!("{}   entrar a la pista, con salto", b[1]),
-            String::new(),
             "stick o cruceta   mover".to_owned(),
             format!("{}  disparar     {}  dash", b[0], b[1]),
             format!("{}  parry        {}  super", b[2], b[3]),
             "L2  focus        M  mudo".to_owned(),
-            String::new(),
             "Parriar las balas ROSAS llena la barra SUPER;".to_owned(),
             format!("llena, {} limpia la pantalla y hace mucho dano.", b[3]),
         ],
         None => vec![
             format!("Z   entrar a la pista, volando{cola}"),
             "X   entrar a la pista, con salto".to_owned(),
-            String::new(),
             "flechas mover    Z disparar    X dash".to_owned(),
             "C parry    SHIFT focus    M mudo".to_owned(),
-            String::new(),
             "Parriar las balas ROSAS llena la barra SUPER.".to_owned(),
             "Llena, ESPACIO limpia la pantalla y hace mucho dano.".to_owned(),
         ],
     };
-    let refs: Vec<&str> = lineas.iter().map(String::as_str).collect();
-    draw_cartel(l, "VALS", TITLE, &refs);
+
+    let o = l.to_screen(0.0, 0.0);
+    let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
+    let cx = o.x + w * 0.5;
+    draw_rectangle(o.x, o.y, w, h, fade(VEIL, 0.8));
+
+    // La bailarina del vals, enorme y en penumbra detras del titulo: el cartel
+    // de un baile se anuncia con su figura, no con una lista de teclas.
+    let figura = Layout {
+        origin: Vec2::ZERO,
+        scale: l.scale() * 11.0,
+    };
+    let (sombra, ropa) = (color_u8!(34, 44, 78, 255), color_u8!(52, 64, 108, 255));
+    for pose in bailarines::poses(0, 0, world.tick as f32, 1.0) {
+        draw_figura(&pose, vec2(cx, o.y + h * 0.40), &figura, 1.0, sombra, ropa);
+    }
+
+    // El titulo, con sombra de tinta y una orla Deco debajo.
+    let grande = 150.0 * l.scale().min(1.2);
+    let y = o.y + h * 0.34;
+    con_sombra(
+        |dx, c| fuentes::centrado("VALS", cx + dx * 2.0, y + dx * 2.0, grande, Cara::Titulo, c),
+        TITLE,
+    );
+    let ry = y + 26.0;
+    let media = w * 0.26;
+    draw_line(cx - media, ry, cx - 12.0, ry, 1.5, METER_FULL);
+    draw_line(cx + 12.0, ry, cx + media, ry, 1.5, METER_FULL);
+    draw_poly(cx, ry, 4, 6.0, 45.0, METER_FULL);
+    con_sombra(
+        |dx, c| {
+            fuentes::centrado(
+                "cuatro bailes, cuatro jefes",
+                cx + dx,
+                ry + 34.0 + dx,
+                20.0,
+                Cara::Cuerpo,
+                c,
+            )
+        },
+        METER_FULL,
+    );
+
+    // La invitacion, latiendo: es lo unico que hay que hacer en esta pantalla.
+    let latido = 0.65 + 0.35 * (get_time() as f32 * 3.0).sin();
+    let mut y = o.y + h * 0.60;
+    for linea in &lineas[..2] {
+        con_sombra(
+            |dx, c| fuentes::centrado(linea, cx + dx, y + dx, 21.0, Cara::Cuerpo, c),
+            fade(TITLE, latido),
+        );
+        y += 28.0;
+    }
+
+    // Y la chuleta, en una carta abajo, pequena.
+    let (cw, ch) = (w * 0.86, 24.0 + 21.0 * (lineas.len() - 2) as f32);
+    let (x0, y0) = (cx - cw * 0.5, o.y + h - ch - 40.0);
+    draw_rectangle(x0, y0, cw, ch, fade(paleta::TINTA, 0.55));
+    draw_rectangle_lines(x0, y0, cw, ch, 1.5, fade(METER_FULL, 0.7));
+    let mut y = y0 + 26.0;
+    for linea in &lineas[2..] {
+        fuentes::centrado(linea, cx, y, 16.0, Cara::Cuerpo, TEXT);
+        y += 21.0;
+    }
 }
 
 pub fn fin_de_partida(l: &Layout, world: &World) {
     if world.victory {
-        draw_cartel(
-            l,
-            "FIN DEL VALS",
-            VICTORY,
-            &["el vals entero", "", "R otra vez    ESC volver a la pista"],
-        );
+        sello_de_victoria(l, world);
     } else {
         sello_de_derrota(l, world);
+    }
+}
+
+/// La victoria: el sello, el nombre del baile y el publico tirando flores.
+///
+/// Antes decia "FIN DEL VALS" hasta cuando se ganaba el tango: era el texto de
+/// cuando el juego tenia un solo baile. Ahora el sello lleva la tinta del baile
+/// ganado y su nombre, y el publico hace lo que se hace al acabar un numero.
+fn sello_de_victoria(l: &Layout, world: &World) {
+    let o = l.to_screen(0.0, 0.0);
+    let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
+    draw_rectangle(o.x, o.y, w, h, fade(VEIL, 0.75));
+    lluvia_de_flores(l, world.baile);
+
+    let (tinta, _) = paleta::del_baile(world.baile);
+    let cx = o.x + w * 0.5;
+    let mut y = o.y + h * 0.36;
+    let ancho = fuentes::medir("¡BRAVO!", 72.0, Cara::Titulo).width;
+    let (rw, rh) = (ancho * 0.5 + 40.0, 50.0);
+    draw_rectangle(
+        cx - rw,
+        y - rh,
+        rw * 2.0,
+        rh * 2.0,
+        fade(paleta::TINTA, 0.6),
+    );
+    for (d, grosor, alfa) in [(0.0, 4.0, 1.0), (8.0, 1.5, 0.6)] {
+        draw_rectangle_lines(
+            cx - rw - d,
+            y - rh - d,
+            (rw + d) * 2.0,
+            (rh + d) * 2.0,
+            grosor,
+            fade(tinta, alfa),
+        );
+    }
+    con_sombra(
+        |dx, c| fuentes::centrado("¡BRAVO!", cx + dx, y + 20.0 + dx, 72.0, Cara::Titulo, c),
+        tinta,
+    );
+    y += rh + 48.0;
+    let nombre = format!("{}, bailado entero", world.boss.name);
+    con_sombra(
+        |dx, c| fuentes::centrado(&nombre, cx + dx, y + dx, 24.0, Cara::Cuerpo, c),
+        TITLE,
+    );
+    y += 44.0;
+    con_sombra(
+        |dx, c| {
+            fuentes::centrado(
+                "R otra vez    ESC volver a la pista",
+                cx + dx,
+                y + dx,
+                19.0,
+                Cara::Cuerpo,
+                c,
+            )
+        },
+        TEXT,
+    );
+}
+
+/// Confeti en las tintas del baile y alguna rosa: lo que le tira el publico a
+/// quien acaba de bailar.
+///
+/// Sin particulas ni estado: cada pieza tiene sus numeros fijos —sacados de una
+/// `Pcg32` con semilla constante, asi que son los mismos en cada frame— y su
+/// posicion es funcion del reloj. Cae, se mece y gira, y al llegar abajo vuelve
+/// a salir por arriba.
+fn lluvia_de_flores(l: &Layout, baile: usize) {
+    let o = l.to_screen(0.0, 0.0);
+    let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
+    let t = get_time() as f32;
+    let (tinta, ropa) = paleta::del_baile(baile);
+    let colores = [tinta, ropa, METER_FULL, paleta::PAPEL];
+    let mut rng = Pcg32::new(0xB4A_0F1E);
+    for i in 0..110 {
+        let (a, b, c) = (rng.next_f32(), rng.next_f32(), rng.next_f32());
+        let rosa = i % 9 == 0;
+        let caida = if rosa { 55.0 } else { 70.0 + b * 90.0 };
+        let y = o.y + (a * h + t * caida).rem_euclid(h + 40.0) - 20.0;
+        let x = o.x + b * w + (t * (1.2 + c) + i as f32).sin() * 14.0;
+        // Nada se sale de la lamina, tampoco las flores (ver `paspartu`).
+        if x < o.x + 6.0 || x > o.x + w - 6.0 || y < o.y + 6.0 || y > o.y + h - 6.0 {
+            continue;
+        }
+        if rosa {
+            // Una rosa: el tallo y la flor, con su tinta.
+            draw_line(x, y, x - 4.0, y + 13.0, 2.0, color_u8!(64, 110, 60, 255));
+            draw_circle(x, y, 6.5, paleta::TINTA);
+            draw_circle(x, y, 5.0, color_u8!(196, 36, 52, 255));
+            draw_circle(x + 1.0, y - 1.0, 2.0, color_u8!(140, 20, 36, 255));
+        } else {
+            draw_rectangle_ex(
+                x,
+                y,
+                8.0,
+                4.5,
+                DrawRectangleParams {
+                    offset: vec2(0.5, 0.5),
+                    rotation: t * (1.5 + c * 4.0) + i as f32,
+                    color: colores[i % colores.len()],
+                },
+            );
+        }
     }
 }
 
@@ -571,10 +718,13 @@ pub fn draw_bullets_at(bullets: &Bullets, l: &Layout, phase: f32) {
         let (color, parryable) = bullet_style(b.kind, b.flags);
         let r = l.len(BULLET_KINDS[b.kind as usize].draw_radius);
 
-        // Lo mismo que el shader: halo fuera, tinta en el canto, color dentro.
+        // Lo mismo que el shader: halo fuera, tinta en el canto, color dentro,
+        // y las agujas alargadas hacia donde van.
+        let (eje, [largo, ancho]) = crate::bullet_renderer::estiramiento(b.kind, b.vel.x, b.vel.y);
+        let giro = eje[1].atan2(eje[0]).to_degrees();
         draw_circle(s.x, s.y, r * 1.9, fade(color, 0.16));
-        draw_circle(s.x, s.y, r, TINTA);
-        draw_circle(s.x, s.y, r * 0.72, color);
+        draw_ellipse(s.x, s.y, r * largo, r * ancho, giro, TINTA);
+        draw_ellipse(s.x, s.y, r * largo * 0.72, r * ancho * 0.72, giro, color);
 
         if parryable {
             // El anillo es lo que de verdad las distingue del resto a simple
@@ -843,7 +993,17 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
         0.0
     };
     let figura = skeleton::pose(&world.player, t, world.mode == Mode::Platform, elegancia);
-    draw_figura(&figura, s, l, body_alpha, PLAYER_BODY, FALDA);
+    // Un 40 % mas grande que el esqueleto. A tamano 1 media 27 pixeles, que es
+    // un marcianito; asi se lee como una bailarina. La hitbox no cambia: es el
+    // punto de 2.5 que se dibuja encima de todo, y ese es el que manda.
+    draw_figura(
+        &figura,
+        s,
+        &l.escalado(TALLA),
+        body_alpha,
+        PLAYER_BODY,
+        FALDA,
+    );
 
     // Anillo de focus: se cierra sobre la hitbox conforme entras en modo lento.
     let ft = world.player.focus_t;

@@ -45,7 +45,36 @@ struct Instance {
     /// bala; el latido, que es global, viaja como uniform.
     ring: f32,
     color: [f32; 4],
+    /// Hacia donde apunta la bala, unitario. Solo importa en las agujas.
+    eje: [f32; 2],
+    /// Cuanto se estira a lo largo y a lo ancho de `eje`. (1, 1) es un circulo.
+    estira: [f32; 2],
 }
+
+/// El eje y el estiramiento de una bala.
+///
+/// Las agujas eran circulos, y una aguja redonda no dice hacia donde va, que es
+/// lo unico que importa de ella. Ahora se alargan en su direccion y se afinan a
+/// lo ancho: el area queda parecida y la silueta pasa a ser una flecha. Una
+/// aguja parada no tiene direccion, y en vez de dividir entre cero se queda
+/// tumbada.
+pub(crate) fn estiramiento(kind: u8, vel_x: f32, vel_y: f32) -> ([f32; 2], [f32; 2]) {
+    if kind != KIND_AGUJA {
+        return ([1.0, 0.0], [1.0, 1.0]);
+    }
+    let largo = (vel_x * vel_x + vel_y * vel_y).sqrt();
+    let eje = if largo > 1e-3 {
+        [vel_x / largo, vel_y / largo]
+    } else {
+        [1.0, 0.0]
+    };
+    (eje, [AGUJA.0, AGUJA.1])
+}
+
+/// El tipo de bala que es una aguja, en `BULLET_KINDS`.
+const KIND_AGUJA: u8 = 3;
+/// A lo largo y a lo ancho de una aguja, respecto a su radio.
+pub(crate) const AGUJA: (f32, f32) = (1.9, 0.62);
 
 /// Uniforms del frame.
 ///
@@ -135,6 +164,8 @@ impl BulletRenderer {
                 VertexAttribute::with_buffer("in_inst_radius", VertexFormat::Float1, 1),
                 VertexAttribute::with_buffer("in_inst_ring", VertexFormat::Float1, 1),
                 VertexAttribute::with_buffer("in_inst_color", VertexFormat::Float4, 1),
+                VertexAttribute::with_buffer("in_inst_eje", VertexFormat::Float2, 1),
+                VertexAttribute::with_buffer("in_inst_estira", VertexFormat::Float2, 1),
             ],
             shader,
             PipelineParams {
@@ -217,7 +248,7 @@ impl BulletRenderer {
             let r = BULLET_KINDS[b.kind as usize].draw_radius;
             // Culling contra la zona visible mas el radio del halo: subir a la
             // GPU balas que caen fuera es trabajo pagado a cambio de nada.
-            let m = r * HALO;
+            let m = r * HALO * AGUJA.0;
             if b.pos.x + m < min.x
                 || b.pos.x - m > max.x
                 || b.pos.y + m < min.y
@@ -230,11 +261,14 @@ impl BulletRenderer {
                 break;
             }
             let (c, ring) = color(b.kind, b.flags);
+            let (eje, estira) = estiramiento(b.kind, b.vel.x, b.vel.y);
             self.instances.push(Instance {
                 pos: [b.pos.x, b.pos.y],
                 radius: r,
                 ring: if ring { 1.0 } else { 0.0 },
                 color: [c.r, c.g, c.b, c.a],
+                eje,
+                estira,
             });
         }
         self.drawn = self.instances.len();
@@ -247,6 +281,8 @@ attribute vec2 in_inst_pos;
 attribute float in_inst_radius;
 attribute float in_inst_ring;
 attribute vec4 in_inst_color;
+attribute vec2 in_inst_eje;
+attribute vec2 in_inst_estira;
 
 uniform vec2 u_origin;
 uniform vec2 u_screen;
@@ -259,7 +295,13 @@ varying lowp float v_ring;
 void main() {
     // 2.2 = HALO en el codigo Rust. El quad se agranda para dejar sitio al
     // halo, asi que el borde solido de la bala cae en 1/2.2 del quad.
-    vec2 logico = in_inst_pos + in_pos * in_inst_radius * 2.2;
+    // Se estira en el marco de la bala y luego se gira hacia su eje. El
+    // fragment sigue viendo el quad sin estirar, asi que el circulo que dibuja
+    // sale en pantalla como una elipse alargada en la direccion de la bala.
+    vec2 local = in_pos * in_inst_estira;
+    vec2 d = in_inst_eje;
+    vec2 girado = vec2(local.x * d.x - local.y * d.y, local.x * d.y + local.y * d.x);
+    vec2 logico = in_inst_pos + girado * in_inst_radius * 2.2;
     vec2 px = u_origin + logico * u_scale;
     gl_Position = vec4(px.x / u_screen.x * 2.0 - 1.0,
                        1.0 - px.y / u_screen.y * 2.0,
@@ -318,3 +360,21 @@ void main() {
     gl_FragColor = vec4(rgb * a, a);
 }
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn solo_las_agujas_se_estiran_y_apuntan_a_donde_van() {
+        // Una bala redonda no tiene direccion que ensenar.
+        assert_eq!(estiramiento(0, 3.0, 4.0), ([1.0, 0.0], [1.0, 1.0]));
+        // Una aguja que baja apunta hacia abajo.
+        let (eje, estira) = estiramiento(KIND_AGUJA, 0.0, 250.0);
+        assert!((eje[0]).abs() < 1e-6 && (eje[1] - 1.0).abs() < 1e-6);
+        assert_eq!(estira, [AGUJA.0, AGUJA.1]);
+        // Y una parada no divide entre cero.
+        let (eje, _) = estiramiento(KIND_AGUJA, 0.0, 0.0);
+        assert!(eje[0].is_finite() && eje[1].is_finite());
+    }
+}
