@@ -59,7 +59,7 @@ fn suelo(l: &Layout, x: f32, d: f32) -> Vec2 {
 ///
 /// Devuelve `(pulso, fuerte)`: `pulso` vale 1 justo en el golpe y baja hasta 0
 /// antes del siguiente, y `fuerte` dice si es el primer tiempo del compas.
-fn latido(tema: Tema, t: f32) -> (f32, bool) {
+pub(crate) fn latido(tema: Tema, t: f32) -> (f32, bool) {
     let (ticks_tiempo, tiempos) = music::compas(tema);
     let tiempo = t / ticks_tiempo;
     let dentro = tiempo.rem_euclid(1.0);

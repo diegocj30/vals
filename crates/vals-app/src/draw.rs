@@ -10,6 +10,7 @@ use crate::bailarines;
 use crate::bullet_renderer::BulletRenderer;
 use crate::cartela;
 use crate::fuentes::{self, Cara};
+use crate::jefes;
 use crate::music::Tema;
 use crate::paleta;
 use crate::particulas::Particulas;
@@ -165,6 +166,16 @@ impl Layout {
     /// La pista la usa para la perspectiva: dibujar una figura al fondo es
     /// dibujarla con un `Layout` mas pequeno, sin que ni `draw_figura` ni nada
     /// de lo que llama tenga que enterarse de que existe una perspectiva.
+    /// Un layout sin origen y con la escala que se pida: para dibujar figuras
+    /// alrededor de un punto de pantalla, que es lo que hacen los jefes y el
+    /// cartel lateral.
+    pub(crate) fn con_escala(scale: f32) -> Self {
+        Self {
+            origin: Vec2::ZERO,
+            scale,
+        }
+    }
+
     pub(crate) fn escalado(&self, k: f32) -> Self {
         Self {
             origin: self.origin,
@@ -652,31 +663,29 @@ fn draw_boss(world: &World, alpha: f32, l: &Layout) {
     } else {
         (tinta_cuerpo, tinta_tela)
     };
-    let ls = l.escalado(bailarines::ESCALA);
-    let poses = bailarines::poses(bailarin(world), b.phase, t, vida);
-    // Los pies del bailarin caen por debajo del aro: la figura se planta sobre
-    // su sitio en vez de flotar en el centro.
-    //
-    // Pero en el suelo tiene que pisar el proscenio, no atravesarlo. El cancan
-    // baja al borde del escenario para patear a ras de tablas, y con el cuerpo
-    // colgado de su hitbox los pies se le hundian por debajo de las
-    // candilejas. Se la sube lo justo; la hitbox no se mueve, asi que la
-    // patada sigue saliendo a la altura de la pierna, que es de donde tiene
-    // que salir para llegar a los pies de la jugadora.
-    let mut centro = s;
-    if world.mode == Mode::Platform {
-        let tablas = l
-            .to_screen(0.0, player::GROUND_Y + player::PLAYER_SPRITE_RADIUS)
-            .y;
-        let pies = poses
-            .iter()
-            .flat_map(|p| [p.joints[skeleton::PIE_I].y, p.joints[skeleton::PIE_D].y])
-            .fold(f32::MIN, f32::max);
-        centro.y -= (s.y + pies * ls.scale() - tablas).max(0.0);
-    }
-    for pose in &poses {
-        draw_figura(pose, centro, &ls, 1.0, cuerpo, tela);
-    }
+    // El cuerpo lo pone cada jefe (`jefes/`). En el suelo no puede atravesar
+    // el proscenio: el cancan baja al borde del escenario para patear a ras de
+    // tablas, y colgado de su hitbox se hundia bajo las candilejas.
+    let (pulso, fuerte) = salon::latido(Tema::de(world.baile, b.phase), t);
+    let tablas = (world.mode == Mode::Platform).then(|| {
+        l.to_screen(0.0, player::GROUND_Y + player::PLAYER_SPRITE_RADIUS)
+            .y
+    });
+    jefes::dibujar(
+        bailarin(world),
+        &jefes::Escena {
+            centro: s,
+            escala: l.escalado(bailarines::ESCALA).scale(),
+            t,
+            fase: b.phase,
+            vida,
+            pulso,
+            fuerte,
+            tinta: cuerpo,
+            ropa: tela,
+            tablas,
+        },
+    );
 }
 
 /// Barra de vida de la fase, con una marca por fase superada.
@@ -835,15 +844,22 @@ fn cartel_del_baile(world: &World, alpha: f32, cx: f32, y0: f32, ancho: f32, alt
     draw_rectangle_lines(sx, sy, sw, sh, 2.5, TINTA);
 
     let t = world.tick as f32 + alpha;
-    let escala = (sh / 44.0).min(sw / 30.0);
-    let figura = Layout {
-        origin: Vec2::ZERO,
-        scale: escala,
-    };
-    let centro = vec2(cx, sy + sh * 0.56);
-    for pose in bailarines::poses(bailarin(world), world.boss.phase, t, world.boss.hp_ratio()) {
-        draw_figura(&pose, centro, &figura, 1.0, TINTA, ropa);
-    }
+    let (pulso, fuerte) = salon::latido(Tema::de(world.baile, world.boss.phase), t);
+    jefes::dibujar(
+        bailarin(world),
+        &jefes::Escena {
+            centro: vec2(cx, sy + sh * 0.56),
+            escala: (sh / 44.0).min(sw / 30.0),
+            t,
+            fase: world.boss.phase,
+            vida: world.boss.hp_ratio(),
+            pulso,
+            fuerte,
+            tinta: TINTA,
+            ropa,
+            tablas: None,
+        },
+    );
 
     // La pieza, partida por el guion si no cabe: "El Danubio azul" arriba y
     // "Johann Strauss II, 1866" debajo.

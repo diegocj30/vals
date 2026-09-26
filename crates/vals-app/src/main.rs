@@ -19,6 +19,7 @@ mod escenarios;
 mod fuentes;
 mod guardado;
 mod hot;
+mod jefes;
 mod mando;
 mod mapa;
 mod music;
