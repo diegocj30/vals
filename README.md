@@ -9,7 +9,10 @@ Tango, cada uno con sus figuras—, que se presentan con su cartela antes de bai
 un parry que te empuja a meterte donde estan las balas en vez de huir de todas.
 
 Dos modos: **volar** por la arena, como el danmaku clasico, o **plataformas**
-con gravedad y salto, mas cerca de Cuphead.
+con gravedad y salto, mas cerca de Cuphead. El modo no se elige: lo trae cada
+baile. El vals y el tango se bailan en el aire; el charleston y el cancan, en
+el suelo, con figuras hechas para eso —arcos que aterrizan y hay que esquivar
+corriendo, y patadas a ras de suelo que hay que saltar—.
 
 ## Estructura
 

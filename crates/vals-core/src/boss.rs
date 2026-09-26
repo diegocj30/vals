@@ -64,10 +64,11 @@ pub const TECHO_POR_NIVEL: [f32; 4] = [160.0, 190.0, 215.0, 245.0];
 /// el tercero mas facil.
 ///
 /// Y no se calcula porque **no se puede**. El tango echa 140 balas por segundo,
-/// menos que el charleston, que echa 172, y aun asi es el mas duro con
-/// diferencia: las balas que salen, frenan y vuelven son lo peor de leer del
-/// juego. La densidad es un tope, nunca un objetivo, y el verbo del baile pesa
-/// mas que el numero.
+/// menos que el charleston cuando se bailaba en el aire, que echaba 172, y aun
+/// asi es el mas duro con diferencia: las balas que salen, frenan y vuelven son
+/// lo peor de leer del juego. Y el charleston en el suelo echa 55 y sigue
+/// siendo medio: en una dimension, cada bala pesa mas. La densidad es un tope,
+/// nunca un objetivo, y el verbo del baile pesa mas que el numero.
 ///
 /// Por defecto `Facil`, que es el techo mas apretado: si a alguien se le olvida
 /// declararlo, el test de presupuesto se queja en vez de dejarlo pasar.
@@ -127,6 +128,15 @@ pub struct BossDef {
     /// Lo duro que es. Lo decide quien disena el baile, no su sitio en la lista.
     #[serde(default)]
     pub nivel: Nivel,
+    /// Si se baila en el suelo: con gravedad y salto, a lo Cuphead.
+    ///
+    /// Es del baile y no del menu porque las figuras se disenan para un modo.
+    /// Se midio: un baile pensado para el aire puesto en el
+    /// suelo da combates cojos, con figuras que no tocan tierra y otras que la
+    /// barren entera. Por defecto `false`, o sea vuelo, que es para lo que
+    /// estan hechos todos los bailes que no digan otra cosa.
+    #[serde(default)]
+    pub suelo: bool,
     pub pos: Vec2,
     /// Radio para recibir los disparos del jugador. No colisiona con nada mas.
     pub radius: f32,
@@ -324,6 +334,7 @@ mod tests {
         BossDef {
             name: "Prueba".into(),
             nivel: Nivel::Facil,
+            suelo: false,
             pos: Vec2::new(320.0, 130.0),
             radius: 30.0,
             phases: vec![
@@ -441,8 +452,8 @@ mod tests {
     ///   que lo usa. Un swing-out no es una linea ni una parada: es un arco.
     /// - **El cancan se desvanece**: `ttl` corto, asi que sus balas salen,
     ///   cruzan un trozo de pantalla y se van solas. Una patada dura lo que
-    ///   dura la patada. Es lo que le deja ser el mas denso del juego y seguir
-    ///   siendo legible.
+    ///   dura la patada. Es lo que deja que sus rasantes crucen el escenario
+    ///   justo de punta a punta y no se queden rodando por el suelo.
     #[test]
     fn cada_baile_tiene_su_verbo_y_no_el_del_vecino() {
         let defs = BossDef::default_bosses();
@@ -682,6 +693,7 @@ mod tests {
         let def = BossDef {
             name: "Vacio".into(),
             nivel: Nivel::Facil,
+            suelo: false,
             pos: Vec2::ZERO,
             radius: 10.0,
             phases: vec![],

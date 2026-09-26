@@ -216,7 +216,6 @@ async fn run_game() {
             pista.marcar_vencido(i);
         }
     }
-    let mut modo = Mode::Flight;
     let mut nodo_actual = 0usize;
     let mut marcado = false;
     let mut intentos: u32 = 0;
@@ -293,12 +292,14 @@ async fn run_game() {
         {
             // Tras perder se reintenta **este** jefe con las vidas llenas; en
             // cualquier otro momento, partida nueva desde el principio.
+            //
+            // "Desde el principio" es el principio de ESTE baile y en su modo:
+            // `with_mode` montaba el vals con los cuatro detras, asi que R en
+            // mitad del cancan te mandaba a bailar el vals, y ahora ademas en
+            // el suelo.
             if world.defeat {
                 world.retry_current_boss();
             } else {
-                // Otra vez **este** baile. Era `World::with_mode`, de antes de
-                // la pista: empezaba desde el vals, asi que ganar el tango y
-                // pulsar "otra vez" te ponia a bailar el vals.
                 world = World::empezar_en(SEED, world.mode, world.baile);
             }
             recorder = Recorder::for_world(&world);
@@ -339,7 +340,11 @@ async fn run_game() {
             marcado = false;
             // Ojo: el jefe sale del NODO, no del sitio en la pista. La pista
             // reordena por nivel.
-            world = World::empezar_en(SEED, modo, pista.nodos[i].jefe);
+            //
+            // Y el modo lo pone el baile: el charleston y el
+            // cancan se bailan en el suelo y el resto en el aire. El vuelo que
+            // se pasa aqui es solo para los que no dicen nada.
+            world = World::empezar_en(SEED, Mode::Flight, pista.nodos[i].jefe);
             recorder = Recorder::for_world(&world);
             accumulator = 0.0;
             intentos += 1;
@@ -351,23 +356,19 @@ async fn run_game() {
             fundido.empezar(0.30);
         }
 
-        if escena == Escena::Menu {
-            let elegido = if is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::SHOOT) {
-                Some(Mode::Flight)
-            } else if is_key_pressed(KeyCode::X) || mando.pulsado(InputFrame::DASH) {
-                Some(Mode::Platform)
-            } else {
-                None
-            };
-            if let Some(m) = elegido {
-                // El modo se elige al entrar a la pista y vale para todos los
-                // bailes de esa visita.
-                audio.play(Sfx::Empezar, 1.0);
-                modo = m;
-                escena = Escena::Pista;
-                accumulator = 0.0;
-                fundido.empezar(0.30);
-            }
+        // Del menu a la pista, con Z. Antes Z entraba volando y X con salto,
+        // y el modo valia para todos los bailes de la visita. Ya no hay nada
+        // que elegir en la puerta: cada baile trae su modo, asi
+        // que la X no hace nada aqui. Dejarla como sinonimo seria un segundo
+        // boton que no dice nada, y el menu tendria que explicar por que hay
+        // dos.
+        if escena == Escena::Menu
+            && (is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::SHOOT))
+        {
+            audio.play(Sfx::Empezar, 1.0);
+            escena = Escena::Pista;
+            accumulator = 0.0;
+            fundido.empezar(0.30);
         }
         // Saltarse el baile. Es una trampa y esta puesta a proposito: ver
         // como avanza el juego no deberia costar pasarse el jefe cada vez.

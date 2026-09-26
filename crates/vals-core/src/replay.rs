@@ -347,7 +347,9 @@ pub fn record_scripted(
     checkpoint_every: u32,
 ) -> Replay {
     let mut world = World::empezar_en(seed, mode, baile);
-    let mut rec = Recorder::with_interval(seed, mode, baile, checkpoint_every);
+    // Se graba el modo del mundo y no el pedido: un baile de suelo se baila en
+    // el suelo aunque se pida vuelo, y el fichero tiene que decir la verdad.
+    let mut rec = Recorder::with_interval(seed, world.mode, baile, checkpoint_every);
     for input in inputs.iter().copied() {
         world.step(input);
         rec.record(input, &world);
@@ -631,6 +633,24 @@ mod tests {
         // Y el formato conserva el modo al ir y volver.
         let vuelta = Replay::from_bytes(&r.to_bytes()).unwrap();
         assert_eq!(vuelta.mode, Mode::Platform);
+        vuelta.verify().expect("y tras pasar por bytes tambien");
+    }
+
+    /// Un baile de suelo se graba y se verifica en el suelo, aunque se pida
+    /// vuelo: el modo lo decide el baile dentro de `empezar_en`, y `verify`
+    /// pasa por el mismo sitio.
+    #[test]
+    fn un_replay_de_un_baile_de_suelo_se_verifica() {
+        let defs = crate::boss::BossDef::default_bosses();
+        let baile = defs
+            .iter()
+            .position(|d| d.suelo)
+            .expect("deberia haber algun baile de suelo");
+        let inputs = inputs_de_prueba(6, 600);
+        let r = record_scripted(8, Mode::Flight, baile, &inputs, 30);
+        assert_eq!(r.mode, Mode::Platform, "el fichero dice el modo de verdad");
+        r.verify().expect("deberia verificar");
+        let vuelta = Replay::from_bytes(&r.to_bytes()).unwrap();
         vuelta.verify().expect("y tras pasar por bytes tambien");
     }
 

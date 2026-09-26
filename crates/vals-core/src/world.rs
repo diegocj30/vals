@@ -159,9 +159,21 @@ impl World {
     /// La progresion la lleva la pista; el mundo solo baila lo que le toca. Un
     /// indice que no existe se recorta al ultimo, para que un mapa
     /// desincronizado no reviente la partida.
+    ///
+    /// **Un baile que declara `suelo` se baila en el suelo**, pida lo que pida
+    /// quien llama: sus figuras estan hechas para eso y en el aire serian otro
+    /// combate. El `mode` que se pasa solo vale para los que no
+    /// dicen nada. Y como esto se decide aqui dentro, el replay no tiene que
+    /// saberlo: `verify` reconstruye con esta misma funcion y sale lo mismo.
     pub fn empezar_en(seed: u64, mode: Mode, jefe: usize) -> Self {
         let mut w = Self::with_mode(seed, mode);
         let i = jefe.min(w.boss_defs.len().saturating_sub(1));
+        if w.boss_defs[i].suelo {
+            w.mode = Mode::Platform;
+        }
+        // El jugador nace segun el modo: en plataformas, de pie en el suelo y
+        // no cayendo desde tres cuartos de pantalla, que es donde nace volando.
+        w.player = Player::new(Self::spawn_pos_for(w.mode));
         w.baile = i;
         w.boss_defs = vec![w.boss_defs[i].clone()];
         w.boss_index = 0;
@@ -1574,6 +1586,24 @@ mod tests {
         assert_eq!(w.baile, ultimo);
     }
 
+    /// El modo lo decide el baile si lo declara, y si no, quien llama.
+    #[test]
+    fn un_baile_de_suelo_se_baila_en_el_suelo_se_pida_lo_que_se_pida() {
+        for (jefe, def) in BossDef::default_bosses().iter().enumerate() {
+            for pedido in [Mode::Flight, Mode::Platform] {
+                let w = World::empezar_en(0, pedido, jefe);
+                let esperado = if def.suelo { Mode::Platform } else { pedido };
+                assert_eq!(w.mode, esperado, "{} pedido en {pedido:?}", def.name);
+                assert_eq!(
+                    w.player.pos,
+                    World::spawn_pos_for(esperado),
+                    "{}: tiene que nacer donde nace su modo",
+                    def.name
+                );
+            }
+        }
+    }
+
     #[test]
     fn saltar_el_baile_lo_da_por_bailado() {
         let mut w = mundo(0);
@@ -1642,43 +1672,99 @@ mod medida_suelo {
     use super::*;
     use crate::player::GROUND_Y;
 
-    /// Cuanta presion llega al suelo en cada figura de cada baile.
+    /// Balas por tick en la franja del suelo durante una figura.
     ///
     /// Un baile solo se puede bailar en tierra si sus balas llegan a tierra.
-    /// Las patadas del cancan, por ejemplo, se desvanecen a mitad de camino:
-    /// en modo plataformas serian decorado. Esto mide balas por segundo en la
-    /// franja del suelo con la jugadora quieta, figura a figura.
+    /// Se mide con la jugadora quieta en el centro del suelo, 20 segundos,
+    /// contando las balas entre `GROUND_Y - 60` y `GROUND_Y + 15`. Por abajo
+    /// se corta en el suelo mas el radio de la bala mas gorda (12) y el de la
+    /// hitbox (2,5): una bala que ya ha atravesado el suelo se sigue viendo,
+    /// pero ahi ya no puede darle a nadie, y contarla premiaba a los arcos que
+    /// cruzan el suelo despacio.
+    ///
+    /// **La jugadora es invulnerable mientras se mide**, y en la primera medida no
+    /// lo era. Al morir se limpia la pantalla, asi que aquella medida premiaba
+    /// a las figuras que matan pronto: cuanto mejor apuntaba una, menos balas
+    /// se le contaban. Lo que se quiere saber es cuanto echa el baile al suelo,
+    /// no cuanto aguanta alguien quieto, igual que `disparar_a_bocajarro`.
+    pub(super) fn presion(baile: usize, fase: usize) -> f32 {
+        let mut w = World::empezar_en(7, Mode::Platform, baile);
+        // Saltar a la figura: se le quita la vida de las anteriores por el
+        // mismo camino que un disparo, que es el que cambia de fase.
+        while w.boss.phase < fase && !w.boss.defeated {
+            let hp = w.boss.hp.max(1);
+            w.boss.damage(hp);
+        }
+        let (mut abajo, ticks) = (0usize, 1200);
+        for _ in 0..ticks {
+            w.player.iframes = 10;
+            w.step(InputFrame::default());
+            abajo += w
+                .bullets
+                .iter_live()
+                .filter(|b| (GROUND_Y - 60.0..=GROUND_Y + 15.0).contains(&b.pos.y))
+                .count();
+        }
+        abajo as f32 / ticks as f32
+    }
+
+    /// Cada figura de un baile de suelo aprieta de verdad en el suelo, y
+    /// ninguna figura aprieta menos que la anterior.
+    ///
+    /// **El umbral son 4 balas por tick en la franja.** La franja mide 75 de
+    /// alto y una bala tipica la cruza en unos 20 ticks, asi que 4 vivas en
+    /// ella son del orden de una docena de balas por segundo llegando al
+    /// suelo: algo que esquivar en cada corchea. Sale de medir:
+    /// las figuras de suelo van de 5,6 a 20,2, y lo mas flojo de los bailes de
+    /// vuelo puesto en tierra, el molinete del vals, se queda en 3,1. Por
+    /// debajo de 4, una figura de suelo seria un paseo con alguna bala
+    /// suelta, que es justo lo que se temia.
+    ///
+    /// Y que no baje: dentro de un baile la curva sube, igual que la densidad
+    /// en `cada_baile_cabe_en_su_presupuesto`. Un suelo que aprieta menos en la
+    /// ultima figura que en la primera es una meseta con otro nombre.
+    #[test]
+    fn los_bailes_de_suelo_aprietan_en_el_suelo() {
+        const UMBRAL: f32 = 4.0;
+        let defs = BossDef::default_bosses();
+        assert!(
+            defs.iter().any(|d| d.suelo),
+            "deberia haber algun baile de suelo"
+        );
+        for (baile, def) in defs.iter().enumerate().filter(|(_, d)| d.suelo) {
+            let presiones: Vec<f32> = (0..def.phases.len())
+                .map(|fase| presion(baile, fase))
+                .collect();
+            for (f, p) in def.phases.iter().zip(&presiones) {
+                assert!(
+                    *p >= UMBRAL,
+                    "{}, en {}, apenas toca el suelo: {p:.1} balas por tick",
+                    def.name,
+                    f.name
+                );
+            }
+            assert!(
+                presiones.windows(2).all(|par| par[1] >= par[0]),
+                "la presion en el suelo de {} baja de una figura a otra: {presiones:?}",
+                def.name
+            );
+        }
+    }
+
+    /// Cuanta presion llega al suelo en cada figura de cada baile.
     ///
     /// `cargo test -p vals-core presion_en_el_suelo -- --nocapture --ignored`
     #[test]
     #[ignore]
     fn presion_en_el_suelo() {
-        for baile in 0..crate::boss::DEFAULT_BOSS_RONS.len() {
-            let w0 = World::empezar_en(7, Mode::Platform, baile);
-            println!("{}", w0.boss.name);
-            for fase in 0..w0.boss.phase_count() {
-                let mut w = World::empezar_en(7, Mode::Platform, baile);
-                // Saltar a la figura: se le quita la vida de las anteriores
-                // por el mismo camino que un disparo, que es el que cambia de
-                // fase.
-                while w.boss.phase < fase && !w.boss.defeated {
-                    let hp = w.boss.hp.max(1);
-                    w.boss.damage(hp);
-                }
-                let (mut abajo, ticks) = (0usize, 1200);
-                for _ in 0..ticks {
-                    w.lives = 99;
-                    w.step(InputFrame::default());
-                    abajo += w
-                        .bullets
-                        .iter_live()
-                        .filter(|b| b.pos.y > GROUND_Y - 60.0)
-                        .count();
-                }
+        for (baile, def) in BossDef::default_bosses().iter().enumerate() {
+            let suelo = if def.suelo { "suelo" } else { "vuelo" };
+            println!("{} ({suelo})", def.name);
+            for (fase, f) in def.phases.iter().enumerate() {
                 println!(
                     "  {:<14} {:>6.1} balas en el suelo por tick",
-                    w.boss.phase_name(),
-                    abajo as f32 / ticks as f32
+                    f.name,
+                    presion(baile, fase)
                 );
             }
         }

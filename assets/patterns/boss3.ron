@@ -1,7 +1,8 @@
-// EL CHARLESTON. El tercer baile, y el jazz.
+// EL CHARLESTON. El tercer baile, el jazz, y el primero que se baila EN EL
+// SUELO (decision 99): con gravedad y salto, a lo Cuphead.
 //
 // Un baile es un jefe y cada fase es una figura suya (decision 70). Lo que
-// separa a este de los otros dos son dos cosas, y ninguna es la melodia:
+// separa a este de los demas son dos cosas, y ninguna es la melodia:
 //
 //   1. LA CLAVE 3-3-2. El charleston no va a tiempo: va tres, tres, dos. El
 //      tema esta a 100 negras en 4/4, o sea 36 ticks por tiempo y 144 por
@@ -13,14 +14,37 @@
 //      que el vals es el unico que usa `Turn`. Un swing-out no es una linea ni
 //      una parada: es un arco, tu pareja sale girando y vuelve girando.
 //
+// EN EL SUELO, EL ARCO ES UN SWING-OUT DE VERDAD. Cada tanda sale hacia un
+// lado y abajo y la curva la trae de vuelta, asi que aterriza al OTRO lado de
+// la bailarina, y cuanto mas abierta sale mas rasante llega. Por eso el spin
+// aqui es suave (0.45-0.55): con la curva del vuelo (1.35) la bala da la vuelta
+// antes de bajar las 430 que hay hasta el suelo, y no lo toca nunca.
+//
+// POR QUE LA BAILARINA ESTA A MEDIA ALTURA Y SE MUEVE DE LADO. El jugador
+// dispara SIEMPRE hacia arriba, tambien en plataformas (world.rs,
+// `player_shoot`): para darle hay que ponerse debajo. Asi que ella salta de un
+// lado a otro y tu la persigues por el suelo, y sus arcos aterrizan justo
+// alrededor de donde tienes que estar. Esa es la tension de la pelea. A media
+// altura (y 300, no 150 como en el aire) para que los arcos lleguen al suelo
+// en dos segundos y no en tres, y por encima del techo del salto (575).
+//
+// ESTE SE ESQUIVA CORRIENDO; el cancan, saltando. Aqui lo que cae son sitios
+// donde no estar, no lineas que saltar: los arcos rasantes se pueden saltar,
+// pero lo normal es leer donde van a caer y apartarse.
+//
 // Y el movimiento va con ease Out —arranca de golpe y frena—, que es lo que
 // hace un salto. El vals usa InOut y el tango Linear.
 //
-// Las tres figuras:
+// Las tres figuras (balas/s disparadas; presion = balas en la franja del suelo
+// por tick, medida en world.rs):
 //
-//   1. El charleston   61 b/s   la patada: todo en la clave 3-3-2.
-//   2. El swing-out   102 b/s   arcos que salen girando por los dos lados.
-//   3. El aereo       172 b/s   el salto. Es el final. Techo del baile: 190.
+//   1. El charleston    19 b/s  presion  6.5  un swing por golpe de clave.
+//   2. El swing-out     30 b/s  presion 11.5  los dos swings en cada golpe.
+//   3. El aereo         55 b/s  presion 20.2  mas bajo, a dos capas. Techo: 190.
+//
+// Las balas por segundo son la mitad o menos que en el aire (61/102/172), y a
+// proposito: en el suelo solo te mueves de lado, y el mismo numero de balas
+// pesa mucho mas en una dimension que en dos.
 //
 // Guia rapida de pasos:
 //   Wait(n)               espera n ticks (60 ticks = 1 segundo)
@@ -32,17 +56,20 @@
 //   MoveTo(pos:,dur:,ease:) mueve al jefe; BLOQUEA su hilo mientras dura
 //
 // En el emisor: arc 6.28 es un anillo completo, menos es un abanico centrado
-// en la mira. aim: Fixed(rad) o AtPlayer. kind: 0 pequena, 1 media, 2 grande,
-// 3 aguja. accel negativa frena la bala y la hace volver. spin la curva.
-// flags: 1 = parryable (rosa). Solo lo gordo y lento deberia serlo.
+// en la mira. aim: Fixed(rad) o AtPlayer; 0 es derecha y 1.57 abajo. kind: 0
+// pequena, 1 media, 2 grande, 3 aguja. accel negativa frena la bala y la hace
+// volver. spin la curva: positivo gira de derecha hacia abajo. flags: 1 =
+// parryable (rosa). Solo lo gordo y lento deberia serlo.
 (
   name: "El Charleston",
   // los arcos se leen, pero hay que aprenderse la clave 3-3-2.
   nivel: Media,
-  pos: (320.0, 150.0),
+  suelo: true,
+  pos: (320.0, 300.0),
   radius: 46.0,
   phases: [
-    // --- El charleston. La patada, en la clave 3-3-2.
+    // --- El charleston. Un swing por golpe de clave: sale a un lado, vuelve
+    //     por el otro. En el "dos" salen los dos a la vez.
     (
       name: "El charleston",
       hp: 480,
@@ -51,9 +78,9 @@
           [
             // Salta de un lado a otro: sale de golpe y frena.
             Forever([
-              MoveTo(pos: (180.0, 145.0), dur: 54, ease: Out),
+              MoveTo(pos: (200.0, 300.0), dur: 54, ease: Out),
               Wait(90),
-              MoveTo(pos: (460.0, 145.0), dur: 54, ease: Out),
+              MoveTo(pos: (440.0, 300.0), dur: 54, ease: Out),
               Wait(90),
             ]),
           ],
@@ -61,48 +88,26 @@
             // LA CLAVE. Tres, tres, dos. Es toda la figura.
             Forever([
               Fire((
-                count: 14,
-                arc: 6.2831855,
-                aim: Fixed(0.0),
-                speed: 165.0,
-                rings: 1,
-                speed_step: 45.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.55,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 8, arc: 1.0, aim: Fixed(0.95), speed: 210.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 14,
-                arc: 6.2831855,
-                aim: Fixed(0.45),
-                speed: 165.0,
-                rings: 1,
-                speed_step: 45.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.55,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 8, arc: 1.0, aim: Fixed(2.19), speed: 210.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 14,
-                arc: 6.2831855,
-                aim: Fixed(0.9),
-                speed: 165.0,
-                rings: 1,
-                speed_step: 45.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.55,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 8, arc: 1.0, aim: Fixed(0.95), speed: 210.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Fire((
+                count: 8, arc: 1.0, aim: Fixed(2.19), speed: 210.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(36),
             ]),
@@ -111,68 +116,33 @@
             // La corchea de swing: no cae en la mitad del tiempo, cae tarde.
             // Con 36 ticks por tiempo, el tresillo son 12 y la corchea swingada
             // cae en el 24. Esto es, literalmente, lo que hace que un ritmo
-            // suene a jazz.
+            // suene a jazz. Va a tus pies: es lo que te obliga a moverte
+            // aunque no caiga ningun arco cerca.
             Forever([
               Wait(24),
               Fire((
-                count: 5,
-                arc: 0.6,
-                aim: AtPlayer,
-                speed: 275.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
+                count: 3, arc: 0.2, aim: AtPlayer, speed: 250.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 3, flags: 0,
               )),
               Wait(12),
             ]),
           ],
           [
             Forever([
-              Fire((
-                count: 10,
-                arc: 6.2831855,
-                aim: Fixed(2.2),
-                speed: 205.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: -0.75,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Wait(18),
-            ]),
-          ],
-          [
-            Forever([
               Wait(288),
               Fire((
-                count: 3,
-                arc: 1.0,
-                aim: AtPlayer,
-                speed: 120.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 2,
-                flags: 1,
+                count: 3, arc: 1.0, aim: AtPlayer, speed: 120.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 2, flags: 1,
               )),
             ]),
           ],
         ]),
       ],
     ),
-    // --- El swing-out. Arcos que salen girando y vuelven.
+    // --- El swing-out. Los dos arcos en cada golpe, cruzandose por debajo de
+    //     ella, y la pareja contestando a contratiempo.
     (
       name: "El swing-out",
       hp: 640,
@@ -180,145 +150,96 @@
         Parallel([
           [
             Forever([
-              MoveTo(pos: (450.0, 130.0), dur: 54, ease: Out),
+              MoveTo(pos: (450.0, 290.0), dur: 54, ease: Out),
               Wait(90),
-              MoveTo(pos: (190.0, 185.0), dur: 54, ease: Out),
+              MoveTo(pos: (190.0, 310.0), dur: 54, ease: Out),
               Wait(90),
             ]),
           ],
           [
-            // El swing-out: sale girando hacia un lado.
+            // El swing-out: salen por los dos lados y se cruzan al volver.
             Forever([
               Fire((
-                count: 18,
-                arc: 6.2831855,
-                aim: Fixed(0.0),
-                speed: 195.0,
-                rings: 1,
-                speed_step: 45.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 1.35,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 7, arc: 0.8, aim: Fixed(0.95), speed: 225.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Fire((
+                count: 7, arc: 0.8, aim: Fixed(2.19), speed: 225.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 18,
-                arc: 6.2831855,
-                aim: Fixed(0.35),
-                speed: 195.0,
-                rings: 1,
-                speed_step: 45.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 1.35,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 7, arc: 0.8, aim: Fixed(0.95), speed: 225.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Fire((
+                count: 7, arc: 0.8, aim: Fixed(2.19), speed: 225.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 18,
-                arc: 6.2831855,
-                aim: Fixed(0.7),
-                speed: 195.0,
-                rings: 1,
-                speed_step: 45.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 1.35,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 7, arc: 0.8, aim: Fixed(0.95), speed: 225.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Fire((
+                count: 7, arc: 0.8, aim: Fixed(2.19), speed: 225.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(36),
             ]),
           ],
           [
-            // Y la pareja gira al reves. Los dos arcos se cruzan.
-            Forever([
-              Wait(18),
-              Fire((
-                count: 16,
-                arc: 6.2831855,
-                aim: Fixed(1.6),
-                speed: 180.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: -1.35,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Wait(18),
-            ]),
-          ],
-          [
+            // Y la pareja, en la corchea de swing (24 y 60): un arco mas
+            // cerrado que aterriza cerca de ella, justo donde tienes que
+            // ponerte para darle.
             Forever([
               Wait(24),
               Fire((
-                count: 6,
-                arc: 0.55,
-                aim: AtPlayer,
-                speed: 300.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
+                count: 4, arc: 0.5, aim: Fixed(1.1), speed: 200.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.55, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(36),
+              Fire((
+                count: 4, arc: 0.5, aim: Fixed(2.04), speed: 200.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.55, ttl: 30.0, kind: 1, flags: 0,
               )),
               Wait(12),
             ]),
           ],
           [
             Forever([
+              Wait(24),
               Fire((
-                count: 12,
-                arc: 6.2831855,
-                aim: Fixed(3.9),
-                speed: 235.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.9,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 3, arc: 0.2, aim: AtPlayer, speed: 270.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 3, flags: 0,
               )),
-              Wait(18),
+              Wait(12),
             ]),
           ],
           [
             Forever([
               Wait(288),
               Fire((
-                count: 4,
-                arc: 1.3,
-                aim: AtPlayer,
-                speed: 125.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 2,
-                flags: 1,
+                count: 4, arc: 1.3, aim: AtPlayer, speed: 125.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 2, flags: 1,
               )),
             ]),
           ],
         ]),
       ],
     ),
-    // --- El aereo. El salto: la pareja despega.
+    // --- El aereo. El salto: la pareja despega y cae. Baila mas bajo, asi que
+    //     los arcos llegan antes y mas cerca, y a dos capas.
     (
       name: "El aereo",
       hp: 900,
@@ -326,58 +247,46 @@
         Parallel([
           [
             Forever([
-              MoveTo(pos: (160.0, 120.0), dur: 36, ease: Out),
+              MoveTo(pos: (170.0, 250.0), dur: 36, ease: Out),
               Wait(36),
-              MoveTo(pos: (480.0, 190.0), dur: 36, ease: Out),
+              MoveTo(pos: (470.0, 380.0), dur: 36, ease: Out),
               Wait(36),
             ]),
           ],
           [
-            // La clave, ahora con dos capas.
+            // La clave, ahora con dos capas y los dos swings en cada golpe.
             Forever([
               Fire((
-                count: 22,
-                arc: 6.2831855,
-                aim: Fixed(0.0),
-                speed: 215.0,
-                rings: 2,
-                speed_step: 60.0,
-                ring_offset: 0.09,
-                accel: 0.0,
-                spin: 1.15,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 6, arc: 0.9, aim: Fixed(0.95), speed: 225.0,
+                rings: 2, speed_step: 35.0, ring_offset: 0.06,
+                accel: 0.0, spin: 0.55, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Fire((
+                count: 6, arc: 0.9, aim: Fixed(2.19), speed: 225.0,
+                rings: 2, speed_step: 35.0, ring_offset: -0.06,
+                accel: 0.0, spin: -0.55, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 22,
-                arc: 6.2831855,
-                aim: Fixed(0.4),
-                speed: 215.0,
-                rings: 2,
-                speed_step: 60.0,
-                ring_offset: 0.09,
-                accel: 0.0,
-                spin: 1.15,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 6, arc: 0.9, aim: Fixed(0.95), speed: 225.0,
+                rings: 2, speed_step: 35.0, ring_offset: 0.06,
+                accel: 0.0, spin: 0.55, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Fire((
+                count: 6, arc: 0.9, aim: Fixed(2.19), speed: 225.0,
+                rings: 2, speed_step: 35.0, ring_offset: -0.06,
+                accel: 0.0, spin: -0.55, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 22,
-                arc: 6.2831855,
-                aim: Fixed(0.8),
-                speed: 215.0,
-                rings: 2,
-                speed_step: 60.0,
-                ring_offset: 0.09,
-                accel: 0.0,
-                spin: 1.15,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 8, arc: 1.1, aim: Fixed(0.95), speed: 225.0,
+                rings: 2, speed_step: 35.0, ring_offset: 0.06,
+                accel: 0.0, spin: 0.55, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Fire((
+                count: 8, arc: 1.1, aim: Fixed(2.19), speed: 225.0,
+                rings: 2, speed_step: 35.0, ring_offset: -0.06,
+                accel: 0.0, spin: -0.55, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(36),
             ]),
@@ -386,97 +295,36 @@
             Forever([
               Wait(18),
               Fire((
-                count: 20,
-                arc: 6.2831855,
-                aim: Fixed(2.6),
-                speed: 190.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: -1.5,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
+                count: 4, arc: 0.6, aim: Fixed(1.25), speed: 210.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
               Wait(18),
+              Fire((
+                count: 4, arc: 0.6, aim: Fixed(1.89), speed: 210.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.6, ttl: 30.0, kind: 1, flags: 0,
+              )),
             ]),
           ],
           [
             Forever([
               Wait(24),
               Fire((
-                count: 9,
-                arc: 0.6,
-                aim: AtPlayer,
-                speed: 315.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
+                count: 4, arc: 0.24, aim: AtPlayer, speed: 285.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 3, flags: 0,
               )),
               Wait(12),
             ]),
           ],
           [
             Forever([
-              Fire((
-                count: 16,
-                arc: 6.2831855,
-                aim: Fixed(5.1),
-                speed: 250.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 1.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Wait(18),
-            ]),
-          ],
-          [
-            Forever([
-              Wait(36),
-              Fire((
-                count: 14,
-                arc: 2.6,
-                aim: AtPlayer,
-                speed: 175.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Wait(36),
-            ]),
-          ],
-          [
-            Forever([
               Wait(216),
               Fire((
-                count: 5,
-                arc: 1.5,
-                aim: AtPlayer,
-                speed: 130.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 2,
-                flags: 1,
+                count: 5, arc: 1.5, aim: AtPlayer, speed: 130.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, ttl: 30.0, kind: 2, flags: 1,
               )),
             ]),
           ],
