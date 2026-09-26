@@ -47,16 +47,8 @@ pub struct Escena {
     /// Vida que le queda en la figura, de 0 a 1.
     pub vida: f32,
     /// El pulso del compas: 1 justo en el golpe y cayendo hasta el siguiente.
-    #[expect(
-        dead_code,
-        reason = "la bailarina de transicion no lo usa; el primer jefe propio que lo lea tiene que quitar esto"
-    )]
     pub pulso: f32,
     /// Si el golpe que acaba de sonar es el uno del compas.
-    #[expect(
-        dead_code,
-        reason = "la bailarina de transicion no lo usa; el primer jefe propio que lo lea tiene que quitar esto"
-    )]
     pub fuerte: bool,
     /// Su tinta principal y la segunda. En combate son las de su baile (ver
     /// `paleta::del_baile`) o blanco si le acaban de dar; en el cartel
