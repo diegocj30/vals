@@ -17,12 +17,12 @@
 //! Un fichero por jefe, y **una sola puerta**: `dibujar`. Lo llaman el combate
 //! (`draw_boss`) y el cartel del panel lateral, asi que un jefe nuevo se
 //! dibuja en los dos sitios sin tocar nada mas.
+//!
+//! Hubo aqui una `bailarina_de_siempre` de transicion, para que el juego no se
+//! quedara sin jefe mientras cada uno tenia su dibujo. Con los cuatro hechos
+//! sobraba, y se borro.
 
 use macroquad::prelude::*;
-
-use crate::bailarines;
-use crate::draw::{Layout, draw_figura};
-use crate::skeleton;
 
 mod bandoneon;
 mod caja_de_musica;
@@ -67,26 +67,5 @@ pub fn dibujar(baile: usize, e: &Escena) {
         1 => bandoneon::dibujar(e),
         2 => gramofono::dibujar(e),
         _ => coristas::dibujar(e),
-    }
-}
-
-/// La bailarina de huesos de antes de los jefes objeto.
-///
-/// Es de transicion: cada jefe la usa hasta que tiene su dibujo propio, asi el
-/// juego nunca se queda sin jefe a medio camino. Cuando ninguno la necesite,
-/// se borra.
-pub(super) fn bailarina_de_siempre(baile: usize, e: &Escena) {
-    let ls = Layout::con_escala(e.escala);
-    let poses = bailarines::poses(baile, e.fase, e.t, e.vida);
-    let mut centro = e.centro;
-    if let Some(tablas) = e.tablas {
-        let pies = poses
-            .iter()
-            .flat_map(|p| [p.joints[skeleton::PIE_I].y, p.joints[skeleton::PIE_D].y])
-            .fold(f32::MIN, f32::max);
-        centro.y -= (e.centro.y + pies * e.escala - tablas).max(0.0);
-    }
-    for pose in &poses {
-        draw_figura(pose, centro, &ls, 1.0, e.tinta, e.ropa);
     }
 }
