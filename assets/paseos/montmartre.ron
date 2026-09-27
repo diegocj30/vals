@@ -1,0 +1,134 @@
+// EL PASEO DE MONTMARTRE. La cuesta que se sube antes de bailar El Cancan.
+//
+// El ultimo paseo y el mas dificil: de noche, del boulevard de Clichy a lo
+// alto de la Butte, por las escaleras de hierro, los tejados de zinc y la
+// place du Tertre, hasta la puerta del Moulin Rouge. Es el unico que SUBE: las
+// escaleras levantan la acera casi quinientas unidades, y la camara sube con
+// ella.
+//
+// Cinco tramos, de izquierda a derecha (la puerta esta en x 7350):
+//
+//   1. El boulevard     0 - 1480   llano. Coristas y una botella en la mesa
+//                                  de un cafe. Ensena a saltar el volante.
+//   2. Las escaleras 1620 - 3300   dos tramos de escalera de la rue Foyatier.
+//                                  Las coristas BAJAN a por ti.
+//   3. Los tejados   3450 - 5050   de tejado en tejado, con el vacio en
+//                                  medio. Un pintor en lo alto: apunta arriba.
+//   4. El Tertre     5050 - 5600   la plaza de los pintores: caballetes,
+//                                  charcos de pintura y champan.
+//   5. La cumbre     5760 - 7650   la ultima escalera y todo junto, hasta el
+//                                  molino rojo.
+//
+// En nativo hay HOT-RELOAD, igual que con los jefes: guarda y el nivel se
+// rehace sin recompilar, con la jugadora donde estaba.
+//
+// Coordenadas: x crece hacia la derecha, y hacia abajo. Sin escaleras la acera
+// esta en y 470 (`SUELO_Y`); cada escalera la sube lo que diga, asi que las y
+// de las plataformas y de las notas son ABSOLUTAS: una mesa en un rellano que
+// esta a 340 va a 290, no a 420. El salto sube unas 155 unidades y cruza unas
+// 200 corriendo.
+//
+// Guia de campos (los de Viena valen igual):
+//   tiempo        ticks por tiempo del galop de Offenbach (150 bpm: 24). Las
+//                 coristas y las botellas van en ciclos de cuatro tiempos.
+//   escaleras     (x, ancho, sube): de x a x + ancho la acera sube `sube`, y
+//                 se queda arriba. Como mucho 0,7 de subida por unidad de
+//                 ancho, que es lo que la fisica perdona al pisar.
+//   enemigos      tipo: Corista (chasse, patada alta y el volante a ras de
+//                                acera: se salta),
+//                       Botella (descorcha en arco; el corcho revienta en
+//                                burbujas; uno de cada tres es rosa. y = la
+//                                superficie donde esta, 0 = la acera),
+//                       Pintor  (sacude pintura en abanico: tres charcos que
+//                                se secan en seguida. y como la botella),
+//                       Nota    (la de Viena: vuela en onda. y = altura).
+(
+  nombre: "El paseo de Montmartre",
+  jefe: "El Cancan",
+  subtitulo: "Cuesta arriba, hasta el molino",
+  tiempo: 24,
+  largo: 7650.0,
+  salida: 140.0,
+  puerta: 7350.0,
+  suelo: [
+    (0.0, 1480.0),
+    (1620.0, 3300.0),
+    (3450.0, 3800.0),
+    (3950.0, 4250.0),
+    (4400.0, 5600.0),
+    (5760.0, 7650.0),
+  ],
+  escaleras: [
+    // La rue Foyatier: dos tramos con su rellano.
+    (x: 1760.0, ancho: 260.0, sube: 130.0),
+    (x: 2300.0, ancho: 240.0, sube: 120.0),
+    // Una escalerilla entre dos casas, ya en los tejados.
+    (x: 4480.0, ancho: 200.0, sube: 100.0),
+    // La ultima, a la cumbre.
+    (x: 5900.0, ancho: 280.0, sube: 140.0),
+  ],
+  plataformas: [
+    // El boulevard: mesas de cafe y un toldo.
+    (x: 960.0, y: 422.0, ancho: 80.0),
+    (x: 1180.0, y: 360.0, ancho: 150.0),
+    // Las escaleras: un rellano de piedra por encima, y el balcon del pintor.
+    (x: 2080.0, y: 290.0, ancho: 90.0),
+    (x: 2840.0, y: 95.0, ancho: 130.0),
+    (x: 3000.0, y: 150.0, ancho: 110.0),
+    // Los tejados: chimeneas y buhardillas, y un voladizo sobre cada vacio.
+    (x: 3560.0, y: 172.0, ancho: 70.0),
+    (x: 3780.0, y: 130.0, ancho: 110.0),
+    (x: 4060.0, y: 170.0, ancho: 80.0),
+    (x: 4210.0, y: 120.0, ancho: 120.0),
+    (x: 4780.0, y: -10.0, ancho: 140.0),
+    // El Tertre: mesas de terraza.
+    (x: 5160.0, y: 72.0, ancho: 80.0),
+    (x: 5420.0, y: 72.0, ancho: 80.0),
+    (x: 5620.0, y: 60.0, ancho: 110.0),
+    // La cumbre.
+    (x: 6420.0, y: -130.0, ancho: 150.0),
+    (x: 6860.0, y: -70.0, ancho: 80.0),
+  ],
+  enemigos: [
+    // --- El boulevard ---
+    (tipo: Corista, x: 760.0),
+    (tipo: Botella, x: 1000.0, y: 422.0),
+    (tipo: Nota, x: 1300.0, y: 300.0),
+    (tipo: Nota, x: 1360.0, y: 260.0, rosa: true),
+    (tipo: Corista, x: 1420.0),
+    // --- Las escaleras ---
+    (tipo: Botella, x: 2125.0, y: 290.0),
+    (tipo: Corista, x: 2250.0),
+    (tipo: Nota, x: 2500.0, y: 150.0),
+    (tipo: Corista, x: 2750.0),
+    (tipo: Pintor, x: 2905.0, y: 95.0),
+    (tipo: Botella, x: 3055.0, y: 150.0),
+    (tipo: Nota, x: 3250.0, y: 110.0, rosa: true),
+    // --- Los tejados ---
+    (tipo: Corista, x: 3700.0),
+    (tipo: Nota, x: 3880.0, y: 110.0),
+    (tipo: Nota, x: 3940.0, y: 70.0),
+    (tipo: Botella, x: 4100.0, y: 170.0),
+    (tipo: Pintor, x: 4270.0, y: 120.0),
+    (tipo: Corista, x: 4700.0),
+    (tipo: Pintor, x: 4850.0, y: -10.0),
+    (tipo: Nota, x: 5000.0, y: 20.0, rosa: true),
+    // --- El Tertre ---
+    (tipo: Pintor, x: 5280.0),
+    (tipo: Botella, x: 5200.0, y: 72.0),
+    (tipo: Corista, x: 5380.0),
+    (tipo: Botella, x: 5460.0, y: 72.0),
+    (tipo: Nota, x: 5620.0, y: 0.0),
+    (tipo: Botella, x: 5675.0, y: 60.0),
+    // --- La cumbre ---
+    (tipo: Corista, x: 6000.0),
+    (tipo: Nota, x: 6250.0, y: -90.0, rosa: true),
+    (tipo: Corista, x: 6400.0),
+    (tipo: Pintor, x: 6495.0, y: -130.0),
+    (tipo: Corista, x: 6650.0),
+    (tipo: Botella, x: 6900.0, y: -70.0),
+    (tipo: Nota, x: 6950.0, y: -120.0),
+    (tipo: Nota, x: 7010.0, y: -80.0, rosa: true),
+    (tipo: Corista, x: 7100.0),
+  ],
+)

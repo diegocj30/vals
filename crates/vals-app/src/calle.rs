@@ -25,6 +25,7 @@ use vals_core::player::{PARRY_RADIUS, SUPER_TICKS};
 use vals_core::rng::Pcg32;
 
 use crate::calle_chicago;
+use crate::calle_montmartre;
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{Instrumento, arco, circulo, linea, musico, rect, tri};
 use crate::fuentes::{self, Cara};
@@ -75,6 +76,29 @@ pub fn camara(p: &Paseo, alpha: f32) -> f32 {
     (x - VISTA_W * ENCUADRE).clamp(0.0, (p.def.largo - VISTA_W).max(0.0))
 }
 
+/// Cuanto ha subido la camara: la y de la calle que queda en el borde de
+/// arriba de la vista. Cero en una calle llana, negativa en una cuesta.
+///
+/// Sigue a **la acera de alrededor**, no a la jugadora: saltar no mueve la
+/// camara, y como mira mas por delante que por detras, la escalera que viene
+/// se ve subir antes de pisarla. Es una media de la altura, asi que sale
+/// suave sin guardar nada entre fotogramas. Con un tope: la acera que se pisa
+/// no baja de 20 por debajo de donde iria en llano ni sube mas de 100, que
+/// mirando tanto por delante, al pie de una escalera la dejaba debajo de las
+/// cartas.
+pub fn camara_y(p: &Paseo, alpha: f32) -> f32 {
+    if p.def.escaleras.is_empty() {
+        return 0.0;
+    }
+    let x = p.jugadora.render_pos(alpha).x;
+    const MUESTRAS: usize = 13;
+    let suma: f32 = (0..MUESTRAS)
+        .map(|i| p.def.altura(x - 160.0 + 40.0 * i as f32) - SUELO_Y)
+        .sum();
+    let pisa = p.def.altura(x) - SUELO_Y;
+    (suma / MUESTRAS as f32).clamp(pisa - 20.0, pisa + 100.0)
+}
+
 /// El paseo entero. `pulso` es el latido del compas, de 0 a 1, y `baile` el
 /// baile al que lleva: sus dos tintas visten a las parejas, la vajilla y la
 /// puerta, igual que visten a su jefe.
@@ -82,20 +106,25 @@ pub fn dibujar(p: &Paseo, alpha: f32, l: &Layout, pulso: f32, baile: usize) {
     let tintas = paleta::del_baile(baile);
     clear_background(PAPEL);
     let cam = camara(p, alpha);
+    let cam_y = camara_y(p, alpha);
     let t = p.tick as f32 + alpha;
     // Una capa de parallax es la lamina desplazada: `f` es lo que se mueve
-    // con la camara, de 0 (el cielo) a 1 (la calle).
-    let capa = |f: f32| l.sacudido(vec2(-cam * f, 0.0));
+    // con la camara, de 0 (el cielo) a 1 (la calle). En una cuesta tambien en
+    // vertical: lo lejano se queda abajo segun se sube.
+    let capa = |f: f32| l.sacudido(vec2(-cam * f, -cam_y * f));
     let calle = capa(1.0);
 
     // El fondo es de cada ciudad. Un baile sin calle propia anda por Viena.
     match baile {
         2 => calle_chicago::fondo(p, l, &capa, cam, pulso),
+        3 => calle_montmartre::fondo(p, l, &capa, cam, pulso),
         _ => fondo_de_viena(p, l, &capa, cam, pulso),
     }
-    // Y lo que se pisa tambien: el canal de Viena no es el vacio de Chicago.
+    // Y lo que se pisa tambien: el canal de Viena no es el vacio de Chicago
+    // ni la cuesta de Montmartre.
     match baile {
         2 => calle_chicago::calle(p, &calle, alpha, cam, t, pulso),
+        3 => calle_montmartre::calle(p, &calle, alpha, t, pulso),
         _ => {
             acera(p, &calle, cam, t);
             plataformas(p, &calle);
@@ -106,6 +135,7 @@ pub fn dibujar(p: &Paseo, alpha: f32, l: &Layout, pulso: f32, baile: usize) {
         enemigo(e, &calle, p.tick, t, p.def.tiempo, tintas);
     }
     platos(p, &calle, t, tintas.0);
+    calle_montmartre::fugaces(p, &calle, t, tintas);
     disparos(p, &calle);
     dibujar_jugadora(p, alpha, t, &calle);
     parry_y_super(p, alpha, &calle);
@@ -761,10 +791,13 @@ fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tiempo: u32, tintas: (Col
         Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin => {
             calle_chicago::enemigo(e, l, tick, t, tiempo, tintas, &tinte);
         }
+        Tipo::Corista => calle_montmartre::corista(e, l, edad, tintas, &tinte),
+        Tipo::Botella => calle_montmartre::botella(e, l, t, tintas, &tinte),
+        Tipo::Pintor => calle_montmartre::pintor(e, l, tintas, &tinte),
     }
 }
 
-fn mezcla(a: Color, b: Color, k: f32) -> Color {
+pub(crate) fn mezcla(a: Color, b: Color, k: f32) -> Color {
     Color::new(
         a.r + (b.r - a.r) * k,
         a.g + (b.g - a.g) * k,

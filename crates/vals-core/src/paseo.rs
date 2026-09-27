@@ -37,9 +37,10 @@ use crate::{DT, InputFrame, Pcg32, Player};
 ///
 /// Cada uno dice delante de que jefe va (`jefe`), asi que el orden de esta
 /// lista no significa nada: un baile sin paseo se entra directo, como antes.
-pub const PASEO_RONS: [&str; 2] = [
+pub const PASEO_RONS: [&str; 3] = [
     include_str!("../../../assets/paseos/viena.ron"),
     include_str!("../../../assets/paseos/chicago.ron"),
+    include_str!("../../../assets/paseos/montmartre.ron"),
 ];
 
 /// Lo que se ve de la calle, en unidades logicas.
@@ -126,6 +127,42 @@ const METER_POR_IMPACTO: f32 = 0.8;
 /// Lo que quita el super a cada enemigo en pantalla.
 const DANO_SUPER: i32 = 12;
 
+/// Lo mas empinada que puede ser una escalera: 0,7 de subida por unidad de
+/// ancho. La fisica se fia de ello (ver `mover`): con un dash a 900 la acera
+/// sube como mucho 10,5 en un tick, y eso es lo que se perdona al pisar.
+pub const PENDIENTE_MAX: f32 = 0.7;
+
+/// La corista patea cuando te tiene a esta distancia, y hasta aqui baja a por
+/// ti con su chasse.
+const ALCANCE_CORISTA: f32 = 560.0;
+/// Lo largo de su pierna, de la cadera a la punta del botin.
+pub const PIERNA: f32 = 40.0;
+/// Radio del botin, para el golpe.
+const RADIO_BOTIN: f32 = 11.0;
+/// Por encima de esto de `gesto` la pierna esta arriba y hace dano. Por debajo
+/// esta recogiendola, y pasar pegada a ella no se castiga.
+const PIERNA_PELIGRO: f32 = 0.3;
+/// El volante que levanta el taconazo: corre a ras de acera y se apaga en poco
+/// mas de un segundo. Es la patada a ras de suelo del jefe, en pequeno.
+const VELOCIDAD_VOLANTE: f32 = 330.0;
+const VIDA_VOLANTE: f32 = 1.1;
+
+/// La botella de champan: descorcha cada cuatro tiempos si te ve.
+const ALCANCE_BOTELLA: f32 = 600.0;
+/// Lo que tarda un corcho en caer donde estabas.
+const VUELO_CORCHO: f32 = 0.8;
+/// Las burbujas del estallido: pocas, rapidas y de medio segundo. Llegan a
+/// unas 95 unidades, asi que se esquivan alejandose, no saltando.
+const BURBUJAS: usize = 8;
+const VELOCIDAD_BURBUJA: f32 = 210.0;
+const VIDA_BURBUJA: f32 = 0.45;
+
+/// El pintor sacude el pincel cada cuatro tiempos, en abanico de tres gotas.
+const ALCANCE_PINTOR: f32 = 580.0;
+const VUELO_GOTA: f32 = 0.7;
+/// Lo que dura el charco de pintura en la acera antes de secarse.
+const VIDA_MANCHA: f32 = 1.4;
+
 /// Un tramo de acera, de `.0` a `.1`. Entre dos tramos hay un foso.
 pub type Tramo = (f32, f32);
 
@@ -139,6 +176,20 @@ pub struct Plataforma {
     /// La superficie, donde se pisa.
     pub y: f32,
     pub ancho: f32,
+}
+
+/// Una escalera: de `x` a `x + ancho` la acera sube `sube` unidades, y se
+/// queda arriba. Es lo que hace que un paseo **suba** en vez de ir llano.
+///
+/// Para la fisica es una rampa y no peldanos: andar sobre una pendiente es
+/// pegarse a una recta, y subir peldanos pedia saltar cada uno o una regla de
+/// "escalon que se sube solo" que acababa siendo la misma rampa con saltitos.
+/// El dibujo si pinta los peldanos, con la rampa pasando por sus bordes.
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct Escalera {
+    pub x: f32,
+    pub ancho: f32,
+    pub sube: f32,
 }
 
 /// Los enemigos de los paseos. Los tres primeros son de Viena, y cada uno pide
@@ -169,6 +220,20 @@ pub enum Tipo {
     /// altos y uno bajo por compas. Por debajo de los altos se pasa corriendo;
     /// el bajo se salta o se tumba.
     Saltarin,
+    // --- Montmartre. El cancan patea y lo que suelta se
+    // apaga enseguida, y sus tres enemigos tambien.
+    /// Una corista del cancan. Baja a por ti con su chasse, se planta y da la
+    /// patada alta; al bajar el talon levanta un volante que corre a ras de
+    /// acera. De cerca, la pierna; de lejos, el volante: se salta.
+    Corista,
+    /// Una botella de champan en una mesa. Tiembla y descorcha: el corcho cae
+    /// donde estabas y revienta en burbujas que duran medio segundo. Uno de
+    /// cada tres corchos es rosa y se parria.
+    Botella,
+    /// Un pintor de la place du Tertre, subido en lo alto. Sacude el pincel
+    /// en abanico y la pintura deja charcos que se secan enseguida. Esta
+    /// arriba: se le dispara plantada y apuntando.
+    Pintor,
 }
 
 impl Tipo {
@@ -182,6 +247,9 @@ impl Tipo {
             Tipo::Flapper => 8,
             Tipo::Saxo => 10,
             Tipo::Saltarin => 7,
+            Tipo::Corista => 7,
+            Tipo::Botella => 3,
+            Tipo::Pintor => 6,
         }
     }
 
@@ -192,6 +260,9 @@ impl Tipo {
             Tipo::Camarero => 22.0,
             Tipo::Nota => 14.0,
             Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin => 22.0,
+            Tipo::Corista => 20.0,
+            Tipo::Botella => 14.0,
+            Tipo::Pintor => 20.0,
         }
     }
 
@@ -203,6 +274,9 @@ impl Tipo {
             Tipo::Nota => 0.0,
             Tipo::Flapper => 38.0,
             Tipo::Saxo | Tipo::Saltarin => 36.0,
+            Tipo::Corista => 44.0,
+            Tipo::Botella => 18.0,
+            Tipo::Pintor => 36.0,
         }
     }
 
@@ -214,6 +288,9 @@ impl Tipo {
             Tipo::Flapper => 3,
             Tipo::Saxo => 4,
             Tipo::Saltarin => 5,
+            Tipo::Corista => 6,
+            Tipo::Botella => 7,
+            Tipo::Pintor => 8,
         }
     }
 }
@@ -266,6 +343,50 @@ impl Forma {
     }
 }
 
+/// Lo que suelta el cancan: sale, revienta y se apaga enseguida.
+///
+/// Es el verbo del jefe del cancan —balas de `ttl` corto, una patada dura lo
+/// que dura la patada— llevado a la calle. Ninguna vive mas de dos segundos.
+/// Va aparte de `Proyectil` y su `Forma` porque esos vuelan hasta romperse o
+/// salirse de la vista, sin reloj; esto se apaga a su tiempo y **cambia**: un corcho que toca la acera es un punado de burbujas, y una gota
+/// de pintura, un charco.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Clase {
+    /// La ola del taconazo de la corista, a ras de acera.
+    Volante,
+    /// Un corcho de champan en arco. Al caer, revienta.
+    Corcho,
+    /// Una burbuja del estallido, en linea recta y de medio segundo.
+    Burbuja,
+    /// Una gota de pintura en arco. Al caer, charco.
+    Gota,
+    /// El charco: quieto en la acera, hasta que se seca.
+    Mancha,
+}
+
+impl Clase {
+    pub fn radio(self) -> f32 {
+        match self {
+            Clase::Volante => 12.0,
+            Clase::Corcho => 7.0,
+            Clase::Burbuja => 7.0,
+            Clase::Gota => 6.0,
+            Clase::Mancha => 14.0,
+        }
+    }
+}
+
+/// Algo fugaz del cancan. Ver `Clase`.
+#[derive(Clone, Copy, Debug)]
+pub struct Fugaz {
+    pub clase: Clase,
+    pub pos: Vec2,
+    pub vel: Vec2,
+    /// Lo que le queda, en segundos. Nunca empieza por encima de dos.
+    pub ttl: f32,
+    pub rosa: bool,
+}
+
 /// Donde sale un enemigo.
 #[derive(Clone, Copy, Debug, Deserialize)]
 pub struct Aparicion {
@@ -297,6 +418,10 @@ pub struct PaseoDef {
     pub suelo: Vec<Tramo>,
     pub plataformas: Vec<Plataforma>,
     pub enemigos: Vec<Aparicion>,
+    /// Las escaleras, si el paseo sube. Sin ellas la acera es llana, a
+    /// `SUELO_Y`, que es lo que era antes de que las hubiera.
+    #[serde(default)]
+    pub escaleras: Vec<Escalera>,
 }
 
 impl PaseoDef {
@@ -322,10 +447,24 @@ impl PaseoDef {
         self.suelo.iter().any(|&(a, b)| x >= a && x <= b)
     }
 
+    /// A que altura va la acera en `x`, haya foso o no: `SUELO_Y` menos lo que
+    /// hayan subido las escaleras que quedan a la izquierda. Sobre un foso es
+    /// la altura a la que iria la acera si lo hubiera, que es de donde se mide
+    /// la caida.
+    pub fn altura(&self, x: f32) -> f32 {
+        self.escaleras.iter().fold(SUELO_Y, |y, e| {
+            y - e.sube * ((x - e.x) / e.ancho.max(1.0)).clamp(0.0, 1.0)
+        })
+    }
+
+    /// Donde se pisa en `x`, o nada si hay foso.
+    pub fn suelo_en(&self, x: f32) -> Option<f32> {
+        self.hay_suelo(x).then(|| self.altura(x))
+    }
     /// Si en `x` hay algo que pisar a la altura `y`: la acera o una
     /// plataforma. Es lo que mira quien anda por una azotea para no tirarse.
     pub fn hay_pie(&self, x: f32, y: f32) -> bool {
-        (y >= SUELO_Y - 0.5 && self.hay_suelo(x))
+        (y >= self.altura(x) - 0.5 && self.hay_suelo(x))
             || self
                 .plataformas
                 .iter()
@@ -358,6 +497,28 @@ pub struct Enemigo {
     /// Lo que avanza por segundo en el brinco en curso (saltarin). Se decide
     /// al despegar, que es cuando mira si al otro lado hay donde caer.
     avance: f32,
+    /// Lo levantada que lleva la pierna una corista, de 0 a 1 y vuelta a 0.
+    /// Esta en el estado y no se calcula al dibujar para que el golpe y el
+    /// dibujo sean la misma pierna. En la botella y el pintor es el golpe de
+    /// tirar, que salta a 1 y se apaga en doce ticks: eso solo lo lee el
+    /// dibujo.
+    pub gesto: f32,
+}
+
+impl Enemigo {
+    /// La pierna de una corista: de la cadera a la punta del botin. Parada
+    /// cuelga recta; con `gesto` a 1 apunta arriba y un poco hacia ti, que es
+    /// la patada del cancan.
+    pub fn pierna(&self) -> Option<(Vec2, Vec2)> {
+        if self.tipo != Tipo::Corista {
+            return None;
+        }
+        let cadera = self.pos + Vec2::new(self.dir * 4.0, 4.0);
+        // De colgar (-90 grados) a pasada la vertical (100), por delante.
+        let a = -TAU * 0.25 + 3.3 * self.gesto;
+        let (s, c) = sin_cos(a);
+        Some((cadera, cadera + Vec2::new(self.dir * c, -s) * PIERNA))
+    }
 }
 
 /// Algo que le tiran a la jugadora: los platos del camarero.
@@ -392,6 +553,8 @@ pub struct Paseo {
     pub apunta: Vec2,
     pub enemigos: Vec<Enemigo>,
     pub proyectiles: Vec<Proyectil>,
+    /// Lo fugaz del cancan: volantes, corchos, burbujas, pintura.
+    pub fugaces: Vec<Fugaz>,
     pub disparos: Vec<Disparo>,
     /// Tick en que se llego a la puerta.
     pub completado: Option<u64>,
@@ -426,7 +589,7 @@ impl Paseo {
         // plataforma, y estable para que dos en la misma x salgan como se
         // escribieron.
         def.enemigos.sort_by(|a, b| a.x.total_cmp(&b.x));
-        let salida = Vec2::new(def.salida, SUELO_Y - PIES);
+        let salida = Vec2::new(def.salida, def.altura(def.salida) - PIES);
         let mut jugadora = Player::new(salida);
         jugadora.facing = Vec2::new(1.0, 0.0);
         jugadora.on_ground = true;
@@ -438,6 +601,7 @@ impl Paseo {
             apunta: Vec2::new(1.0, 0.0),
             enemigos: Vec::with_capacity(32),
             proyectiles: Vec::with_capacity(32),
+            fugaces: Vec::with_capacity(64),
             disparos: Vec::with_capacity(MAX_DISPAROS),
             completado: None,
             derrota: false,
@@ -491,7 +655,7 @@ impl Paseo {
         if self.terminado() {
             return;
         }
-        let p = Vec2::new(self.def.puerta, SUELO_Y - PIES);
+        let p = Vec2::new(self.def.puerta, self.def.altura(self.def.puerta) - PIES);
         self.jugadora.pos = p;
         self.jugadora.prev_pos = p;
         self.llegar();
@@ -519,6 +683,7 @@ impl Paseo {
         self.despertar();
         self.enemigos_actuan();
         self.mover_proyectiles();
+        self.mover_fugaces();
         self.mover_disparos();
         self.recibir();
         self.olvidar();
@@ -535,6 +700,7 @@ impl Paseo {
         self.events.victory = true;
         // Lo que venia volando ya no llega: se acabo la calle.
         self.proyectiles.clear();
+        self.fugaces.clear();
     }
 
     /// La fisica de la jugadora en la calle.
@@ -644,25 +810,29 @@ impl Paseo {
         // con el centro y no con el ancho del cuerpo: con el ancho, al bajar
         // del borde andando, el cuerpo aun solapa la acera y el muro la
         // empujaba de golpe hacia el foso.
+        //
+        // Solo al **entrar** al tramo, y a la altura del borde por donde se
+        // entra. Con escaleras hay pies por debajo de la acera sin foso
+        // ninguno —saltando contra una rampa que sube— y eso se pisa (abajo),
+        // no se choca: mirar todo el tramo la mandaba al otro extremo.
         const PARED: f32 = 2.0;
         let def = &self.def;
         p.pos.x = (p.pos.x + p.vel.x * DT).clamp(CUERPO_RADIO, def.largo - CUERPO_RADIO);
-        if p.pos.y + PIES > SUELO_Y + 1.0 {
-            for &(a, b) in &def.suelo {
-                if p.pos.x + PARED > a && p.pos.x - PARED < b {
-                    p.pos.x = if p.prev_pos.x <= a {
-                        a - PARED
-                    } else {
-                        b + PARED
-                    };
-                    p.vel.x = 0.0;
-                }
+        let (antes, pies) = (p.prev_pos.x, p.pos.y + PIES);
+        for &(a, b) in &def.suelo {
+            let fuera = antes < a || antes > b;
+            let borde = if antes <= a { a } else { b };
+            if fuera && pies > def.altura(borde) + 1.0 && p.pos.x + PARED > a && p.pos.x - PARED < b
+            {
+                p.pos.x = if antes <= a { a - PARED } else { b + PARED };
+                p.vel.x = 0.0;
             }
         }
 
         // Luego en y. Solo se aterriza bajando y cruzando la superficie en este
         // tick: es lo que deja atravesar las plataformas desde abajo.
         let pies_antes = p.prev_pos.y + PIES;
+        let pisaba = p.on_ground;
         p.pos.y += p.vel.y * DT;
         p.on_ground = false;
         if p.vel.y >= 0.0 {
@@ -670,8 +840,15 @@ impl Paseo {
             let cruza = |y: f32| pies_antes <= y + 0.5 && pies >= y;
             let x = p.pos.x;
             let mut pisa = None;
-            if cruza(SUELO_Y) && def.hay_suelo(x) {
-                pisa = Some(SUELO_Y);
+            if let Some(y) = def.suelo_en(x) {
+                // En una escalera la acera se mueve bajo los pies: subiendo, se
+                // mete por encima de ellos, y bajando se va por debajo mas
+                // deprisa que la gravedad. Se perdona justo lo que se ha
+                // movido en este tick, asi que en llano es el cruce de siempre.
+                let margen = 0.5 + (def.altura(p.prev_pos.x) - y).abs();
+                if pies_antes <= y + margen && (pies >= y || pisaba && pies >= y - margen) {
+                    pisa = Some(y);
+                }
             }
             for pl in &def.plataformas {
                 if cruza(pl.y) && x >= pl.x && x <= pl.x + pl.ancho {
@@ -685,13 +862,14 @@ impl Paseo {
                 p.vel.y = 0.0;
                 p.on_ground = true;
                 p.coyote = COYOTE_TICKS;
-                if y == SUELO_Y
+                if def.suelo_en(x) == Some(y)
                     && let Some(&(a, b)) = def.suelo.iter().find(|&&(a, b)| x >= a && x <= b)
                 {
                     // El sitio seguro, metido hacia dentro del tramo: volver
                     // al borde exacto del foso seria volver a caerse.
                     let margen = 50.0_f32.min((b - a) * 0.5);
-                    self.seguro = Vec2::new(x.clamp(a + margen, b - margen), SUELO_Y - PIES);
+                    let sx = x.clamp(a + margen, b - margen);
+                    self.seguro = Vec2::new(sx, def.altura(sx) - PIES);
                 } else if !def.hay_suelo(x)
                     && let Some(pl) = def
                         .plataformas
@@ -713,7 +891,8 @@ impl Paseo {
 
     /// Caer a un foso cuesta un golpe y te devuelve a la ultima acera pisada.
     fn caida(&mut self) {
-        if self.jugadora.pos.y + PIES < SUELO_Y + CAIDA {
+        let p = &self.jugadora;
+        if p.pos.y + PIES < self.def.altura(p.pos.x) + CAIDA {
             return;
         }
         let p = &mut self.jugadora;
@@ -775,6 +954,11 @@ impl Paseo {
             n += u32::from(dentro);
             !dentro
         });
+        self.fugaces.retain(|f| {
+            let dentro = f.rosa && f.pos.distance_squared(centro) <= PARRY_RADIUS * PARRY_RADIUS;
+            n += u32::from(dentro);
+            !dentro
+        });
         for e in &mut self.enemigos {
             let r = PARRY_RADIUS + e.tipo.radio();
             if e.rosa && e.vida > 0 && e.pos.distance_squared(centro) <= r * r {
@@ -804,6 +988,7 @@ impl Paseo {
         }
         self.events.super_fired = true;
         self.proyectiles.clear();
+        self.fugaces.clear();
         let x = self.jugadora.pos.x;
         for e in &mut self.enemigos {
             if (e.pos.x - x).abs() < VISTA_W * 0.6 {
@@ -822,7 +1007,13 @@ impl Paseo {
                 break;
             }
             self.siguiente += 1;
-            let pisa = if a.y > 0.0 { a.y } else { SUELO_Y };
+            // Distinto de cero y no mayor: en lo alto de una escalera se pisa
+            // por encima de la lamina, en y negativas.
+            let pisa = if a.y != 0.0 {
+                a.y
+            } else {
+                self.def.altura(a.x)
+            };
             let y = match a.tipo {
                 Tipo::Nota => a.y,
                 t => pisa - t.alto(),
@@ -842,6 +1033,7 @@ impl Paseo {
                 lanzados: 0,
                 base_y: y,
                 avance: 0.0,
+                gesto: 0.0,
             });
         }
     }
@@ -1001,8 +1193,166 @@ impl Paseo {
                         e.pos.y = e.base_y;
                     }
                 }
+                Tipo::Corista => {
+                    // El cancan va en compas de dos, y ella en cuatro tiempos:
+                    // dos de chasse hacia ti y dos de patada. En el uno del
+                    // siguiente, el talon baja y levanta el volante. Todo va
+                    // con la musica, asi que se aprende a saltar al compas.
+                    let fase = edad % (4 * tiempo);
+                    let cerca = (objetivo.x - e.pos.x).abs() < ALCANCE_CORISTA;
+                    if fase == 0 {
+                        // `reloj` es aqui "ha pateado este ciclo": el azar con
+                        // que despierta se borra en su primer tick.
+                        if e.reloj == 1 {
+                            let x = e.pos.x + e.dir * PIERNA * 0.6;
+                            if let Some(y) = self.def.suelo_en(x) {
+                                self.fugaces.push(Fugaz {
+                                    clase: Clase::Volante,
+                                    pos: Vec2::new(x, y - 10.0),
+                                    vel: Vec2::new(e.dir * VELOCIDAD_VOLANTE, 0.0),
+                                    ttl: VIDA_VOLANTE,
+                                    rosa: false,
+                                });
+                            }
+                        }
+                        e.reloj = 0;
+                        if objetivo.x != e.pos.x {
+                            e.dir = (objetivo.x - e.pos.x).signum();
+                        }
+                    }
+                    if fase < 2 * tiempo {
+                        e.gesto = 0.0;
+                        if cerca {
+                            // Por la acera, escaleras incluidas, y sin tirarse
+                            // a un foso, como la pareja.
+                            let nx = e.pos.x + e.dir * 130.0 * DT;
+                            if self.def.hay_suelo(nx + e.dir * e.tipo.radio()) {
+                                e.pos.x = nx;
+                            } else {
+                                e.dir = -e.dir;
+                            }
+                        }
+                    } else if fase == 2 * tiempo && cerca || e.reloj == 1 {
+                        e.reloj = 1;
+                        let k = (fase - 2 * tiempo) as f32 / (2 * tiempo) as f32;
+                        e.gesto = sin(TAU * 0.5 * k);
+                    }
+                    e.pos.y = self.def.altura(e.pos.x) - e.tipo.alto();
+                }
+                Tipo::Botella | Tipo::Pintor => {
+                    e.gesto = (e.gesto - 1.0 / 12.0).max(0.0);
+                    let dx = objetivo.x - e.pos.x;
+                    if dx != 0.0 {
+                        e.dir = dx.signum();
+                    }
+                    let alcance = if e.tipo == Tipo::Botella {
+                        ALCANCE_BOTELLA
+                    } else {
+                        ALCANCE_PINTOR
+                    };
+                    if dx.abs() > alcance {
+                        continue;
+                    }
+                    e.reloj = e.reloj.saturating_sub(1);
+                    if e.reloj > 0 {
+                        continue;
+                    }
+                    // Cada cuatro tiempos, como la corista.
+                    e.reloj = 4 * self.def.tiempo.max(1);
+                    e.lanzados += 1;
+                    e.gesto = 1.0;
+                    // Las dos tiran en arco a donde tienes los pies, en un
+                    // tiempo fijo: se esquiva moviendose, como el plato.
+                    let pies = objetivo.y + PIES - 8.0;
+                    let arco = |origen: Vec2, x: f32, t: f32| {
+                        let vx = ((x - origen.x) / t).clamp(-420.0, 420.0);
+                        let vy = (pies - origen.y - 0.5 * GRAVEDAD_PLATO * t * t) / t;
+                        Vec2::new(vx, vy)
+                    };
+                    if e.tipo == Tipo::Botella {
+                        let origen = e.pos + Vec2::new(0.0, -22.0);
+                        self.fugaces.push(Fugaz {
+                            clase: Clase::Corcho,
+                            pos: origen,
+                            vel: arco(origen, objetivo.x, VUELO_CORCHO),
+                            ttl: 1.6,
+                            rosa: e.lanzados % 3 == 0,
+                        });
+                    } else {
+                        // Un abanico de tres: a tus pies, delante y detras.
+                        // Tres charcos no se saltan de pie: se sale de ahi.
+                        let origen = e.pos + Vec2::new(e.dir * 20.0, -30.0);
+                        for d in [-70.0, 0.0, 70.0] {
+                            self.fugaces.push(Fugaz {
+                                clase: Clase::Gota,
+                                pos: origen,
+                                vel: arco(origen, objetivo.x + d, VUELO_GOTA),
+                                ttl: 1.6,
+                                rosa: false,
+                            });
+                        }
+                    }
+                }
             }
         }
+    }
+
+    /// Lo fugaz se mueve, se transforma al tocar la acera y se apaga.
+    fn mover_fugaces(&mut self) {
+        // Solo los que habia al empezar el tick: lo que nace de un corcho
+        // empieza a moverse en el siguiente, como todo lo que nace.
+        for i in 0..self.fugaces.len() {
+            let mut f = self.fugaces[i];
+            f.ttl -= DT;
+            match f.clase {
+                Clase::Volante => {
+                    // Corre pegado a la acera, escaleras arriba si hace falta.
+                    // Donde se acaba la acera se acaba el: un foso lo apaga.
+                    f.pos.x += f.vel.x * DT;
+                    match self.def.suelo_en(f.pos.x) {
+                        Some(y) => f.pos.y = y - 10.0,
+                        None => f.ttl = 0.0,
+                    }
+                }
+                Clase::Corcho | Clase::Gota => {
+                    f.vel.y += GRAVEDAD_PLATO * DT;
+                    f.pos += f.vel * DT;
+                    let suelo = self.def.suelo_en(f.pos.x).filter(|&y| f.pos.y >= y);
+                    if let Some(y) = suelo {
+                        f.pos.y = y;
+                        if f.clase == Clase::Gota {
+                            f = Fugaz {
+                                clase: Clase::Mancha,
+                                pos: Vec2::new(f.pos.x, y - 4.0),
+                                vel: Vec2::ZERO,
+                                ttl: VIDA_MANCHA,
+                                rosa: false,
+                            };
+                        } else {
+                            f.ttl = 0.0;
+                        }
+                    }
+                    if f.clase == Clase::Corcho && f.ttl <= 0.0 {
+                        // Revienta: al caer, o en el aire si se le acaba.
+                        let centro = f.pos - Vec2::new(0.0, 8.0);
+                        for k in 0..BURBUJAS {
+                            let (s, c) = sin_cos(TAU * k as f32 / BURBUJAS as f32);
+                            self.fugaces.push(Fugaz {
+                                clase: Clase::Burbuja,
+                                pos: centro,
+                                vel: Vec2::new(c, s) * VELOCIDAD_BURBUJA,
+                                ttl: VIDA_BURBUJA,
+                                rosa: false,
+                            });
+                        }
+                    }
+                }
+                Clase::Burbuja => f.pos += f.vel * DT,
+                Clase::Mancha => {}
+            }
+            self.fugaces[i] = f;
+        }
+        self.fugaces.retain(|f| f.ttl > 0.0);
     }
 
     fn mover_proyectiles(&mut self) {
@@ -1089,13 +1439,28 @@ impl Paseo {
             .proyectiles
             .iter()
             .position(|q| self.toca(q.pos, q.forma.radio()));
+        let fugaz = self
+            .fugaces
+            .iter()
+            .position(|f| self.toca(f.pos, f.clase.radio()));
+        // La pierna de la corista solo pega arriba: recogida es decorado.
+        let patada = self.enemigos.iter().any(|e| {
+            e.gesto > PIERNA_PELIGRO
+                && e.pierna()
+                    .is_some_and(|(_, pie)| self.toca(pie, RADIO_BOTIN))
+        });
         let tocado = plato.is_some()
+            || fugaz.is_some()
+            || patada
             || self
                 .enemigos
                 .iter()
                 .any(|e| self.toca(e.pos, e.tipo.radio() * 0.8));
         if let Some(i) = plato {
             self.proyectiles.swap_remove(i);
+        }
+        if let Some(i) = fugaz {
+            self.fugaces.swap_remove(i);
         }
         if tocado {
             // Un empujon hacia atras y arriba: que se vea que te han dado y
@@ -1112,6 +1477,7 @@ impl Paseo {
         let x = self.jugadora.pos.x;
         self.enemigos.retain(|e| e.pos.x > x - OLVIDAR);
         self.proyectiles.retain(|q| (q.pos.x - x).abs() < OLVIDAR);
+        self.fugaces.retain(|f| (f.pos.x - x).abs() < OLVIDAR);
     }
 
     /// Huella del estado, para el test de determinismo. Como la del mundo,
@@ -1146,12 +1512,20 @@ impl Paseo {
             h.write_f32(e.dir);
             h.write_u64(u64::from(e.reloj));
             h.write_f32(e.avance);
+            h.write_f32(e.gesto);
         }
         for q in &self.proyectiles {
             h.write_vec2(q.pos);
             h.write_vec2(q.vel);
             h.write_u64(u64::from(q.rosa));
             h.write_u64(q.forma as u64);
+        }
+        for f in &self.fugaces {
+            h.write_u64(f.clase as u64);
+            h.write_vec2(f.pos);
+            h.write_vec2(f.vel);
+            h.write_f32(f.ttl);
+            h.write_u64(u64::from(f.rosa));
         }
         for d in &self.disparos {
             h.write_vec2(d.pos);
@@ -1187,6 +1561,7 @@ mod tests {
             suelo: vec![(0.0, 3200.0)],
             plataformas: vec![],
             enemigos: vec![],
+            escaleras: vec![],
         }
     }
 
@@ -1270,6 +1645,38 @@ mod tests {
             if matches!(a.tipo, Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin) {
                 let pisa = if a.y > 0.0 { a.y } else { SUELO_Y };
                 assert!(chicago.hay_pie(a.x, pisa), "{a:?} flota");
+            }
+        }
+
+        // Montmartre: sube, lleva a su jefe y trae los enemigos del cancan.
+        let mont = defs
+            .iter()
+            .find(|d| d.nombre == "El paseo de Montmartre")
+            .expect("falta Montmartre");
+        assert_eq!(mont.jefe, "El Cancan", "Montmartre va antes del cancan");
+        assert!(mont.hay_suelo(mont.salida) && mont.hay_suelo(mont.puerta));
+        assert!(mont.puerta < mont.largo);
+        for par in mont.suelo.windows(2) {
+            assert!(par[0].1 < par[1].0, "tramos desordenados: {par:?}");
+        }
+        assert!(
+            mont.altura(mont.puerta) < mont.altura(mont.salida) - 400.0,
+            "Montmartre es una cuesta"
+        );
+        for t in [Tipo::Corista, Tipo::Botella, Tipo::Pintor] {
+            assert!(mont.enemigos.iter().any(|a| a.tipo == t), "falta {t:?}");
+        }
+        assert!(mont.enemigos.iter().any(|a| a.rosa));
+        // Las escaleras de todos, dentro de lo que la fisica perdona y sin
+        // empezar ni acabar en un foso: un borde de foso a media rampa no
+        // tiene una altura que se lea.
+        for d in &defs {
+            for e in &d.escaleras {
+                assert!(
+                    e.sube / e.ancho <= PENDIENTE_MAX,
+                    "escalera empinada: {e:?}"
+                );
+                assert!(d.hay_suelo(e.x) && d.hay_suelo(e.x + e.ancho), "{e:?}");
             }
         }
     }
@@ -1775,5 +2182,201 @@ mod tests {
         }
         assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
         assert_eq!(p.vidas, VIDAS, "no ha caido a ningun foso");
+    }
+
+    // --- Montmartre ---
+
+    fn montmartre() -> PaseoDef {
+        PaseoDef::de_serie()
+            .into_iter()
+            .find(|d| d.jefe == "El Cancan")
+            .expect("falta Montmartre")
+    }
+
+    /// Una calle de pruebas con una escalera en medio.
+    fn cuesta() -> PaseoDef {
+        PaseoDef {
+            escaleras: vec![Escalera {
+                x: 400.0,
+                ancho: 200.0,
+                sube: 120.0,
+            }],
+            ..calle()
+        }
+    }
+
+    fn aparece(tipo: Tipo, x: f32) -> Aparicion {
+        Aparicion {
+            tipo,
+            x,
+            y: 0.0,
+            rosa: false,
+        }
+    }
+
+    #[test]
+    fn la_escalera_se_sube_y_se_baja_andando_sin_despegarse() {
+        // Andando, los pies van pegados a la rampa en los dos sentidos: ni se
+        // queda en el aire al bajar ni choca con ella al subir.
+        let mut p = Paseo::new(cuesta(), 1);
+        for bits in [DERECHA, InputFrame::LEFT] {
+            for _ in 0..150 {
+                p.step(pulsar(bits));
+                let x = p.jugadora.pos.x;
+                assert!(p.jugadora.on_ground, "en el aire en x {x}");
+                assert!((p.jugadora.pos.y + PIES - p.def.altura(x)).abs() < 0.01);
+            }
+            if bits == DERECHA {
+                assert_eq!(p.jugadora.pos.y + PIES, SUELO_Y - 120.0, "no ha subido");
+            }
+        }
+        assert_eq!(p.jugadora.pos.y + PIES, SUELO_Y, "no ha vuelto a bajar");
+        assert_eq!(p.vidas, VIDAS);
+    }
+
+    #[test]
+    fn la_corista_baja_la_escalera_y_su_volante_corre_a_ras_de_acera() {
+        // La corista arriba de la escalera y la jugadora abajo, quieta. Tiene
+        // que bajar pisando los peldanos, patear y mandarle un volante que
+        // corre pegado a la acera y le da.
+        let mut def = cuesta();
+        def.enemigos = vec![aparece(Tipo::Corista, 700.0)];
+        let mut p = Paseo::new(def, 1);
+        p.jugadora.pos.x = 300.0;
+        let mut volante = false;
+        for _ in 0..600 {
+            p.step(InputFrame::NONE);
+            if let Some(e) = p.enemigos.first() {
+                assert_eq!(
+                    e.pos.y,
+                    p.def.altura(e.pos.x) - e.tipo.alto(),
+                    "flota o se hunde"
+                );
+            }
+            for f in &p.fugaces {
+                assert_eq!(f.clase, Clase::Volante);
+                assert!(f.ttl <= VIDA_VOLANTE);
+                assert_eq!(f.pos.y, p.def.altura(f.pos.x) - 10.0, "no va a ras");
+                volante = true;
+            }
+            if p.events.player_died {
+                break;
+            }
+        }
+        assert!(volante, "no ha pateado nunca");
+        assert_eq!(p.vidas, VIDAS - 1, "el volante tenia que llegarle");
+    }
+
+    #[test]
+    fn la_pierna_de_la_corista_cuelga_parada_y_sube_en_la_patada() {
+        let mut p = Paseo::new(con(vec![aparece(Tipo::Corista, 600.0)]), 1);
+        correr(&mut p, 0, 1);
+        let e = &mut p.enemigos[0];
+        e.gesto = 0.0;
+        let (cadera, colgada) = e.pierna().expect("una corista tiene pierna");
+        assert!(colgada.y > cadera.y, "parada, la pierna cuelga");
+        e.gesto = 1.0;
+        let (cadera, arriba) = e.pierna().expect("una corista tiene pierna");
+        assert!(arriba.y < cadera.y - PIERNA * 0.9, "la patada no sube");
+    }
+
+    #[test]
+    fn el_corcho_revienta_en_burbujas_que_se_apagan_enseguida() {
+        let mut p = Paseo::new(con(vec![aparece(Tipo::Botella, 450.0)]), 1);
+        let mut burbujas_max = 0;
+        let mut corcho = false;
+        for _ in 0..240 {
+            // Invulnerable: un golpe se lleva lo que toca y no se contaria.
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+            corcho |= p.fugaces.iter().any(|f| f.clase == Clase::Corcho);
+            let n = p
+                .fugaces
+                .iter()
+                .filter(|f| f.clase == Clase::Burbuja)
+                .count();
+            burbujas_max = burbujas_max.max(n);
+            assert!(
+                p.fugaces.iter().all(|f| f.ttl <= 2.0),
+                "nada vive mas de 2 s"
+            );
+        }
+        assert!(corcho, "no ha descorchado");
+        assert_eq!(burbujas_max, BURBUJAS, "el corcho no ha reventado");
+        // Y se apagan: sin la botella, en un segundo y medio no queda nada.
+        p.enemigos.clear();
+        correr(&mut p, 0, 90);
+        assert!(p.fugaces.is_empty());
+    }
+
+    #[test]
+    fn un_corcho_rosa_se_parria() {
+        let mut p = Paseo::new(calle(), 1);
+        p.fugaces.push(Fugaz {
+            clase: Clase::Corcho,
+            pos: p.jugadora.pos + Vec2::new(20.0, -30.0),
+            vel: Vec2::ZERO,
+            ttl: 1.0,
+            rosa: true,
+        });
+        p.step(pulsar(InputFrame::PARRY));
+        assert_eq!(p.events.parried, 1);
+        assert!(p.fugaces.is_empty(), "parriado no revienta");
+    }
+
+    #[test]
+    fn el_pintor_deja_tres_charcos_que_se_secan() {
+        // El pintor en un balcon y la jugadora debajo, invulnerable. Se mira
+        // hasta antes de que caigan las gotas de la segunda sacudida.
+        let mut def = calle();
+        def.enemigos = vec![Aparicion {
+            y: 330.0,
+            ..aparece(Tipo::Pintor, 500.0)
+        }];
+        let mut p = Paseo::new(def, 1);
+        let mut charcos = 0;
+        for _ in 0..150 {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+            let manchas: Vec<&Fugaz> = p
+                .fugaces
+                .iter()
+                .filter(|f| f.clase == Clase::Mancha)
+                .collect();
+            for m in &manchas {
+                assert_eq!(m.pos.y, SUELO_Y - 4.0, "el charco va en la acera");
+                assert_eq!(m.vel, Vec2::ZERO);
+            }
+            charcos = charcos.max(manchas.len());
+        }
+        assert_eq!(charcos, 3, "un abanico son tres gotas");
+        p.enemigos.clear();
+        correr(&mut p, 0, (VIDA_MANCHA / DT) as usize + 2);
+        assert!(p.fugaces.is_empty(), "los charcos no se secan");
+    }
+
+    #[test]
+    fn montmartre_se_puede_subir_entera() {
+        // El bot de Viena en la cuesta: corre, dispara y salta ante cada foso.
+        // Las escaleras se suben andando, asi que no hace falta mas. Prueba
+        // que ningun foso de la subida es mas ancho que un salto.
+        let mut p = Paseo::new(montmartre(), 3);
+        let mut salto = 0;
+        for _ in 0..(60 * 60) {
+            p.jugadora.iframes = 5;
+            let x = p.jugadora.pos.x;
+            if p.jugadora.on_ground && !p.def.hay_suelo(x + 24.0) {
+                salto = 20;
+            }
+            let bits = DERECHA | DISPARA | if salto > 0 { InputFrame::JUMP } else { 0 };
+            salto = if salto > 0 { salto - 1 } else { 0 };
+            p.step(pulsar(bits));
+            if p.completado.is_some() {
+                break;
+            }
+        }
+        assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
+        assert_eq!(p.vidas, VIDAS, "no ha caido a ningun foso");
+        assert!(p.jugadora.pos.y < SUELO_Y - 400.0, "no ha llegado arriba");
     }
 }

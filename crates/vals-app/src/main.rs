@@ -16,6 +16,7 @@ mod bailarines;
 mod bullet_renderer;
 mod calle;
 mod calle_chicago;
+mod calle_montmartre;
 mod cartela;
 mod draw;
 mod escenarios;
@@ -596,7 +597,7 @@ async fn run_game() {
             let jefe = pista.nodos[nodo_actual].jefe;
             let (pulso, _) = salon::latido(Tema::de(jefe, 0), p.tick as f32 + alpha);
             calle::dibujar(p, alpha, &layout, pulso, jefe);
-            let camara = layout.sacudido(vec2(-calle::camara(p, alpha), 0.0));
+            let camara = layout.sacudido(-vec2(calle::camara(p, alpha), calle::camara_y(p, alpha)));
             draw::particulas(&chispas, &camara);
             calle::encima(p, &layout);
         } else {
