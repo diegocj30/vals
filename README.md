@@ -14,6 +14,12 @@ baile. El vals y el tango se bailan en el aire; el charleston y el cancan, en
 el suelo, con figuras hechas para eso —arcos que aterrizan y hay que esquivar
 corriendo, y patadas a ras de suelo que hay que saltar—.
 
+Y antes de un jefe, **su paseo**: un nivel de correr y disparar de lado, a lo
+Cuphead, por la calle de la ciudad de su baile. Hoy existe el de Viena, antes
+del vals: parejas que bailan hacia ti, camareros que tiran platos y notas que
+vuelan, y al final la puerta del salon. Es un RON en `assets/paseos/`, como los
+jefes.
+
 ## Estructura
 
 | Crate | Que hace |

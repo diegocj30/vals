@@ -6,6 +6,7 @@
 use macroquad::prelude::*;
 use vals_core::bench::Stress;
 use vals_core::boss::BossDef;
+use vals_core::paseo::{Paseo, PaseoDef, VISTA_H, VISTA_W};
 use vals_core::pista::Pista;
 use vals_core::replay::{GOLDEN_REPLAY, Replay};
 use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
@@ -13,6 +14,7 @@ use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
 mod audio;
 mod bailarines;
 mod bullet_renderer;
+mod calle;
 mod cartela;
 mod draw;
 mod escenarios;
@@ -49,10 +51,14 @@ use zumo::Zumo;
 /// Antes esto era un `bool` —menu o partida— porque no habia mas sitios. La
 /// pista mete un tercero, y es el que convierte una fila de jefes en un lugar:
 /// del menu se entra a la pista, y de la pista a cada baile.
+///
+/// El paseo va entre la pista y el combate: la calle que se anda antes del
+/// jefe, si su baile tiene una y no se ha andado ya.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Escena {
     Menu,
     Pista,
+    Paseo,
     Combate,
 }
 
@@ -67,6 +73,10 @@ const HOT_RELOAD_EVERY: u32 = 20;
 
 /// Balas de la escena de stress si no se pide otra cosa.
 const BENCH_DEFAULT: usize = 10_000;
+
+/// Ticks que se queda la jugadora en la puerta antes de pasar al baile: lo
+/// justo para ver abrirse la luz del salon.
+const EN_LA_PUERTA: u64 = 50;
 
 /// Maximo de ticks de simulacion por frame.
 ///
@@ -236,6 +246,10 @@ async fn run_game() {
     // mismo tick en que muere.
     let mut fantasma: Option<((f32, f32), f64)> = None;
     let mut fundido = Fundido::nuevo();
+    // Los paseos de serie, y el que se esta andando. Cada uno dice delante de
+    // que baile va, por nombre.
+    let paseos = PaseoDef::de_serie();
+    let mut paseo: Option<(usize, Paseo)> = None;
 
     loop {
         frames += 1;
@@ -251,6 +265,13 @@ async fn run_game() {
             // El replay en curso ya no reproduce nada: el jefe ha cambiado.
             recorder = Recorder::for_world(&world);
         }
+        if frames.is_multiple_of(HOT_RELOAD_EVERY)
+            && escena == Escena::Paseo
+            && let Some((i, p)) = paseo.as_mut()
+            && let Some(def) = hot.poll_paseo(*i)
+        {
+            p.recargar(def);
+        }
 
         hubo_interaccion |= get_last_key_pressed().is_some() || mando.frame().bits() != 0;
         if hubo_interaccion {
@@ -259,6 +280,9 @@ async fn run_game() {
             // el juego, y el vals es UN jefe del juego.
             audio.poner_musica(match escena {
                 Escena::Combate => Tema::de(world.baile, world.boss.phase),
+                // En la calle suena la primera figura de su baile: el vals se
+                // oye desde fuera, y al entrar sigue sonando sin cortarse.
+                Escena::Paseo => Tema::de(pista.nodos[nodo_actual].jefe, 0),
                 _ => Tema::Sala,
             });
         }
@@ -284,7 +308,8 @@ async fn run_game() {
             c.saltar();
         }
         let leyendo = cartela.as_ref().is_some_and(Cartela::para_el_mundo);
-        let congelado = escena == Escena::Combate && (zumo.congelado() || leyendo);
+        let jugando = matches!(escena, Escena::Combate | Escena::Paseo);
+        let congelado = jugando && (zumo.congelado() || leyendo);
 
         if is_key_pressed(KeyCode::F1) {
             show_debug = !show_debug;
@@ -308,14 +333,23 @@ async fn run_game() {
             accumulator = 0.0;
             intentos += 1;
         }
-        // Start/Select del mando hacen de ESC: salir un escalon.
-        if is_key_pressed(KeyCode::Escape)
-            || mando.pulsado(InputFrame::SUPER) && escena != Escena::Combate
+        // En el paseo, R (o el parry tras el KO) vuelve a empezar la calle.
+        // Morir en el paseo no te lleva al jefe ni te lo quita: se reintenta
+        // el paseo, igual que morir en el jefe reintenta solo el jefe.
+        if escena == Escena::Paseo
+            && let Some((i, p)) = paseo.as_mut()
+            && (is_key_pressed(KeyCode::R) || mando.pulsado(InputFrame::PARRY) && p.derrota)
         {
-            // Se sale un escalon cada vez: del baile a la pista, de la pista
-            // al menu.
+            *p = Paseo::new(paseos[*i].clone(), SEED);
+            accumulator = 0.0;
+        }
+        // Start/Select del mando hacen de ESC: salir un escalon. En la calle
+        // no, que alli el super es el super.
+        if is_key_pressed(KeyCode::Escape) || mando.pulsado(InputFrame::SUPER) && !jugando {
+            // Se sale un escalon cada vez: del baile o del paseo a la pista,
+            // de la pista al menu.
             escena = match escena {
-                Escena::Combate => Escena::Pista,
+                Escena::Combate | Escena::Paseo => Escena::Pista,
                 _ => Escena::Menu,
             };
             cartela = None;
@@ -337,24 +371,47 @@ async fn run_game() {
             && pista.abierto(i)
         {
             audio.play(Sfx::Empezar, 1.0);
-            escena = Escena::Combate;
             nodo_actual = i;
             marcado = false;
             // Ojo: el jefe sale del NODO, no del sitio en la pista. La pista
             // reordena por nivel.
-            //
-            // Y el modo lo pone el baile: el charleston y el
-            // cancan se bailan en el suelo y el resto en el aire. El vuelo que
-            // se pasa aqui es solo para los que no dicen nada.
-            world = World::empezar_en(SEED, Mode::Flight, pista.nodos[i].jefe);
-            recorder = Recorder::for_world(&world);
+            let jefe = pista.nodos[i].jefe;
+            // Antes del baile, su paseo, si lo tiene y no se ha andado ya: una
+            // vez hecha la calle, volver a un baile es volver a bailarlo, no a
+            // andar hasta el. Se busca por nombre, como el guardado.
+            let calle = paseos
+                .iter()
+                .position(|d| d.jefe == bailes[jefe].name)
+                .filter(|&k| !progreso.tiene(&paseos[k].nombre));
+            if let Some(k) = calle {
+                let def = &paseos[k];
+                escena = Escena::Paseo;
+                paseo = Some((k, Paseo::new(def.clone(), SEED)));
+                cartela = Some(Cartela::prologo(
+                    &def.nombre,
+                    &def.subtitulo,
+                    Tema::de(jefe, 0).titulo(),
+                ));
+            } else {
+                escena = Escena::Combate;
+                (world, recorder, cartela) = empezar_baile(jefe);
+                intentos += 1;
+            }
             accumulator = 0.0;
+            fundido.empezar(0.30);
+        }
+        // Llegar a la puerta: el paseo queda andado para siempre y se entra al
+        // baile, con su cartela, como si se hubiera entrado desde la pista.
+        if escena == Escena::Paseo
+            && let Some((k, p)) = paseo.as_ref()
+            && p.completado.is_some_and(|t| p.tick >= t + EN_LA_PUERTA)
+        {
+            progreso.marcar(&paseos[*k].nombre);
+            progreso.guardar();
+            escena = Escena::Combate;
+            (world, recorder, cartela) = empezar_baile(pista.nodos[nodo_actual].jefe);
             intentos += 1;
-            cartela = Some(Cartela::entrada(
-                &world.boss.name,
-                world.boss.phase_name(),
-                Tema::de(world.baile, 0).titulo(),
-            ));
+            accumulator = 0.0;
             fundido.empezar(0.30);
         }
 
@@ -375,6 +432,15 @@ async fn run_game() {
         // Saltarse el baile. Es una trampa y esta puesta a proposito: ver
         // como avanza el juego no deberia costar pasarse el jefe cada vez.
         // Rompe el replay en curso, asi que se vuelve a empezar la grabacion.
+        // Y lo mismo con la calle.
+        if is_key_pressed(KeyCode::F3)
+            && escena == Escena::Paseo
+            && let Some((_, p)) = paseo.as_mut()
+            && !p.terminado()
+        {
+            p.saltar();
+            aviso = Some(("paseo saltado".to_owned(), false, 120));
+        }
         if is_key_pressed(KeyCode::F3) && escena == Escena::Combate && !world.is_over() {
             world.saltar_el_baile();
             recorder = Recorder::for_world(&world);
@@ -421,6 +487,27 @@ async fn run_game() {
                     }
                 }
                 Escena::Pista => pista.step(input),
+                Escena::Paseo => {
+                    if let Some((_, p)) = paseo.as_mut() {
+                        p.step(input);
+                        eventos.merge(&p.events);
+                        // Las chispas del paseo salen tick a tick: cada una
+                        // tiene que salir de donde paso, y al final del frame
+                        // solo queda el sitio del ultimo impacto.
+                        // Conversion explicita en la frontera: el core usa su
+                        // glam y macroquad el suyo.
+                        let (b, a) = (p.boca(), p.apunta);
+                        let boca = (vec2(b.x, b.y), vec2(a.x, a.y));
+                        let j = vec2(p.jugadora.pos.x, p.jugadora.pos.y);
+                        let golpe = vec2(p.impacto.x, p.impacto.y);
+                        chispas.reaccionar_en(&p.events, j, golpe, boca);
+                        if p.caidos > 0 {
+                            let (_, ropa) = paleta::del_baile(pista.nodos[nodo_actual].jefe);
+                            chispas.estallido(golpe, ropa);
+                            audio.play(Sfx::Fase, 0.55);
+                        }
+                    }
+                }
                 Escena::Combate => {
                     let antes = (world.player.pos.x, world.player.pos.y);
                     world.step(input);
@@ -454,7 +541,10 @@ async fn run_game() {
             // Al acabar la presentacion, el grito: el "WALLOP!" de Cuphead. Es
             // lo que convierte el final de una cartela en el principio de un
             // combate.
-            cartela = c.es_de_entrada().then(Cartela::a_bailar);
+            cartela = c.es_de_entrada().then(|| match escena {
+                Escena::Paseo => Cartela::grito("¡EN MARCHA!"),
+                _ => Cartela::a_bailar(),
+            });
         }
         stats.push_sim((get_time() - t0) as f32);
         // En el menu no suena nada ni sacude nada: el atractor es un fondo, no
@@ -467,6 +557,10 @@ async fn run_game() {
                 if eventos.phase_changed && !world.boss.defeated {
                     cartela = Some(Cartela::figura(world.boss.phase_name(), world.boss.phase));
                 }
+            }
+            (Escena::Paseo, _) => {
+                audio.play_events(&eventos);
+                zumo.reaccionar(&eventos);
             }
             (Escena::Menu, Some(a)) => chispas.reaccionar(&eventos, &a.world),
             _ => {}
@@ -487,9 +581,23 @@ async fn run_game() {
 
         // --- Render ---
         let t1 = get_time();
-        let layout = draw::Layout::compute().sacudido(zumo.desplazamiento());
+        // El paseo es apaisado; todo lo demas, la arena de siempre.
+        let lamina = match escena {
+            Escena::Paseo => draw::Layout::para(VISTA_W, VISTA_H),
+            _ => draw::Layout::compute(),
+        };
+        let layout = lamina.sacudido(zumo.desplazamiento());
         if escena == Escena::Pista {
             mapa::pista(&pista, alpha, &layout);
+        } else if escena == Escena::Paseo
+            && let Some((_, p)) = paseo.as_ref()
+        {
+            let jefe = pista.nodos[nodo_actual].jefe;
+            let (pulso, _) = salon::latido(Tema::de(jefe, 0), p.tick as f32 + alpha);
+            calle::dibujar(p, alpha, &layout, pulso, jefe);
+            let camara = layout.sacudido(vec2(-calle::camara(p, alpha), 0.0));
+            draw::particulas(&chispas, &camara);
+            calle::encima(p, &layout);
         } else {
             let mostrado = match (escena, attract.as_ref()) {
                 (Escena::Menu, Some(a)) => &a.world,
@@ -524,7 +632,10 @@ async fn run_game() {
             draw::recording_badge(recorder.ticks());
         }
         if let Some(c) = cartela.as_ref() {
-            c.dibujar(&layout);
+            match escena {
+                Escena::Paseo => c.dibujar_en(&layout, vec2(VISTA_W, VISTA_H)),
+                _ => c.dibujar(&layout),
+            }
         }
         fundido.dibujar();
         // La pelicula va encima de todo: es la copia la que tiene grano.
@@ -542,6 +653,24 @@ async fn run_game() {
 
         next_frame().await;
     }
+}
+
+/// Todo lo que hace falta para empezar el baile `jefe`: su mundo, su
+/// grabacion y su cartela. Se entra desde dos sitios —la pista y la puerta del
+/// paseo— y los dos tienen que entrar igual.
+///
+/// El modo lo pone el baile: el charleston y el cancan se bailan
+/// en el suelo y el resto en el aire. El vuelo que se pasa aqui es solo para
+/// los que no dicen nada.
+fn empezar_baile(jefe: usize) -> (World, Recorder, Option<Cartela>) {
+    let world = World::empezar_en(SEED, Mode::Flight, jefe);
+    let recorder = Recorder::for_world(&world);
+    let cartela = Cartela::entrada(
+        &world.boss.name,
+        world.boss.phase_name(),
+        Tema::de(world.baile, 0).titulo(),
+    );
+    (world, recorder, Some(cartela))
 }
 
 fn guardar_replay(recorder: &Recorder) -> Result<String, String> {

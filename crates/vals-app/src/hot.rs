@@ -13,6 +13,7 @@
 //! en el binario y esto se convierte en un no-op.
 
 use vals_core::boss::BossDef;
+use vals_core::paseo::PaseoDef;
 
 /// Ruta del patron, resuelta al compilar.
 ///
@@ -34,6 +35,14 @@ const RUTAS: [&str; 3] = [
     ),
 ];
 
+/// Los paseos, en el orden de `PASEO_RONS`. El tamano sale de esa lista, asi
+/// que anadir un paseo sin su ruta aqui no compila.
+#[cfg(not(target_arch = "wasm32"))]
+const RUTAS_PASEOS: [&str; vals_core::paseo::PASEO_RONS.len()] = [concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../assets/paseos/viena.ron"
+)];
+
 /// Cuantos frames se muestra el aviso de recarga.
 #[cfg(not(target_arch = "wasm32"))]
 const AVISO_FRAMES: u32 = 180;
@@ -41,6 +50,9 @@ const AVISO_FRAMES: u32 = 180;
 pub struct HotReload {
     #[cfg(not(target_arch = "wasm32"))]
     last: [Option<std::time::SystemTime>; 3],
+    /// La fecha del paseo que se esta andando, y cual es.
+    #[cfg(not(target_arch = "wasm32"))]
+    last_paseo: Option<(usize, std::time::SystemTime)>,
     aviso: Option<(String, bool)>,
     aviso_frames: u32,
 }
@@ -50,6 +62,8 @@ impl HotReload {
         Self {
             #[cfg(not(target_arch = "wasm32"))]
             last: [None; 3],
+            #[cfg(not(target_arch = "wasm32"))]
+            last_paseo: None,
             aviso: None,
             aviso_frames: 0,
         }
@@ -123,6 +137,45 @@ impl HotReload {
                 false,
             );
             Some(defs)
+        }
+    }
+
+    /// Lo mismo para el paseo `i`, que es el que se esta andando: solo se
+    /// vigila ese, porque es el unico que se puede estar afinando. Un RON roto
+    /// se avisa y se sigue con el nivel de antes.
+    pub fn poll_paseo(&mut self, i: usize) -> Option<PaseoDef> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = i;
+            None
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let ruta = RUTAS_PASEOS.get(i)?;
+            let m = std::fs::metadata(ruta).and_then(|m| m.modified()).ok()?;
+            let antes = self.last_paseo.replace((i, m));
+            // Como con los jefes, el primer vistazo solo toma nota.
+            if antes.is_none_or(|(j, f)| j != i || f == m) {
+                return None;
+            }
+            let src = match std::fs::read_to_string(ruta) {
+                Ok(s) => s,
+                Err(e) => {
+                    self.set_aviso(format!("no se pudo leer {ruta}: {e}"), true);
+                    return None;
+                }
+            };
+            match PaseoDef::from_ron(&src) {
+                Ok(d) => {
+                    self.set_aviso(format!("paseo recargado: {}", d.nombre), false);
+                    Some(d)
+                }
+                Err(e) => {
+                    self.set_aviso(format!("RON invalido: {e}"), true);
+                    None
+                }
+            }
         }
     }
 

@@ -115,11 +115,26 @@ impl Cartela {
         }
     }
 
+    /// La de entrada a un paseo. La misma que la de un baile, pero el paseo no
+    /// es una figura: en el programa de mano va delante de todas, y eso es un
+    /// prologo.
+    pub fn prologo(paseo: &str, subtitulo: &str, pieza: &str) -> Self {
+        Self {
+            orden: "PROLOGO".to_owned(),
+            ..Self::entrada(paseo, subtitulo, pieza)
+        }
+    }
+
     /// El grito de salida, al acabar la cartela de entrada. Corto, grande y sin
     /// parar el mundo: el combate ya ha empezado.
     pub fn a_bailar() -> Self {
+        Self::grito("¡A BAILAR!")
+    }
+
+    /// Un grito cualquiera. El paseo no se baila, se anda.
+    pub fn grito(texto: &str) -> Self {
         Self {
-            baile: "¡A BAILAR!".to_owned(),
+            baile: texto.to_owned(),
             orden: String::new(),
             figura: String::new(),
             pieza: String::new(),
@@ -166,12 +181,17 @@ impl Cartela {
     }
 
     pub fn dibujar(&self, l: &Layout) {
+        self.dibujar_en(l, vec2(vals_core::ARENA_W, vals_core::ARENA_H));
+    }
+
+    /// Sobre una lamina de `tam` unidades: la del paseo es apaisada.
+    pub fn dibujar_en(&self, l: &Layout, tam: Vec2) {
         let a = self.opacidad();
         if a <= 0.0 {
             return;
         }
         let o = l.to_screen(0.0, 0.0);
-        let (w, h) = (l.len(vals_core::ARENA_W), l.len(vals_core::ARENA_H));
+        let (w, h) = (l.len(tam.x), l.len(tam.y));
         let cx = o.x + w * 0.5;
 
         if self.para {

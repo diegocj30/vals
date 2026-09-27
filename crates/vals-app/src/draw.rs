@@ -103,6 +103,12 @@ pub struct Layout {
 
 impl Layout {
     pub fn compute() -> Self {
+        Self::para(ARENA_W, ARENA_H)
+    }
+
+    /// Una lamina de `ancho` x `alto` unidades, centrada y lo mas grande que
+    /// quepa. La arena es la de 640 x 800; el paseo pide 960 x 540.
+    pub(crate) fn para(ancho: f32, alto: f32) -> Self {
         // Se ajusta por el eje mas apretado, no solo por el alto: en una
         // ventana estrecha —o en el navegador de un movil en vertical— escalar
         // solo por la altura saca la arena por los lados y recorta el campo de
@@ -111,10 +117,10 @@ impl Layout {
         // impresa en una pagina, no una pantalla a sangre. Antes eran 24 px
         // porque el marco era negro y daba igual.
         const MARGEN: f32 = 76.0;
-        let scale = ((screen_height() - MARGEN) / ARENA_H)
-            .min((screen_width() - MARGEN) / ARENA_W)
+        let scale = ((screen_height() - MARGEN) / alto)
+            .min((screen_width() - MARGEN) / ancho)
             .max(0.05);
-        let size = vec2(ARENA_W * scale, ARENA_H * scale);
+        let size = vec2(ancho, alto) * scale;
         let origin = ((vec2(screen_width(), screen_height()) - size) * 0.5).round();
         Self { origin, scale }
     }
@@ -960,8 +966,14 @@ fn orla(x: f32, y: f32, w: f32, h: f32) {
 /// grano y el marco. Mas barato que un scissor y no toca el render instanciado
 /// de las balas, que va por su cuenta.
 pub(crate) fn paspartu(l: &Layout) {
+    paspartu_de(l, vec2(ARENA_W, ARENA_H));
+}
+
+/// El paspartu de una lamina de `tam` unidades. El paseo es apaisado
+/// y su papel tiene que cortar por otro sitio.
+pub(crate) fn paspartu_de(l: &Layout, tam: Vec2) {
     let o = l.to_screen(0.0, 0.0);
-    let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
+    let (w, h) = (l.len(tam.x), l.len(tam.y));
     let (sw, sh) = (screen_width(), screen_height());
     let papel = paleta::PAPEL;
     draw_rectangle(0.0, 0.0, sw, o.y, papel);
@@ -978,7 +990,7 @@ pub(crate) fn paspartu(l: &Layout) {
             }
         }
     });
-    marco(l);
+    marco(l, tam);
 }
 
 /// El marco de la lamina: tinta gruesa y una esquina Deco en cada canto.
@@ -986,9 +998,9 @@ pub(crate) fn paspartu(l: &Layout) {
 /// El borde sigue siendo informacion —dice hasta donde se puede llegar— y por
 /// eso sigue nitido. Lo que cambia es que ahora tambien dice que lo de dentro
 /// esta impreso.
-fn marco(l: &Layout) {
+fn marco(l: &Layout, tam: Vec2) {
     let o = l.to_screen(0.0, 0.0);
-    let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
+    let (w, h) = (l.len(tam.x), l.len(tam.y));
     let gordo = l.len(5.0);
     let fino = l.len(1.2);
     let aire = l.len(4.5);
@@ -1384,10 +1396,16 @@ fn hueso(a: Vec2, b: Vec2, r0: f32, r1: f32, arqueo: f32, l: &Layout, color: Col
 /// y por lo mismo: es el unico momento en que hay que mirarla.
 fn draw_cartas(world: &World, l: &Layout) {
     let o = l.to_screen(0.0, ARENA_H);
+    cartas(o, world.lives, world.is_over(), &world.player);
+}
+
+/// Las cartas en la esquina `o` (abajo a la izquierda de la lamina). Aparte de
+/// `draw_cartas` para que el paseo lleve las mismas: la vida se lee igual en la
+/// calle que en el salon.
+pub(crate) fn cartas(o: Vec2, vidas: u32, acabado: bool, jugadora: &player::Player) {
     let (x0, y) = (o.x + 12.0, o.y - 42.0);
 
-    let vidas = world.lives;
-    let critico = vidas <= 1 && !world.is_over();
+    let critico = vidas <= 1 && !acabado;
     let parpadea = critico && (get_time() * 3.0).fract() < 0.5;
     carta(
         x0,
@@ -1408,8 +1426,8 @@ fn draw_cartas(world: &World, l: &Layout) {
     // El super en cinco cartas que se llenan de abajo arriba. Una barra
     // continua dice lo mismo, pero cinco cartas dicen ademas cuanto falta de
     // un vistazo.
-    let m = world.player.meter_ratio();
-    let lleno = world.player.meter_full();
+    let m = jugadora.meter_ratio();
+    let lleno = jugadora.meter_full();
     let relleno = if lleno { METER_FULL } else { METER };
     let (cw, ch) = (17.0, 26.0);
     for i in 0..5 {

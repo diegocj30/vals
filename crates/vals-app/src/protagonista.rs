@@ -45,13 +45,13 @@ use crate::skeleton::{self, CABEZA, CADERA, CODO_D, CODO_I, HUESOS, MANO_D, MANO
 // el pelo son lo unico que se sale, porque una cara necesita las dos.
 
 /// El lazo y todo lo que es suyo: los zapatos y el bajo del vestido.
-const LAZO: Color = color_u8!(222, 34, 52, 255);
+pub(crate) const LAZO: Color = color_u8!(222, 34, 52, 255);
 /// El pliegue del lazo, para que tenga volumen sin dibujar una sombra.
 const PLIEGUE: Color = color_u8!(140, 16, 36, 255);
 /// El vestido va en crema por lo mismo que antes el cuerpo: es lo que mas
 /// tiene que destacar sobre la tarima despues de las balas. Y porque la hitbox,
 /// que es roja, cae en la cintura: sobre un vestido rojo desapareceria.
-const VESTIDO: Color = color_u8!(244, 236, 216, 255);
+pub(crate) const VESTIDO: Color = color_u8!(244, 236, 216, 255);
 const ENAGUA: Color = color_u8!(255, 252, 244, 255);
 const MEDIA: Color = color_u8!(232, 222, 204, 255);
 const PIEL: Color = color_u8!(250, 224, 196, 255);

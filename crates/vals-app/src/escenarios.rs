@@ -369,7 +369,7 @@ fn publico(l: &Layout, alto: f32, t: f32, brillo: f32) {
 
 /// Que toca cada uno. Cambia el instrumento y la postura, nada mas.
 #[derive(Clone, Copy)]
-enum Instrumento {
+pub(crate) enum Instrumento {
     Bandoneon,
     Contrabajo,
     Trompeta,
@@ -380,7 +380,7 @@ enum Instrumento {
 
 /// Un musico con los pies en `(x, suelo)`. `brillo` es el pulso del compas: en
 /// el golpe cabecea, y es lo que hace que parezca que esta tocando.
-fn musico(l: &Layout, x: f32, suelo: f32, que: Instrumento, brillo: f32) {
+pub(crate) fn musico(l: &Layout, x: f32, suelo: f32, que: Instrumento, brillo: f32) {
     let c = TINTA;
     let golpe = brillo * 2.5;
     let sentado = matches!(
@@ -529,28 +529,28 @@ fn musico(l: &Layout, x: f32, suelo: f32, que: Instrumento, brillo: f32) {
 // cada decorado tenga que saber de pixeles.
 // ---------------------------------------------------------------------------
 
-fn rect(l: &Layout, x: f32, y: f32, w: f32, h: f32, c: Color) {
+pub(crate) fn rect(l: &Layout, x: f32, y: f32, w: f32, h: f32, c: Color) {
     let p = l.to_screen(x, y);
     draw_rectangle(p.x, p.y, l.len(w), l.len(h), c);
 }
 
-fn circulo(l: &Layout, x: f32, y: f32, r: f32, c: Color) {
+pub(crate) fn circulo(l: &Layout, x: f32, y: f32, r: f32, c: Color) {
     let p = l.to_screen(x, y);
     draw_circle(p.x, p.y, l.len(r), c);
 }
 
-fn tri(l: &Layout, a: (f32, f32), b: (f32, f32), c: (f32, f32), color: Color) {
+pub(crate) fn tri(l: &Layout, a: (f32, f32), b: (f32, f32), c: (f32, f32), color: Color) {
     let p = |q: (f32, f32)| l.to_screen(q.0, q.1);
     draw_triangle(p(a), p(b), p(c), color);
 }
 
-fn linea(l: &Layout, a: (f32, f32), b: (f32, f32), g: f32, c: Color) {
+pub(crate) fn linea(l: &Layout, a: (f32, f32), b: (f32, f32), g: f32, c: Color) {
     let (p, q) = (l.to_screen(a.0, a.1), l.to_screen(b.0, b.1));
     draw_line(p.x, p.y, q.x, q.y, l.len(g).max(1.0), c);
 }
 
 /// La mitad de arriba de un circulo: arcos, cupulas y conchas.
-fn arco(l: &Layout, x: f32, y: f32, r: f32, g: f32, c: Color) {
+pub(crate) fn arco(l: &Layout, x: f32, y: f32, r: f32, g: f32, c: Color) {
     let p = l.to_screen(x, y);
     draw_arc(p.x, p.y, 40, l.len(r), 180.0, l.len(g).max(1.0), 180.0, c);
 }

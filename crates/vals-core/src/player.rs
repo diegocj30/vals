@@ -582,7 +582,7 @@ impl Player {
 }
 
 /// Version escalar de `move_towards`, para el eje horizontal con gravedad.
-fn mover_hacia(current: f32, target: f32, max_delta: f32) -> f32 {
+pub(crate) fn mover_hacia(current: f32, target: f32, max_delta: f32) -> f32 {
     let d = target - current;
     if d.abs() <= max_delta {
         target

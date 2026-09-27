@@ -1,0 +1,101 @@
+// EL PASEO DE VIENA. La calle que se anda antes de bailar El Vals.
+//
+// Un paseo es un nivel de correr y disparar, como los de Cuphead: la calle de
+// la ciudad de su baile, con enemigos de su mundo, y al final la puerta del
+// salon donde espera el jefe. Este fichero es el nivel entero; el codigo solo
+// sabe andar, disparar y hacer caso a lo que diga aqui.
+//
+// Cuatro tramos, de izquierda a derecha (la puerta esta en x 6500):
+//
+//   1. El Ring           0 - 1850   parejas y notas sueltas. Ensena a disparar
+//                                   de frente y a saltar por encima.
+//   2. Los cafes      2010 - 3350   camareros tirando platos en arco, uno en un
+//                                   balcon. Cada tercer plato es rosa: parry.
+//   3. El canal       3350 - 4130   tres tramos de acera con el canal en medio.
+//                                   Las notas cruzan justo encima de los saltos.
+//   4. La escalinata  4130 - 6500   todo junto, y la puerta del salon.
+//
+// En nativo hay HOT-RELOAD, igual que con los jefes: guarda y el nivel se
+// rehace sin recompilar, con la jugadora donde estaba. Un RON roto se ignora y
+// se sigue con la ultima version buena.
+//
+// Coordenadas: x crece hacia la derecha, y hacia abajo. El suelo esta en y 470
+// (`SUELO_Y`), y la vista mide 960 x 540. El salto sube unas 155 unidades y
+// cruza unas 200 corriendo: un foso de mas de 190 ya pide dash o balcon.
+//
+// Guia de campos:
+//   tiempo        ticks por tiempo de la musica (el Danubio va a unos 21). Las
+//                 parejas dan su paso fuerte en el "uno" de cada compas de tres.
+//   suelo         tramos de acera (desde, hasta). Lo que queda entre dos
+//                 tramos es un foso: caer cuesta una vida y vuelves a la acera.
+//   plataformas   mesas de cafe y balcones. Se atraviesan desde abajo y se
+//                 pisan desde arriba. x es el borde izquierdo, y la superficie.
+//   enemigos      tipo: Pareja (baila por la acera hacia ti),
+//                       Camarero (tira platos en arco; y = superficie donde
+//                                 esta de pie, 0 o sin poner = la acera),
+//                       Nota (vuela hacia la izquierda en onda; y = altura).
+//                 rosa: true solo en notas: se pueden parriar.
+//                 Despiertan cuando la jugadora esta a 640 de su x.
+(
+  nombre: "El paseo de Viena",
+  jefe: "El Vals",
+  subtitulo: "Camino del baile",
+  tiempo: 21,
+  largo: 6800.0,
+  salida: 140.0,
+  puerta: 6500.0,
+  suelo: [
+    (0.0, 1850.0),
+    (2010.0, 3350.0),
+    (3530.0, 3950.0),
+    (4130.0, 6800.0),
+  ],
+  plataformas: [
+    // El Ring: un balcon para aprender que se sube desde abajo.
+    (x: 980.0, y: 395.0, ancho: 150.0),
+    (x: 1560.0, y: 420.0, ancho: 80.0),
+    // Los cafes: mesas bajas y el balcon del camarero.
+    (x: 2280.0, y: 420.0, ancho: 80.0),
+    (x: 2470.0, y: 360.0, ancho: 150.0),
+    (x: 2900.0, y: 420.0, ancho: 80.0),
+    // El canal: un balcon sobre cada foso, por si el salto no llega.
+    (x: 3380.0, y: 385.0, ancho: 120.0),
+    (x: 3620.0, y: 400.0, ancho: 110.0),
+    (x: 3990.0, y: 390.0, ancho: 120.0),
+    // La escalinata.
+    (x: 4700.0, y: 400.0, ancho: 140.0),
+    (x: 5280.0, y: 360.0, ancho: 150.0),
+    (x: 5800.0, y: 420.0, ancho: 80.0),
+  ],
+  enemigos: [
+    // --- El Ring ---
+    (tipo: Pareja, x: 800.0),
+    (tipo: Nota, x: 1150.0, y: 330.0),
+    (tipo: Nota, x: 1230.0, y: 300.0),
+    (tipo: Nota, x: 1310.0, y: 330.0),
+    (tipo: Pareja, x: 1650.0),
+    // --- Los cafes ---
+    (tipo: Camarero, x: 2150.0),
+    (tipo: Nota, x: 2360.0, y: 280.0, rosa: true),
+    (tipo: Camarero, x: 2545.0, y: 360.0),
+    (tipo: Pareja, x: 3050.0),
+    (tipo: Nota, x: 3200.0, y: 300.0),
+    (tipo: Nota, x: 3270.0, y: 260.0),
+    // --- El canal ---
+    (tipo: Pareja, x: 3800.0),
+    (tipo: Nota, x: 3900.0, y: 280.0),
+    (tipo: Nota, x: 3960.0, y: 320.0, rosa: true),
+    (tipo: Nota, x: 4020.0, y: 280.0),
+    // --- La escalinata ---
+    (tipo: Camarero, x: 4450.0),
+    (tipo: Pareja, x: 4850.0),
+    (tipo: Pareja, x: 5100.0),
+    (tipo: Camarero, x: 5355.0, y: 360.0),
+    (tipo: Nota, x: 5500.0, y: 300.0),
+    (tipo: Nota, x: 5560.0, y: 250.0),
+    (tipo: Nota, x: 5620.0, y: 300.0),
+    (tipo: Pareja, x: 5950.0),
+    (tipo: Nota, x: 6100.0, y: 290.0, rosa: true),
+    (tipo: Nota, x: 6160.0, y: 330.0),
+  ],
+)

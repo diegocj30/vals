@@ -18,6 +18,7 @@ pub mod events;
 mod hash;
 pub mod input;
 pub mod math;
+pub mod paseo;
 pub mod pattern;
 pub mod pista;
 pub mod player;

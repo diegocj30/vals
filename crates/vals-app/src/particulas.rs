@@ -132,17 +132,18 @@ impl Particulas {
     pub fn reaccionar(&mut self, ev: &Events, world: &World) {
         let jugador = vec2(world.player.pos.x, world.player.pos.y);
         let jefe = vec2(world.boss.pos.x, world.boss.pos.y);
+        // Un fogonazo corto hacia arriba: la boca del arma.
+        let boca = (jugador + vec2(0.0, -12.0), vec2(0.0, -1.0));
+        self.reaccionar_en(ev, jugador, jefe, boca);
+    }
 
+    /// Lo mismo, con los sitios dichos a mano: donde esta la jugadora, donde
+    /// ha sido el golpe y por donde sale el disparo. El paseo no tiene un jefe
+    /// en un sitio fijo ni dispara hacia arriba, y las chispas tienen que salir
+    /// del enemigo al que se ha dado y de la boca que apunta de lado.
+    pub fn reaccionar_en(&mut self, ev: &Events, jugador: Vec2, jefe: Vec2, boca: (Vec2, Vec2)) {
         if ev.player_shot {
-            // Un fogonazo corto hacia arriba: la boca del arma.
-            self.cono(
-                jugador + vec2(0.0, -12.0),
-                vec2(0.0, -1.0),
-                3,
-                260.0,
-                0.10,
-                SHOT,
-            );
+            self.cono(boca.0, boca.1, 3, 260.0, 0.10, SHOT);
         }
         if ev.boss_hit {
             self.cono(jefe, vec2(0.0, 1.0), 5, 320.0, 0.22, CHISPA);
@@ -169,6 +170,12 @@ impl Particulas {
         if ev.player_died {
             self.rafaga(jugador, 70, 520.0, 0.85, 2.8, MUERTE);
         }
+    }
+
+    /// Un estallido pequeno: lo que suelta un enemigo del paseo al caer. Mucho
+    /// menos que un jefe, que en la calle caen veinte.
+    pub fn estallido(&mut self, pos: Vec2, color: Color) {
+        self.rafaga(pos, 26, 360.0, 0.40, 2.2, color);
     }
 
     /// Dibuja. Cada particula es una estela corta hacia atras, no un punto: una
