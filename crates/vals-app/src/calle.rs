@@ -24,6 +24,7 @@ use vals_core::paseo::{
 use vals_core::player::{PARRY_RADIUS, SUPER_TICKS};
 use vals_core::rng::Pcg32;
 
+use crate::calle_arrabal;
 use crate::calle_chicago;
 use crate::calle_montmartre;
 use crate::draw::{self, Layout, fade};
@@ -55,7 +56,7 @@ const PIEDRA_CLARA: Color = color_u8!(52, 56, 92, 255);
 /// de la acera, y sobre un fondo oscuro tiene que saltar a la vista.
 const BALCON: Color = color_u8!(172, 162, 170, 255);
 const NOCHE: Color = color_u8!(36, 54, 104, 255);
-const VENTANA: Color = color_u8!(236, 188, 104, 255);
+pub(crate) const VENTANA: Color = color_u8!(236, 188, 104, 255);
 const ACERA: Color = color_u8!(84, 82, 108, 255);
 const ADOQUIN: Color = color_u8!(52, 48, 66, 255);
 const ADOQUIN_LUZ: Color = color_u8!(66, 62, 82, 255);
@@ -116,17 +117,19 @@ pub fn dibujar(p: &Paseo, alpha: f32, l: &Layout, pulso: f32, baile: usize) {
 
     // El fondo es de cada ciudad. Un baile sin calle propia anda por Viena.
     match baile {
+        1 => calle_arrabal::fondo(p, l, &capa, cam, pulso, t),
         2 => calle_chicago::fondo(p, l, &capa, cam, pulso),
         3 => calle_montmartre::fondo(p, l, &capa, cam, pulso),
         _ => fondo_de_viena(p, l, &capa, cam, pulso),
     }
     // Y lo que se pisa tambien: el canal de Viena no es el vacio de Chicago
-    // ni la cuesta de Montmartre.
+    // ni la cuesta de Montmartre, ni el Riachuelo.
     match baile {
+        1 => calle_arrabal::calle(p, &calle, alpha, cam, t, pulso, tintas),
         2 => calle_chicago::calle(p, &calle, alpha, cam, t, pulso),
         3 => calle_montmartre::calle(p, &calle, alpha, t, pulso),
         _ => {
-            acera(p, &calle, cam, t);
+            acera(p, &calle, cam, t, AGUA);
             plataformas(p, &calle);
             puerta(p, &calle, alpha, t, tintas);
         }
@@ -411,7 +414,7 @@ fn fachadas(l: &Layout, desde: f32, pulso: f32) {
     }
 }
 
-fn draw_rect_lines(l: &Layout, x: f32, y: f32, w: f32, h: f32, g: f32) {
+pub(crate) fn draw_rect_lines(l: &Layout, x: f32, y: f32, w: f32, h: f32, g: f32) {
     let p = l.to_screen(x, y);
     draw_rectangle_lines(p.x, p.y, l.len(w), l.len(h), l.len(g).max(1.0), TINTA);
 }
@@ -521,7 +524,7 @@ fn farolas(p: &Paseo, l: &Layout, cam: f32, pulso: f32) {
 /// El foso es **agua**: es la parte de la calle que no se pisa, y el Danubio
 /// es de Viena. Los bordes llevan un canto de tinta gordo, porque el borde de
 /// un foso es informacion y no decorado, igual que el marco de la arena.
-fn acera(p: &Paseo, l: &Layout, cam: f32, t: f32) {
+pub(crate) fn acera(p: &Paseo, l: &Layout, cam: f32, t: f32, agua: Color) {
     let fondo = VISTA_H + 10.0;
     // El canal, a lo ancho de la vista: la acera se pinta encima.
     rect(
@@ -530,7 +533,7 @@ fn acera(p: &Paseo, l: &Layout, cam: f32, t: f32) {
         SUELO_Y + 16.0,
         VISTA_W + 20.0,
         fondo - SUELO_Y,
-        AGUA,
+        agua,
     );
     for i in 0..5 {
         // Reflejos que se mecen: rayas cortas que van y vienen.
@@ -794,6 +797,9 @@ fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tiempo: u32, tintas: (Col
         Tipo::Corista => calle_montmartre::corista(e, l, edad, tintas, &tinte),
         Tipo::Botella => calle_montmartre::botella(e, l, t, tintas, &tinte),
         Tipo::Pintor => calle_montmartre::pintor(e, l, tintas, &tinte),
+        Tipo::Compadrito => calle_arrabal::compadrito(e, l, t, tintas, &tinte),
+        Tipo::Florista => calle_arrabal::florista(e, l, tintas, &tinte),
+        Tipo::Rosa => calle_arrabal::rosa(e, l, edad, t, tintas.0, &tinte),
     }
 }
 

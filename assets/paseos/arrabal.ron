@@ -1,0 +1,120 @@
+// EL PASEO DEL ARRABAL. La calle que se anda antes de bailar El Tango.
+//
+// La Boca al caer la noche: conventillos de chapa pintada, el puerto con sus
+// gruas y el Transbordador al fondo, el tranvia y el Riachuelo, que es lo que
+// hay en los fosos. Al final, la puerta de la milonga.
+//
+// El tango, en el jefe, es la ACELERACION NEGATIVA: balas que salen a tope y
+// frenan en seco. Los enemigos de aqui se mueven igual:
+//
+//   Compadrito   amaga un tiempo (se echa atras: es el aviso), se lanza en una
+//                estocada que frena hasta cero y se queda plantado dos
+//                tiempos. Arranca siempre en un tiempo de la musica. Se salta.
+//   Florista     en un balcon, tira rosas derechas a ti. Esta arriba: se la
+//                tumba plantada (SHIFT) y apuntando arriba.
+//   (Rosa)       la tira la florista, no se pone aqui. Sale disparada, frena,
+//                se queda COLGADA en el aire dos tiempos y cae marchita. Se
+//                dispara o se rodea; una de cada tres es rosa y se parria.
+//   Nota         las del bandoneon, las mismas de Viena: cruzan en onda.
+//
+// Cuatro tramos, de izquierda a derecha (la puerta esta en x 7050):
+//
+//   1. La parada del tranvia     0 - 1900   el anden y su marquesina. Ensena
+//                                           al compadrito: se le ve amagar.
+//   2. El conventillo         2080 - 3880   balcones y tejados de chapa, con
+//                                           floristas arriba. Apuntar arriba.
+//   3. La Vuelta de Rocha     3880 - 5500   el muelle: tablones cortos sobre el
+//                                           Riachuelo y botes amarrados. Rosas
+//                                           colgadas encima de los saltos.
+//   4. Caminito               5500 - 7400   todo junto, y la puerta.
+//
+// Un punto mas dificil que Viena, que es el segundo baile: mas fosos, un
+// enemigo que te persigue a golpes y rosas que se quedan donde vas a saltar.
+//
+// En nativo hay HOT-RELOAD: guarda y el nivel se rehace sin recompilar, con la
+// jugadora donde estaba.
+//
+// Coordenadas: x a la derecha, y hacia abajo. El suelo esta en y 470. El salto
+// sube unas 155 unidades y cruza unas 200 corriendo; la estocada de un
+// compadrito cubre unas 230.
+//
+// Guia de campos: la misma de `viena.ron`. `tiempo` son los ticks por tiempo
+// del tango: 120 negras por minuto, 30 ticks. En los enemigos, `y` es la
+// superficie donde esta de pie una florista (0 o sin poner, la acera) o la
+// altura de vuelo de una nota.
+(
+  nombre: "El paseo del arrabal",
+  jefe: "El Tango",
+  subtitulo: "Por la Vuelta de Rocha",
+  tiempo: 30,
+  largo: 7400.0,
+  salida: 140.0,
+  puerta: 7050.0,
+  suelo: [
+    (0.0, 1900.0),
+    (2080.0, 2900.0),
+    (3080.0, 3880.0),
+    (4060.0, 4400.0),
+    (4580.0, 4860.0),
+    (5040.0, 5900.0),
+    (6070.0, 7400.0),
+  ],
+  plataformas: [
+    // La parada: el anden, bajo, y el techo de la marquesina encima.
+    (x: 700.0, y: 428.0, ancho: 300.0),
+    (x: 760.0, y: 335.0, ancho: 180.0),
+    (x: 1560.0, y: 425.0, ancho: 90.0),
+    // El conventillo: balcones para las floristas y tejados de chapa.
+    (x: 2300.0, y: 360.0, ancho: 150.0),
+    (x: 2560.0, y: 425.0, ancho: 90.0),
+    (x: 2700.0, y: 335.0, ancho: 200.0),
+    (x: 2950.0, y: 385.0, ancho: 90.0),
+    (x: 3250.0, y: 355.0, ancho: 150.0),
+    (x: 3430.0, y: 420.0, ancho: 80.0),
+    (x: 3530.0, y: 315.0, ancho: 170.0),
+    // La Vuelta de Rocha: botes amarrados sobre el agua y cajones en el muelle.
+    (x: 3920.0, y: 430.0, ancho: 100.0),
+    (x: 4440.0, y: 430.0, ancho: 100.0),
+    (x: 4640.0, y: 350.0, ancho: 150.0),
+    (x: 4900.0, y: 430.0, ancho: 100.0),
+    (x: 5250.0, y: 425.0, ancho: 90.0),
+    // Caminito.
+    (x: 5600.0, y: 360.0, ancho: 150.0),
+    (x: 5930.0, y: 385.0, ancho: 110.0),
+    (x: 6180.0, y: 425.0, ancho: 90.0),
+    (x: 6400.0, y: 340.0, ancho: 160.0),
+  ],
+  enemigos: [
+    // --- La parada del tranvia ---
+    (tipo: Compadrito, x: 1000.0),
+    (tipo: Nota, x: 1260.0, y: 330.0),
+    (tipo: Nota, x: 1330.0, y: 300.0),
+    (tipo: Compadrito, x: 1560.0),
+    (tipo: Compadrito, x: 1820.0),
+    // --- El conventillo ---
+    (tipo: Florista, x: 2375.0, y: 360.0),
+    (tipo: Compadrito, x: 2650.0),
+    (tipo: Nota, x: 2860.0, y: 270.0, rosa: true),
+    (tipo: Florista, x: 3325.0, y: 355.0),
+    (tipo: Compadrito, x: 3500.0),
+    (tipo: Florista, x: 3615.0, y: 315.0),
+    (tipo: Compadrito, x: 3800.0),
+    // --- La Vuelta de Rocha ---
+    (tipo: Compadrito, x: 4330.0),
+    (tipo: Nota, x: 4500.0, y: 310.0),
+    (tipo: Florista, x: 4715.0, y: 350.0),
+    (tipo: Nota, x: 4960.0, y: 300.0, rosa: true),
+    (tipo: Nota, x: 5020.0, y: 330.0),
+    (tipo: Compadrito, x: 5350.0),
+    // --- Caminito ---
+    (tipo: Florista, x: 5675.0, y: 360.0),
+    (tipo: Compadrito, x: 5780.0),
+    (tipo: Compadrito, x: 5860.0),
+    (tipo: Nota, x: 6000.0, y: 290.0),
+    (tipo: Nota, x: 6060.0, y: 250.0),
+    (tipo: Compadrito, x: 6320.0),
+    (tipo: Florista, x: 6480.0, y: 340.0),
+    (tipo: Compadrito, x: 6720.0),
+    (tipo: Nota, x: 6850.0, y: 300.0, rosa: true),
+  ],
+)

@@ -50,6 +50,10 @@ const RUTAS_PASEOS: [&str; vals_core::paseo::PASEO_RONS.len()] = [
     concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/paseos/viena.ron"),
     concat!(
         env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/paseos/arrabal.ron"
+    ),
+    concat!(
+        env!("CARGO_MANIFEST_DIR"),
         "/../../assets/paseos/chicago.ron"
     ),
     concat!(

@@ -37,8 +37,9 @@ use crate::{DT, InputFrame, Pcg32, Player};
 ///
 /// Cada uno dice delante de que jefe va (`jefe`), asi que el orden de esta
 /// lista no significa nada: un baile sin paseo se entra directo, como antes.
-pub const PASEO_RONS: [&str; 3] = [
+pub const PASEO_RONS: [&str; 4] = [
     include_str!("../../../assets/paseos/viena.ron"),
+    include_str!("../../../assets/paseos/arrabal.ron"),
     include_str!("../../../assets/paseos/chicago.ron"),
     include_str!("../../../assets/paseos/montmartre.ron"),
 ];
@@ -120,6 +121,37 @@ const BRINCO_CORTO: f32 = 45.0;
 const AVANCE_LARGO: f32 = 150.0;
 const AVANCE_CORTO: f32 = 50.0;
 pub const EN_EL_SUELO: u64 = 6;
+
+// El arrabal. El verbo del tango en el jefe es la **aceleracion negativa**:
+// balas que salen disparadas, frenan en seco y se quedan. Sus enemigos se
+// mueven igual: arrancan a tope y se clavan.
+
+/// El compadrito, en ticks: un tiempo de amago (se echa atras, se ve venir),
+/// uno de estocada frenando y dos plantado. Con el tango a 30 ticks por tiempo
+/// es un compas justo, y arranca siempre en un tiempo de la musica.
+pub const AMAGO_COMPADRITO: u32 = 30;
+pub const ESTOCADA_COMPADRITO: u32 = 30;
+pub const PLANTADO_COMPADRITO: u32 = 60;
+pub const CICLO_COMPADRITO: u32 = AMAGO_COMPADRITO + ESTOCADA_COMPADRITO + PLANTADO_COMPADRITO;
+/// La velocidad con que sale la estocada, tres veces la de la jugadora. Frena
+/// en linea recta hasta cero: unas 230 unidades, algo mas que un salto.
+const ESTOCADA_V: f32 = 900.0;
+/// Hasta donde ve un compadrito: no se lanza a lo que no tiene cerca.
+const ALCANCE_COMPADRITO: f32 = 420.0;
+
+/// Cada cuantos ticks tira una rosa la florista: un compas de tango.
+pub const CADENCIA_FLORISTA: u32 = 120;
+const ALCANCE_FLORISTA: f32 = 600.0;
+/// Una rosa sale a esto y pierde un 7 % por tick: a los `VUELO_ROSA` ticks
+/// casi no se mueve, y ha recorrido unas 215 unidades hacia donde estabas.
+const ROSA_V: f32 = 950.0;
+const FRENO_ROSA: f32 = 0.93;
+pub const VUELO_ROSA: u64 = 45;
+/// Lo que se queda colgada en el aire tras frenar, antes de marchitarse y
+/// caer: dos tiempos. Es el corte del tango hecho objeto.
+pub const COLGADA_ROSA: u64 = 60;
+/// Una rosa marchita cae despacio, como cae una flor.
+const GRAVEDAD_ROSA: f32 = 320.0;
 
 /// Lo que llena el medidor cada disparo que entra. El parry sigue siendo el
 /// chorro; esto es el goteo, igual que el graze en los combates.
@@ -205,6 +237,18 @@ pub enum Tipo {
     Camarero,
     /// Una nota que cruza volando en onda. Las rosas se parrian.
     Nota,
+    // --- El arrabal. El tango arranca a tope y se clava,
+    // y sus enemigos tambien.
+    /// Un compadrito de chambergo y panuelo: amaga un tiempo, se
+    /// lanza en una estocada que frena en seco y se queda plantado. Se salta.
+    Compadrito,
+    /// Una florista en un balcon del conventillo que tira rosas. Esta arriba,
+    /// asi que se la tumba plantada y apuntando arriba.
+    Florista,
+    /// La rosa que tira la florista: sale disparada, frena, se queda colgada
+    /// en el aire y se marchita. No se pone en el RON; nace de la florista.
+    /// Una de cada tres es rosa de verdad y se parria.
+    Rosa,
     // --- Chicago. El charleston gira y va en clave 3-3-2, y
     // sus tres enemigos tambien.
     /// Una flapper plantada, bailando el charleston en el sitio, con el collar
@@ -244,6 +288,9 @@ impl Tipo {
             Tipo::Pareja => 6,
             Tipo::Camarero => 8,
             Tipo::Nota => 2,
+            Tipo::Compadrito => 8,
+            Tipo::Florista => 6,
+            Tipo::Rosa => 1,
             Tipo::Flapper => 8,
             Tipo::Saxo => 10,
             Tipo::Saltarin => 7,
@@ -259,6 +306,9 @@ impl Tipo {
             Tipo::Pareja => 24.0,
             Tipo::Camarero => 22.0,
             Tipo::Nota => 14.0,
+            Tipo::Compadrito => 22.0,
+            Tipo::Florista => 20.0,
+            Tipo::Rosa => 14.0,
             Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin => 22.0,
             Tipo::Corista => 20.0,
             Tipo::Botella => 14.0,
@@ -271,7 +321,9 @@ impl Tipo {
         match self {
             Tipo::Pareja => 38.0,
             Tipo::Camarero => 36.0,
-            Tipo::Nota => 0.0,
+            Tipo::Nota | Tipo::Rosa => 0.0,
+            Tipo::Compadrito => 38.0,
+            Tipo::Florista => 36.0,
             Tipo::Flapper => 38.0,
             Tipo::Saxo | Tipo::Saltarin => 36.0,
             Tipo::Corista => 44.0,
@@ -291,6 +343,9 @@ impl Tipo {
             Tipo::Corista => 6,
             Tipo::Botella => 7,
             Tipo::Pintor => 8,
+            Tipo::Compadrito => 9,
+            Tipo::Florista => 10,
+            Tipo::Rosa => 11,
         }
     }
 }
@@ -503,6 +558,8 @@ pub struct Enemigo {
     /// tirar, que salta a 1 y se apaga en doce ticks: eso solo lo lee el
     /// dibujo.
     pub gesto: f32,
+    /// Velocidad propia (rosa), que se frena tick a tick.
+    pub vel: Vec2,
 }
 
 impl Enemigo {
@@ -1020,7 +1077,11 @@ impl Paseo {
             };
             // El primer plato sale con un poco de azar: dos camareros que se
             // despiertan juntos no deben tirar a la vez.
-            let reloj = CADENCIA_CAMARERO / 2 + self.rng.next_u32() % 30;
+            let mut reloj = CADENCIA_CAMARERO / 2 + self.rng.next_u32() % 30;
+            if a.tipo == Tipo::Compadrito {
+                // El compadrito espera a tenerte cerca y a que caiga un tiempo.
+                reloj = 0;
+            }
             self.enemigos.push(Enemigo {
                 tipo: a.tipo,
                 pos: Vec2::new(a.x, y),
@@ -1034,6 +1095,7 @@ impl Paseo {
                 base_y: y,
                 avance: 0.0,
                 gesto: 0.0,
+                vel: Vec2::ZERO,
             });
         }
     }
@@ -1041,6 +1103,9 @@ impl Paseo {
     fn enemigos_actuan(&mut self) {
         let objetivo = self.jugadora.pos;
         let tiempo = u64::from(self.def.tiempo.max(1));
+        // Lo que nace este tick (las rosas). Se anade al acabar, que no se
+        // puede empujar a la lista que se esta recorriendo.
+        let mut nuevas = Vec::new();
         for e in &mut self.enemigos {
             e.golpe = e.golpe.saturating_sub(1);
             let edad = self.tick - e.nacio;
@@ -1293,8 +1358,93 @@ impl Paseo {
                         }
                     }
                 }
+                Tipo::Compadrito => {
+                    let dx = objetivo.x - e.pos.x;
+                    if e.reloj == 0 {
+                        // Quieto hasta tenerte a tiro, y entonces arranca en
+                        // el siguiente tiempo de la musica: se lanza a compas.
+                        if dx.abs() > ALCANCE_COMPADRITO || !self.tick.is_multiple_of(tiempo) {
+                            continue;
+                        }
+                        if dx != 0.0 {
+                            e.dir = dx.signum();
+                        }
+                        // Este tick ya es el primero del amago.
+                        e.reloj = CICLO_COMPADRITO;
+                        continue;
+                    }
+                    e.reloj -= 1;
+                    // La estocada: de `ESTOCADA_V` a cero en linea recta. Es
+                    // aceleracion negativa constante, el corte del jefe.
+                    let quedan = e.reloj.saturating_sub(PLANTADO_COMPADRITO);
+                    if quedan == 0 || quedan > ESTOCADA_COMPADRITO {
+                        continue;
+                    }
+                    let v = ESTOCADA_V * quedan as f32 / ESTOCADA_COMPADRITO as f32;
+                    let nx = e.pos.x + e.dir * v * DT;
+                    if self.def.hay_suelo(nx + e.dir * e.tipo.radio()) {
+                        e.pos.x = nx;
+                    } else {
+                        // Al borde del Riachuelo se clava antes de tiempo.
+                        e.reloj = PLANTADO_COMPADRITO;
+                    }
+                }
+                Tipo::Florista => {
+                    let dx = objetivo.x - e.pos.x;
+                    if dx != 0.0 {
+                        e.dir = dx.signum();
+                    }
+                    if dx.abs() > ALCANCE_FLORISTA {
+                        continue;
+                    }
+                    e.reloj = e.reloj.saturating_sub(1);
+                    if e.reloj > 0 {
+                        continue;
+                    }
+                    e.reloj = CADENCIA_FLORISTA;
+                    e.lanzados += 1;
+                    // Derecha a ti: no hay arco que leer, hay una rosa que
+                    // viene rapida y se para antes de llegar si estas lejos.
+                    let origen = e.pos + Vec2::new(e.dir * 16.0, -24.0);
+                    let hacia = (objetivo - origen).normalize_or(Vec2::new(e.dir, 0.0));
+                    nuevas.push(Enemigo {
+                        tipo: Tipo::Rosa,
+                        pos: origen,
+                        vida: Tipo::Rosa.vida(),
+                        dir: e.dir,
+                        nacio: self.tick,
+                        rosa: e.lanzados % 3 == 0,
+                        golpe: 0,
+                        reloj: 0,
+                        lanzados: 0,
+                        base_y: origen.y,
+                        avance: 0.0,
+                        gesto: 0.0,
+                        vel: hacia * ROSA_V,
+                    });
+                }
+                Tipo::Rosa => {
+                    // Vuela frenando, se queda colgada y cae marchita. Por
+                    // edad y no por velocidad, para que colgar dure lo mismo
+                    // la tire quien la tire.
+                    if edad < VUELO_ROSA {
+                        e.pos += e.vel * DT;
+                        e.vel *= FRENO_ROSA;
+                    } else if edad < VUELO_ROSA + COLGADA_ROSA {
+                        e.vel = Vec2::ZERO;
+                    } else {
+                        e.vel.y += GRAVEDAD_ROSA * DT;
+                        e.pos += e.vel * DT;
+                    }
+                }
             }
         }
+        self.enemigos.extend(nuevas);
+        // Una rosa que se ha caido por debajo de la calle ya no es nada. Se va
+        // sin contar como caida, que nadie la ha tumbado.
+        let def = &self.def;
+        self.enemigos
+            .retain(|e| e.tipo != Tipo::Rosa || e.pos.y < def.altura(e.pos.x) + 90.0);
     }
 
     /// Lo fugaz se mueve, se transforma al tocar la acera y se apaga.
@@ -1513,6 +1663,7 @@ impl Paseo {
             h.write_u64(u64::from(e.reloj));
             h.write_f32(e.avance);
             h.write_f32(e.gesto);
+            h.write_vec2(e.vel);
         }
         for q in &self.proyectiles {
             h.write_vec2(q.pos);
@@ -1646,6 +1797,26 @@ mod tests {
                 let pisa = if a.y > 0.0 { a.y } else { SUELO_Y };
                 assert!(chicago.hay_pie(a.x, pisa), "{a:?} flota");
             }
+        }
+
+        // El arrabal, antes del tango, con sus enemigos y mas saltos que Viena.
+        let arrabal = de_serie("El Tango");
+        assert!(
+            arrabal.suelo.len() > viena.suelo.len(),
+            "el Riachuelo pide mas saltos"
+        );
+        assert_eq!(arrabal.tiempo, 30, "el tango va a 120");
+        for t in [Tipo::Compadrito, Tipo::Florista] {
+            assert!(
+                arrabal.enemigos.iter().any(|a| a.tipo == t),
+                "falta {t:?} en el arrabal"
+            );
+        }
+        // Las rosas no se ponen: las tira la florista. Y una florista tiene
+        // que estar de pie sobre algo.
+        assert!(!arrabal.enemigos.iter().any(|a| a.tipo == Tipo::Rosa));
+        for a in arrabal.enemigos.iter().filter(|a| a.tipo == Tipo::Florista) {
+            assert!(arrabal.hay_pie(a.x, a.y), "florista en el aire: {a:?}");
         }
 
         // Montmartre: sube, lleva a su jefe y trae los enemigos del cancan.
@@ -2182,6 +2353,140 @@ mod tests {
         }
         assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
         assert_eq!(p.vidas, VIDAS, "no ha caido a ningun foso");
+    }
+
+    // --- El arrabal ---
+
+    #[test]
+    fn el_arrabal_se_puede_andar_entero() {
+        // El mismo bot que en Viena: corre, dispara y salta ante cada foso.
+        let mut p = Paseo::new(de_serie("El Tango"), 3);
+        let mut salto = 0;
+        for _ in 0..(60 * 60) {
+            p.jugadora.iframes = 5;
+            let x = p.jugadora.pos.x;
+            if p.jugadora.on_ground && !p.def.hay_suelo(x + 24.0) {
+                salto = 20;
+            }
+            let bits = DERECHA | DISPARA | if salto > 0 { InputFrame::JUMP } else { 0 };
+            salto = if salto > 0 { salto - 1 } else { 0 };
+            p.step(pulsar(bits));
+            if p.completado.is_some() {
+                break;
+            }
+        }
+        assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
+        assert_eq!(p.vidas, VIDAS, "ha caido al Riachuelo");
+    }
+
+    #[test]
+    fn el_compadrito_amaga_se_lanza_frenando_y_se_planta() {
+        let mut p = Paseo::new(
+            con(vec![Aparicion {
+                tipo: Tipo::Compadrito,
+                x: 400.0,
+                y: 0.0,
+                rosa: false,
+            }]),
+            1,
+        );
+        // Se despierta y arranca en el mismo tick, que es un tiempo (el 0).
+        p.step(InputFrame::NONE);
+        assert_eq!(p.enemigos[0].reloj, CICLO_COMPADRITO, "no ha arrancado");
+        let mut xs = vec![p.enemigos[0].pos.x];
+        for _ in 1..CICLO_COMPADRITO {
+            p.step(InputFrame::NONE);
+            xs.push(p.enemigos[0].pos.x);
+        }
+        let pasos: Vec<f32> = xs.windows(2).map(|w| w[0] - w[1]).collect();
+        let (amago, resto) = pasos.split_at(AMAGO_COMPADRITO as usize - 1);
+        let (estocada, plantado) = resto.split_at(ESTOCADA_COMPADRITO as usize);
+        assert!(
+            amago.iter().all(|&d| d == 0.0),
+            "el amago es quieto: {amago:?}"
+        );
+        // Hacia ella, y cada paso mas corto que el anterior: frena.
+        assert!(estocada[0] > 13.0, "sale a tope: {}", estocada[0]);
+        for w in estocada.windows(2) {
+            assert!(w[1] < w[0] && w[1] > 0.0, "no frena: {estocada:?}");
+        }
+        let largo: f32 = estocada.iter().sum();
+        assert!(largo > 200.0, "la estocada se queda corta: {largo}");
+        assert!(
+            plantado.iter().all(|&d| d == 0.0),
+            "no se planta: {plantado:?}"
+        );
+        assert_eq!(p.vidas, VIDAS, "no llega a tocarla desde 300");
+    }
+
+    #[test]
+    fn la_rosa_frena_se_queda_colgada_y_cae() {
+        let mut p = Paseo::new(calle(), 1);
+        p.enemigos.push(Enemigo {
+            tipo: Tipo::Rosa,
+            pos: Vec2::new(700.0, 380.0),
+            vida: 1,
+            dir: -1.0,
+            nacio: 0,
+            rosa: false,
+            golpe: 0,
+            reloj: 0,
+            lanzados: 0,
+            base_y: 380.0,
+            avance: 0.0,
+            gesto: 0.0,
+            vel: Vec2::new(-ROSA_V, 0.0),
+        });
+        let mut antes = 700.0;
+        let mut paso = f32::MAX;
+        for _ in 0..VUELO_ROSA {
+            p.step(InputFrame::NONE);
+            let x = p.enemigos[0].pos.x;
+            assert!(antes - x < paso && x < antes, "no frena");
+            (paso, antes) = (antes - x, x);
+        }
+        assert!(700.0 - antes > 180.0, "vuela poco: {}", 700.0 - antes);
+        let colgada = p.enemigos[0].pos;
+        for _ in 0..COLGADA_ROSA {
+            p.step(InputFrame::NONE);
+            assert_eq!(p.enemigos[0].pos, colgada, "tenia que quedarse colgada");
+        }
+        correr(&mut p, 0, 20);
+        assert!(p.enemigos[0].pos.y > colgada.y, "y luego cae");
+        correr(&mut p, 0, 240);
+        assert!(p.enemigos.is_empty(), "una rosa caida se va");
+        assert_eq!(p.caidos, 0);
+    }
+
+    #[test]
+    fn la_florista_tira_rosas_hacia_ti_y_una_de_cada_tres_es_rosa() {
+        let mut def = con(vec![Aparicion {
+            tipo: Tipo::Florista,
+            x: 500.0,
+            y: 360.0,
+            rosa: false,
+        }]);
+        def.plataformas = vec![Plataforma {
+            x: 440.0,
+            y: 360.0,
+            ancho: 120.0,
+        }];
+        let mut p = Paseo::new(def, 1);
+        let (mut vistas, mut rosas) = (0, 0);
+        for _ in 0..(CADENCIA_FLORISTA * 7) {
+            p.jugadora.iframes = 10;
+            let antes = p.enemigos.first().map_or(0, |f| f.lanzados);
+            p.step(InputFrame::NONE);
+            if p.enemigos[0].lanzados > antes {
+                let r = p.enemigos.last().expect("acaba de tirar");
+                assert_eq!(r.tipo, Tipo::Rosa);
+                assert!(r.vel.x < 0.0 && r.vel.y > 0.0, "hacia ella, abajo");
+                vistas += 1;
+                rosas += u32::from(r.rosa);
+            }
+        }
+        assert!(vistas >= 6, "tira con cadencia: {vistas}");
+        assert_eq!(rosas, vistas / 3);
     }
 
     // --- Montmartre ---

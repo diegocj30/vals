@@ -15,6 +15,7 @@ mod audio;
 mod bailarines;
 mod bullet_renderer;
 mod calle;
+mod calle_arrabal;
 mod calle_chicago;
 mod calle_montmartre;
 mod cartela;
