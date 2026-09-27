@@ -62,13 +62,13 @@
           if (ay > ZONA_MUERTA || pulsado(p, 13)) bits |= DOWN;
           if (ax < -ZONA_MUERTA || pulsado(p, 14)) bits |= LEFT;
           if (ax > ZONA_MUERTA || pulsado(p, 15)) bits |= RIGHT;
-          if (pulsado(p, 0)) bits |= SHOOT;
+          if (pulsado(p, 5) || pulsado(p, 7)) bits |= SHOOT;
           if (pulsado(p, 2)) bits |= DASH;
           if (pulsado(p, 1)) bits |= PARRY;
           if (pulsado(p, 3)) bits |= SUPER;
           if (pulsado(p, 4) || pulsado(p, 6)) bits |= FOCUS;
-          // Saltar en R1/R2, no en arriba: ver mando.rs.
-          if (pulsado(p, 5) || pulsado(p, 7)) bits |= JUMP;
+          // Saltar en el boton de abajo y disparar en R1/R2: ver mando.rs.
+          if (pulsado(p, 0)) bits |= JUMP;
           return bits;
         }
         return 0;

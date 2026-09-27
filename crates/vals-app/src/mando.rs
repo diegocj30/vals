@@ -117,9 +117,9 @@ impl Mando {
     /// Devuelve (disparar, dash, parry, super, saltar).
     pub fn botones(&self) -> [&'static str; 5] {
         if self.actual & PLAYSTATION != 0 {
-            ["X", "cuadrado", "circulo", "triangulo", "R1"]
+            ["R1", "cuadrado", "circulo", "triangulo", "X"]
         } else {
-            ["A", "X", "B", "Y", "RB"]
+            ["RB", "X", "B", "Y", "A"]
         }
     }
 
@@ -192,16 +192,15 @@ impl Mando {
             InputFrame::RIGHT,
             ax > ZONA_MUERTA || pad.is_pressed(Button::DPadRight),
         );
-        // Saltar va en un gatillo y no en "arriba": con el stick, apuntar en
-        // diagonal hacia delante saltaba sin querer, y en el paseo arriba es
-        // tambien apuntar. En R1 o R2 se salta con el indice sin soltar el
-        // disparo del pulgar.
+        // Saltar va en el boton de abajo y no en "arriba": con el stick,
+        // apuntar en diagonal hacia delante saltaba sin querer, y en el paseo
+        // arriba es tambien apuntar. Disparar pasa al gatillo: se mantiene con
+        // el indice y el pulgar queda libre para saltar.
+        set(InputFrame::JUMP, pad.is_pressed(Button::South));
         set(
-            InputFrame::JUMP,
+            InputFrame::SHOOT,
             pad.is_pressed(Button::RightTrigger) || pad.is_pressed(Button::RightTrigger2),
         );
-
-        set(InputFrame::SHOOT, pad.is_pressed(Button::South));
         set(InputFrame::DASH, pad.is_pressed(Button::West));
         set(InputFrame::PARRY, pad.is_pressed(Button::East));
         set(InputFrame::SUPER, pad.is_pressed(Button::North));
@@ -318,7 +317,7 @@ mod tests {
             gilrs: None,
         };
         assert!(m.conectado());
-        assert_eq!(m.botones()[0], "A", "sin marca de Sony, nombres de Xbox");
+        assert_eq!(m.botones()[4], "A", "sin marca de Sony, nombres de Xbox");
         assert_eq!(m.frame().bits(), 0, "estar conectado no es pulsar nada");
     }
 }

@@ -369,7 +369,7 @@ async fn run_game() {
         // se entra lejos de todo, pero deja de ser verdad en cuanto un baile
         // este cerca de la entrada.
         if escena == Escena::Pista
-            && (is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::SHOOT))
+            && (is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::JUMP))
             && let Some(i) = pista.nodo_cerca()
             && pista.abierto(i)
         {
@@ -424,8 +424,7 @@ async fn run_game() {
         // que la X no hace nada aqui. Dejarla como sinonimo seria un segundo
         // boton que no dice nada, y el menu tendria que explicar por que hay
         // dos.
-        if escena == Escena::Menu
-            && (is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::SHOOT))
+        if escena == Escena::Menu && (is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::JUMP))
         {
             audio.play(Sfx::Empezar, 1.0);
             escena = Escena::Pista;

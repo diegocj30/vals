@@ -356,7 +356,7 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 5]>) 
     // ultima version el modo lo trae cada baile y no se elige aqui.
     let lineas: Vec<String> = match mando {
         Some(b) => vec![
-            format!("{}   entrar a la pista{cola}", b[0]),
+            format!("{}   entrar a la pista{cola}", b[4]),
             "stick o cruceta   mover".to_owned(),
             format!("{}  disparar     {}  dash", b[0], b[1]),
             format!("{}  parry        {}  super", b[2], b[3]),
