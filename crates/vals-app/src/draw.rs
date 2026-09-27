@@ -403,25 +403,30 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 4]>) 
         false,
     );
 
+    // Todo lo que va en pixeles se escala con la arena. Con tamanos fijos, en
+    // una ventana estrecha la invitacion caia encima del subtitulo y la
+    // chuleta se salia de la lamina.
+    let u = l.scale().clamp(0.55, 1.2);
+
     // El titulo, con sombra de tinta y una orla Deco debajo.
-    let grande = 150.0 * l.scale().min(1.2);
+    let grande = 150.0 * u;
     let y = o.y + h * 0.34;
     con_sombra(
         |dx, c| fuentes::centrado("VALS", cx + dx * 2.0, y + dx * 2.0, grande, Cara::Titulo, c),
         TITLE,
     );
-    let ry = y + 26.0;
+    let ry = y + 26.0 * u;
     let media = w * 0.26;
-    draw_line(cx - media, ry, cx - 12.0, ry, 1.5, METER_FULL);
-    draw_line(cx + 12.0, ry, cx + media, ry, 1.5, METER_FULL);
-    draw_poly(cx, ry, 4, 6.0, 45.0, METER_FULL);
+    draw_line(cx - media, ry, cx - 12.0 * u, ry, 1.5, METER_FULL);
+    draw_line(cx + 12.0 * u, ry, cx + media, ry, 1.5, METER_FULL);
+    draw_poly(cx, ry, 4, 6.0 * u, 45.0, METER_FULL);
     con_sombra(
         |dx, c| {
             fuentes::centrado(
                 "cuatro bailes, cuatro jefes",
                 cx + dx,
-                ry + 34.0 + dx,
-                20.0,
+                ry + 34.0 * u + dx,
+                20.0 * u,
                 Cara::Cuerpo,
                 c,
             )
@@ -431,25 +436,25 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 4]>) 
 
     // La invitacion, latiendo: es lo unico que hay que hacer en esta pantalla.
     let latido = 0.65 + 0.35 * (get_time() as f32 * 3.0).sin();
-    // Justo bajo el subtitulo: mas abajo esta ella.
-    let mut y = o.y + h * 0.46;
+    // Justo bajo el subtitulo, medido desde el y no desde la arena: mas abajo
+    // esta ella.
+    let y = ry + 66.0 * u;
     for linea in &lineas[..1] {
         con_sombra(
-            |dx, c| fuentes::centrado(linea, cx + dx, y + dx, 21.0, Cara::Cuerpo, c),
+            |dx, c| fuentes::centrado(linea, cx + dx, y + dx, 21.0 * u, Cara::Cuerpo, c),
             fade(TITLE, latido),
         );
-        y += 28.0;
     }
 
     // Y la chuleta, en una carta abajo, pequena.
-    let (cw, ch) = (w * 0.86, 24.0 + 21.0 * (lineas.len() - 1) as f32);
-    let (x0, y0) = (cx - cw * 0.5, o.y + h - ch - 40.0);
+    let (cw, ch) = (w * 0.86, (24.0 + 21.0 * (lineas.len() - 1) as f32) * u);
+    let (x0, y0) = (cx - cw * 0.5, o.y + h - ch - 40.0 * u);
     draw_rectangle(x0, y0, cw, ch, fade(paleta::TINTA, 0.55));
     draw_rectangle_lines(x0, y0, cw, ch, 1.5, fade(METER_FULL, 0.7));
-    let mut y = y0 + 26.0;
+    let mut y = y0 + 26.0 * u;
     for linea in &lineas[1..] {
-        fuentes::centrado(linea, cx, y, 16.0, Cara::Cuerpo, TEXT);
-        y += 21.0;
+        fuentes::centrado(linea, cx, y, 16.0 * u, Cara::Cuerpo, TEXT);
+        y += 21.0 * u;
     }
 }
 
