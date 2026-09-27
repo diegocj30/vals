@@ -36,7 +36,11 @@ const HITBOX: Color = color_u8!(226, 58, 92, 255);
 /// Es el color que no habia. Este juego tenia 27 constantes y ninguna era un
 /// contorno, y por eso se veia a marcianitos: sin tinta todo brilla, y lo que
 /// brilla flota.
-const TINTA: Color = color_u8!(18, 13, 20, 255);
+const TINTA: Color = paleta::TINTA;
+// Hubo aqui una tinta propia, (18, 13, 20), un punto mas oscura que la de la
+// paleta. Dos tintas distintas en un cartel son un error de imprenta: el
+// contorno de las figuras y el del marco no casaban, y el cartel lateral tenia
+// que adivinar cual le llegaba. Ahora hay una.
 /// Lo que engorda el contorno, en unidades logicas. Se **suma** al grosor en
 /// vez de multiplicarlo, que es lo que hace que la linea salga del mismo ancho
 /// en un antebrazo que en un muslo. Una plumilla no se ensancha con el hueso.

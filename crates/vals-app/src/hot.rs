@@ -19,8 +19,12 @@ use vals_core::paseo::PaseoDef;
 ///
 /// Relativa al manifiesto y no al directorio de trabajo, para que funcione
 /// tanto con `cargo run` desde la raiz como lanzando el ejecutable a pelo.
+///
+/// El tamano sale de `DEFAULT_BOSS_RONS`, igual que el de los paseos: estuvo
+/// escrito a mano como 3, y cuando entro el cuarto baile (primero el dembow y
+/// luego el cancan) su RON no se recargaba. Asi, olvidarse de uno no compila.
 #[cfg(not(target_arch = "wasm32"))]
-const RUTAS: [&str; 3] = [
+const RUTAS: [&str; vals_core::boss::DEFAULT_BOSS_RONS.len()] = [
     concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../assets/patterns/boss1.ron"
@@ -32,6 +36,10 @@ const RUTAS: [&str; 3] = [
     concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../assets/patterns/boss3.ron"
+    ),
+    concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/patterns/boss4.ron"
     ),
 ];
 
