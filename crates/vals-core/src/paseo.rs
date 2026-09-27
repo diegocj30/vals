@@ -24,7 +24,7 @@ use serde::Deserialize;
 
 use crate::events::Events;
 use crate::hash::Fnv1a;
-use crate::math::{TAU, sin};
+use crate::math::{TAU, sin, sin_cos};
 use crate::player::{
     AIR_CONTROL, COYOTE_TICKS, DASH_COOLDOWN_TICKS, DASH_IFRAME_TICKS, DASH_SPEED, DASH_TICKS,
     Dash, FOCUS_RAMP_TICKS, GRAVITY, INPUT_BUFFER_TICKS, JUMP_BUFFER_TICKS, JUMP_CUT, JUMP_SPEED,
@@ -37,7 +37,10 @@ use crate::{DT, InputFrame, Pcg32, Player};
 ///
 /// Cada uno dice delante de que jefe va (`jefe`), asi que el orden de esta
 /// lista no significa nada: un baile sin paseo se entra directo, como antes.
-pub const PASEO_RONS: [&str; 1] = [include_str!("../../../assets/paseos/viena.ron")];
+pub const PASEO_RONS: [&str; 2] = [
+    include_str!("../../../assets/paseos/viena.ron"),
+    include_str!("../../../assets/paseos/chicago.ron"),
+];
 
 /// Lo que se ve de la calle, en unidades logicas.
 ///
@@ -96,6 +99,27 @@ const RADIO_PLATO: f32 = 9.0;
 pub const CADENCIA_CAMARERO: u32 = 96;
 const ALCANCE_CAMARERO: f32 = 620.0;
 
+/// Las perlas de la flapper: cuantas suelta a la vez, repartidas por el
+/// collar, y a que velocidad salen. Rectas y sin gravedad: son un collar que
+/// gira, no una piedra, y lo que se lee es el giro.
+pub const PERLAS_POR_GOLPE: usize = 3;
+const VEL_PERLA: f32 = 200.0;
+/// Hasta donde ven la flapper y el saxofonista. Menos que el camarero: los
+/// dos estan en pantalla antes de empezar, y lo que se esquiva tiene que salir
+/// de algo que ya se ha visto.
+const ALCANCE_CHICAGO: f32 = 560.0;
+/// Las notas del saxo: una cada `SEPARACION_SAXO` ticks dentro de la rafaga.
+const SEPARACION_SAXO: u64 = 6;
+const VEL_SAXO: f32 = 250.0;
+/// Los brincos del saltarin: alto en los dos golpes de tres, bajo en el de
+/// dos, y lo que avanza en cada uno. Los ultimos ticks de cada golpe los pasa
+/// en el suelo, que es el unico momento en que se le puede saltar por encima.
+const BRINCO_LARGO: f32 = 120.0;
+const BRINCO_CORTO: f32 = 45.0;
+const AVANCE_LARGO: f32 = 150.0;
+const AVANCE_CORTO: f32 = 50.0;
+pub const EN_EL_SUELO: u64 = 6;
+
 /// Lo que llena el medidor cada disparo que entra. El parry sigue siendo el
 /// chorro; esto es el goteo, igual que el graze en los combates.
 const METER_POR_IMPACTO: f32 = 0.8;
@@ -117,8 +141,9 @@ pub struct Plataforma {
     pub ancho: f32,
 }
 
-/// Los enemigos de Viena. Tres, y cada uno pide una cosa distinta: saltar,
-/// ponerse a tiro y apuntar arriba.
+/// Los enemigos de los paseos. Los tres primeros son de Viena, y cada uno pide
+/// una cosa distinta: saltar, ponerse a tiro y apuntar arriba. Cada ciudad
+/// trae los suyos con la misma regla.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 pub enum Tipo {
     /// Una pareja que baila por la acera hacia ti, girando: paso largo en el
@@ -129,6 +154,21 @@ pub enum Tipo {
     Camarero,
     /// Una nota que cruza volando en onda. Las rosas se parrian.
     Nota,
+    // --- Chicago. El charleston gira y va en clave 3-3-2, y
+    // sus tres enemigos tambien.
+    /// Una flapper plantada, bailando el charleston en el sitio, con el collar
+    /// de perlas dando vueltas como un lazo. En cada golpe de la clave suelta
+    /// tres perlas por donde va el collar: una espiral que se lee mirandola.
+    /// En el golpe de dos, una es rosa. Pide el parry.
+    Flapper,
+    /// Un saxofonista en una escalera de incendios, por encima de la calle.
+    /// Sopla rafagas de tres, tres y dos notas apuntadas a ti: se esquiva
+    /// andando y se le tumba plantada, apuntando arriba.
+    Saxo,
+    /// Un dandi de canotier que viene brincando el charleston: dos brincos
+    /// altos y uno bajo por compas. Por debajo de los altos se pasa corriendo;
+    /// el bajo se salta o se tumba.
+    Saltarin,
 }
 
 impl Tipo {
@@ -139,6 +179,9 @@ impl Tipo {
             Tipo::Pareja => 6,
             Tipo::Camarero => 8,
             Tipo::Nota => 2,
+            Tipo::Flapper => 8,
+            Tipo::Saxo => 10,
+            Tipo::Saltarin => 7,
         }
     }
 
@@ -148,6 +191,7 @@ impl Tipo {
             Tipo::Pareja => 24.0,
             Tipo::Camarero => 22.0,
             Tipo::Nota => 14.0,
+            Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin => 22.0,
         }
     }
 
@@ -157,6 +201,8 @@ impl Tipo {
             Tipo::Pareja => 38.0,
             Tipo::Camarero => 36.0,
             Tipo::Nota => 0.0,
+            Tipo::Flapper => 38.0,
+            Tipo::Saxo | Tipo::Saltarin => 36.0,
         }
     }
 
@@ -165,6 +211,57 @@ impl Tipo {
             Tipo::Pareja => 0,
             Tipo::Camarero => 1,
             Tipo::Nota => 2,
+            Tipo::Flapper => 3,
+            Tipo::Saxo => 4,
+            Tipo::Saltarin => 5,
+        }
+    }
+}
+
+/// La clave 3-3-2 del charleston, contada en corcheas: golpes en la 0, la 3 y
+/// la 6 de cada compas de ocho, igual que en el jefe (`boss3.ron`). Devuelve
+/// que golpe suena (0, 1 o 2), cuantos ticks lleva sonando y cuanto dura.
+///
+/// Va con el tick del paseo y no con la edad de cada enemigo: la musica es una
+/// para toda la calle, y el dibujo late con el mismo tick.
+pub fn clave(tick: u64, tiempo: u32) -> (usize, u64, u64) {
+    let corchea = u64::from((tiempo / 2).max(1));
+    let fase = tick % (8 * corchea);
+    let (golpe, desde, largo) = if fase < 3 * corchea {
+        (0, 0, 3)
+    } else if fase < 6 * corchea {
+        (1, 3, 3)
+    } else {
+        (2, 6, 2)
+    };
+    (golpe, fase - desde * corchea, largo * corchea)
+}
+
+/// Por donde va el collar de la flapper en el tick `t`. Siete decimos de vuelta
+/// por compas: asi un golpe no cae nunca donde el del compas anterior y la
+/// espiral avanza. El dibujo usa esta misma cuenta, asi que las perlas salen
+/// de donde se ve el collar.
+pub fn giro_collar(t: f32, tiempo: u32) -> f32 {
+    TAU * 0.7 * t / (4 * tiempo.max(1)) as f32
+}
+
+/// Que es lo que vuela. El dibujo lo necesita, y la fisica tambien: un plato
+/// cae y una perla no.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Forma {
+    Plato,
+    /// Del collar de la flapper.
+    Perla,
+    /// Del saxo.
+    Corchea,
+}
+
+impl Forma {
+    fn radio(self) -> f32 {
+        match self {
+            Forma::Plato => RADIO_PLATO,
+            Forma::Perla => 7.0,
+            Forma::Corchea => 8.0,
         }
     }
 }
@@ -224,6 +321,16 @@ impl PaseoDef {
     pub fn hay_suelo(&self, x: f32) -> bool {
         self.suelo.iter().any(|&(a, b)| x >= a && x <= b)
     }
+
+    /// Si en `x` hay algo que pisar a la altura `y`: la acera o una
+    /// plataforma. Es lo que mira quien anda por una azotea para no tirarse.
+    pub fn hay_pie(&self, x: f32, y: f32) -> bool {
+        (y >= SUELO_Y - 0.5 && self.hay_suelo(x))
+            || self
+                .plataformas
+                .iter()
+                .any(|pl| (pl.y - y).abs() < 0.5 && x >= pl.x && x <= pl.x + pl.ancho)
+    }
 }
 
 /// Un enemigo despierto.
@@ -245,8 +352,12 @@ pub struct Enemigo {
     pub reloj: u32,
     /// Platos tirados (camarero), para saber cual toca rosa.
     lanzados: u32,
-    /// Altura de vuelo (nota).
+    /// Altura de vuelo (nota), o donde esta su centro con los pies en el
+    /// suelo (saltarin, que vuelve ahi de cada brinco).
     base_y: f32,
+    /// Lo que avanza por segundo en el brinco en curso (saltarin). Se decide
+    /// al despegar, que es cuando mira si al otro lado hay donde caer.
+    avance: f32,
 }
 
 /// Algo que le tiran a la jugadora: los platos del camarero.
@@ -255,6 +366,7 @@ pub struct Proyectil {
     pub pos: Vec2,
     pub vel: Vec2,
     pub rosa: bool,
+    pub forma: Forma,
 }
 
 /// Un disparo de la jugadora.
@@ -580,6 +692,20 @@ impl Paseo {
                     // al borde exacto del foso seria volver a caerse.
                     let margen = 50.0_f32.min((b - a) * 0.5);
                     self.seguro = Vec2::new(x.clamp(a + margen, b - margen), SUELO_Y - PIES);
+                } else if !def.hay_suelo(x)
+                    && let Some(pl) = def
+                        .plataformas
+                        .iter()
+                        .find(|pl| pl.y == y && x >= pl.x && x <= pl.x + pl.ancho)
+                {
+                    // Sobre el vacio, la plataforma es el suelo: en las azoteas
+                    // de Chicago no hay acera en toda la manzana, y caerse entre
+                    // dos tejados no puede devolverte al pie de la escalera de
+                    // incendios. Se vuelve al ultimo tejado pisado, tambien
+                    // metido hacia dentro.
+                    let margen = 40.0_f32.min(pl.ancho * 0.5);
+                    self.seguro =
+                        Vec2::new(x.clamp(pl.x + margen, pl.x + pl.ancho - margen), y - PIES);
                 }
             }
         }
@@ -715,6 +841,7 @@ impl Paseo {
                 reloj,
                 lanzados: 0,
                 base_y: y,
+                avance: 0.0,
             });
         }
     }
@@ -769,6 +896,7 @@ impl Paseo {
                         pos: origen,
                         vel: Vec2::new(vx, vy),
                         rosa: e.lanzados % 3 == 0,
+                        forma: Forma::Plato,
                     });
                 }
                 Tipo::Nota => {
@@ -779,18 +907,123 @@ impl Paseo {
                     e.pos.y = e.base_y + 50.0 * sin(TAU * t);
                     e.dir = -1.0;
                 }
+                Tipo::Flapper => {
+                    let dx = objetivo.x - e.pos.x;
+                    if dx != 0.0 {
+                        e.dir = dx.signum();
+                    }
+                    let (golpe, dentro, _) = clave(self.tick, self.def.tiempo);
+                    if dentro != 0 || dx.abs() > ALCANCE_CHICAGO {
+                        continue;
+                    }
+                    // El collar gira alrededor del cuello, y en el golpe se
+                    // sueltan las perlas por donde pasa. Tres, repartidas: una
+                    // espiral que avanza a saltos de tres, tres y dos.
+                    let giro = giro_collar(self.tick as f32, self.def.tiempo);
+                    let cuello = e.pos + Vec2::new(0.0, -12.0);
+                    for k in 0..PERLAS_POR_GOLPE {
+                        let a = giro + TAU * k as f32 / PERLAS_POR_GOLPE as f32;
+                        let (s, c) = sin_cos(a);
+                        let dir = Vec2::new(c, s);
+                        self.proyectiles.push(Proyectil {
+                            pos: cuello + dir * 24.0,
+                            vel: dir * VEL_PERLA,
+                            rosa: golpe == 2 && k == 0,
+                            forma: Forma::Perla,
+                        });
+                    }
+                    e.lanzados += 1;
+                }
+                Tipo::Saxo => {
+                    let dx = objetivo.x - e.pos.x;
+                    if dx != 0.0 {
+                        e.dir = dx.signum();
+                    }
+                    if dx.abs() > ALCANCE_CHICAGO {
+                        continue;
+                    }
+                    // Tres, tres y dos notas: una rafaga por golpe de clave,
+                    // cada nota apuntada a donde estas al soplarla. Se esquiva
+                    // andando, igual que el plato.
+                    let (golpe, dentro, _) = clave(self.tick, self.def.tiempo);
+                    let notas = if golpe == 2 { 2 } else { 3 };
+                    if dentro % SEPARACION_SAXO != 0 || dentro / SEPARACION_SAXO >= notas {
+                        continue;
+                    }
+                    let boca = e.pos + Vec2::new(e.dir * 20.0, 6.0);
+                    let dir = (objetivo - boca).normalize_or(Vec2::new(e.dir, 0.0));
+                    // La ultima del compas, rosa: una por compas.
+                    let rosa = golpe == 2 && dentro / SEPARACION_SAXO == notas - 1;
+                    self.proyectiles.push(Proyectil {
+                        pos: boca,
+                        vel: dir * VEL_SAXO,
+                        rosa,
+                        forma: Forma::Corchea,
+                    });
+                    e.lanzados += 1;
+                }
+                Tipo::Saltarin => {
+                    let (golpe, dentro, largo) = clave(self.tick, self.def.tiempo);
+                    let alto = if golpe == 2 {
+                        BRINCO_CORTO
+                    } else {
+                        BRINCO_LARGO
+                    };
+                    let vuelo = largo.saturating_sub(EN_EL_SUELO).max(1);
+                    if dentro == 0 {
+                        // Al despegar se vuelve hacia ti y mira si al otro
+                        // lado hay donde caer. Si no, brinca en el sitio: no se
+                        // tira de una azotea, igual que la pareja no se tira al
+                        // canal.
+                        if objetivo.x != e.pos.x {
+                            e.dir = (objetivo.x - e.pos.x).signum();
+                        }
+                        let paso = if golpe == 2 {
+                            AVANCE_CORTO
+                        } else {
+                            AVANCE_LARGO
+                        };
+                        let pies = e.base_y + e.tipo.alto();
+                        let cae = e.pos.x + e.dir * (paso + e.tipo.radio());
+                        e.avance = if self.def.hay_pie(cae, pies) {
+                            e.dir * paso / (vuelo as f32 * DT)
+                        } else {
+                            0.0
+                        };
+                    }
+                    if dentro < vuelo {
+                        // Una parabola exacta en funcion del tiempo, no una
+                        // integracion: toca el suelo justo al acabar el vuelo.
+                        let f = dentro as f32 / vuelo as f32;
+                        e.pos.y = e.base_y - 4.0 * alto * f * (1.0 - f);
+                        e.pos.x += e.avance * DT;
+                    } else {
+                        e.pos.y = e.base_y;
+                    }
+                }
             }
         }
     }
 
     fn mover_proyectiles(&mut self) {
         for q in &mut self.proyectiles {
-            q.vel.y += GRAVEDAD_PLATO * DT;
+            if q.forma == Forma::Plato {
+                q.vel.y += GRAVEDAD_PLATO * DT;
+            }
             q.pos += q.vel * DT;
         }
         // Un plato que llega a la acera se rompe. Sobre un foso sigue cayendo
-        // hasta perderse, que no hace dano a nadie.
-        self.proyectiles.retain(|q| q.pos.y < SUELO_Y);
+        // hasta perderse, que no hace dano a nadie. Lo que vuela recto se
+        // rompe igual contra la acera, y sobre el vacio se va al salir de la
+        // vista; por los lados lo quita `olvidar`.
+        let def = &self.def;
+        self.proyectiles.retain(|q| match q.forma {
+            Forma::Plato => q.pos.y < SUELO_Y,
+            _ => {
+                let en_acera = q.pos.y >= SUELO_Y && def.hay_suelo(q.pos.x);
+                q.pos.y > -40.0 && q.pos.y < VISTA_H + 40.0 && !en_acera
+            }
+        });
     }
 
     fn mover_disparos(&mut self) {
@@ -855,7 +1088,7 @@ impl Paseo {
         let plato = self
             .proyectiles
             .iter()
-            .position(|q| self.toca(q.pos, RADIO_PLATO));
+            .position(|q| self.toca(q.pos, q.forma.radio()));
         let tocado = plato.is_some()
             || self
                 .enemigos
@@ -912,11 +1145,13 @@ impl Paseo {
             h.write_u64(e.vida as u64);
             h.write_f32(e.dir);
             h.write_u64(u64::from(e.reloj));
+            h.write_f32(e.avance);
         }
         for q in &self.proyectiles {
             h.write_vec2(q.pos);
             h.write_vec2(q.vel);
             h.write_u64(u64::from(q.rosa));
+            h.write_u64(q.forma as u64);
         }
         for d in &self.disparos {
             h.write_vec2(d.pos);
@@ -968,20 +1203,43 @@ mod tests {
         }
     }
 
+    /// El paseo de serie que va antes de `jefe`.
+    fn de_serie(jefe: &str) -> PaseoDef {
+        PaseoDef::de_serie()
+            .into_iter()
+            .find(|d| d.jefe == jefe)
+            .unwrap_or_else(|| panic!("no hay paseo antes de {jefe}"))
+    }
+
     #[test]
     fn los_paseos_de_serie_cargan_y_tienen_sentido() {
         let defs = PaseoDef::de_serie();
         assert_eq!(defs.len(), PASEO_RONS.len());
-        let viena = &defs[0];
-        assert_eq!(viena.jefe, "El Vals", "Viena va antes del vals");
-        assert!(viena.hay_suelo(viena.salida), "se empieza pisando acera");
-        assert!(viena.hay_suelo(viena.puerta), "la puerta esta en la acera");
-        assert!(viena.puerta < viena.largo);
-        // Los tramos en orden y sin pisarse: si se solapasen, un foso podria
-        // quedar tapado sin que el dibujo lo supiera.
-        for par in viena.suelo.windows(2) {
-            assert!(par[0].1 < par[1].0, "tramos desordenados: {par:?}");
+        for d in &defs {
+            assert!(
+                d.hay_suelo(d.salida),
+                "{}: se empieza pisando acera",
+                d.nombre
+            );
+            assert!(d.hay_suelo(d.puerta), "{}: la puerta en la acera", d.nombre);
+            assert!(d.puerta < d.largo);
+            // Los tramos en orden y sin pisarse: si se solapasen, un foso
+            // podria quedar tapado sin que el dibujo lo supiera.
+            for par in d.suelo.windows(2) {
+                assert!(par[0].1 < par[1].0, "{}: tramos desordenados", d.nombre);
+            }
+            assert!(d.suelo.len() >= 2, "{}: sin fosos no hay paseo", d.nombre);
+            assert!(
+                d.enemigos.iter().any(|a| a.rosa),
+                "{}: sin nada rosa no hay parry en la calle",
+                d.nombre
+            );
+            // Dos paseos para el mismo jefe: el segundo no se andaria nunca.
+            let mismos = defs.iter().filter(|o| o.jefe == d.jefe).count();
+            assert_eq!(mismos, 1, "dos paseos antes de {}", d.jefe);
         }
+
+        let viena = de_serie("El Vals");
         assert!(viena.suelo.len() >= 3, "hace falta algun foso que saltar");
         for t in [Tipo::Pareja, Tipo::Camarero, Tipo::Nota] {
             assert!(
@@ -989,10 +1247,31 @@ mod tests {
                 "falta {t:?} en Viena"
             );
         }
-        assert!(
-            viena.enemigos.iter().any(|a| a.rosa),
-            "sin nada rosa no hay parry en la calle"
-        );
+
+        // Chicago se cruza por arriba: tiene que haber un tramo largo sin
+        // calle, y la clave del charleston en su `tiempo`.
+        let chicago = de_serie("El Charleston");
+        let vacio = chicago
+            .suelo
+            .windows(2)
+            .map(|par| par[1].0 - par[0].1)
+            .fold(0.0, f32::max);
+        assert!(vacio > 2000.0, "Chicago no tiene tejados: {vacio}");
+        assert_eq!(chicago.tiempo, 36, "el Maple Leaf va a 100");
+        for t in [Tipo::Flapper, Tipo::Saxo, Tipo::Saltarin, Tipo::Nota] {
+            assert!(
+                chicago.enemigos.iter().any(|a| a.tipo == t),
+                "falta {t:?} en Chicago"
+            );
+        }
+        // Cada flapper, saxo y saltarin, de pie sobre algo: uno puesto en el
+        // aire flotaria, y un saltarin en el aire no sabria donde caer.
+        for a in &chicago.enemigos {
+            if matches!(a.tipo, Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin) {
+                let pisa = if a.y > 0.0 { a.y } else { SUELO_Y };
+                assert!(chicago.hay_pie(a.x, pisa), "{a:?} flota");
+            }
+        }
     }
 
     #[test]
@@ -1160,6 +1439,7 @@ mod tests {
             pos,
             vel: Vec2::ZERO,
             rosa: true,
+            forma: Forma::Plato,
         });
         p.step(pulsar(InputFrame::PARRY));
         assert_eq!(p.events.parried, 1);
@@ -1217,9 +1497,14 @@ mod tests {
 
     #[test]
     fn el_mismo_input_da_el_mismo_paseo() {
-        // Un minuto largo de Viena con input sembrado: dos paseos iguales
+        // Un minuto largo de cada paseo con input sembrado: dos paseos iguales
         // tienen que ir tick a tick a la par, enemigos incluidos.
-        let def = PaseoDef::de_serie().remove(0);
+        for def in PaseoDef::de_serie() {
+            mismo_input_mismo_paseo(def);
+        }
+    }
+
+    fn mismo_input_mismo_paseo(def: PaseoDef) {
         let mut r = Pcg32::new(7);
         let inputs: Vec<InputFrame> = (0..4000)
             .map(|_| {
@@ -1239,7 +1524,7 @@ mod tests {
         for (i, input) in inputs.iter().enumerate() {
             a.step(*input);
             b.step(*input);
-            assert_eq!(a.huella(), b.huella(), "divergencia en el tick {i}");
+            assert_eq!(a.huella(), b.huella(), "{}: divergencia en {i}", def.nombre);
         }
         assert!(
             a.jugadora.pos.x > def.salida + 500.0,
@@ -1255,11 +1540,223 @@ mod tests {
     }
 
     #[test]
+    fn la_clave_va_tres_tres_dos() {
+        // A 36 ticks por tiempo la corchea son 18: golpes en 0, 54 y 108.
+        let golpes: Vec<u64> = (0..288).filter(|&t| clave(t, 36).1 == 0).collect();
+        assert_eq!(golpes, [0, 54, 108, 144, 198, 252]);
+        assert_eq!(clave(110, 36), (2, 2, 36));
+    }
+
+    fn uno(tipo: Tipo, x: f32, y: f32) -> PaseoDef {
+        con(vec![Aparicion {
+            tipo,
+            x,
+            y,
+            rosa: false,
+        }])
+    }
+
+    #[test]
+    fn la_flapper_suelta_perlas_en_la_clave_y_el_collar_gira() {
+        let mut def = uno(Tipo::Flapper, 500.0, 0.0);
+        def.tiempo = 36;
+        let mut p = Paseo::new(def, 1);
+        let mut angulos = Vec::new();
+        let mut rosas = 0;
+        for _ in 0..(144 * 3) {
+            p.jugadora.iframes = 10;
+            let tick = p.tick;
+            let antes = p.proyectiles.len();
+            p.step(InputFrame::NONE);
+            let nuevas = &p.proyectiles[antes.min(p.proyectiles.len())..];
+            if nuevas.is_empty() {
+                continue;
+            }
+            // Solo en los golpes de la clave, y de tres en tres.
+            assert_eq!(clave(tick, 36).1, 0, "perlas fuera de la clave en {tick}");
+            assert_eq!(nuevas.len(), PERLAS_POR_GOLPE);
+            assert!(nuevas.iter().all(|q| q.forma == Forma::Perla));
+            rosas += nuevas.iter().filter(|q| q.rosa).count();
+            let v = nuevas[0].vel;
+            angulos.push(crate::math::atan2(v.y, v.x));
+        }
+        assert_eq!(angulos.len(), 9, "tres golpes por compas");
+        assert_eq!(rosas, 3, "una rosa por compas, en el golpe de dos");
+        // El collar gira: dos golpes seguidos nunca salen por el mismo sitio.
+        for par in angulos.windows(2) {
+            assert!((par[0] - par[1]).abs() > 0.2, "el collar no gira: {par:?}");
+        }
+        // Y las perlas vuelan rectas: sin gravedad, la velocidad no cambia.
+        let v = p.proyectiles[0].vel;
+        p.step(InputFrame::NONE);
+        assert_eq!(p.proyectiles[0].vel, v);
+    }
+
+    #[test]
+    fn el_saxo_sopla_rafagas_de_tres_tres_dos_apuntadas() {
+        // En una escalera por encima de la jugadora.
+        let mut def = uno(Tipo::Saxo, 400.0, 330.0);
+        def.tiempo = 36;
+        let mut p = Paseo::new(def, 1);
+        let mut rafagas: Vec<usize> = Vec::new();
+        let mut rosas = 0;
+        for _ in 0..(144 * 2) {
+            p.jugadora.iframes = 10;
+            let (_, dentro, _) = clave(p.tick, 36);
+            let antes = p.enemigos.first().map_or(0, |e| e.lanzados);
+            p.step(InputFrame::NONE);
+            if p.enemigos[0].lanzados == antes {
+                continue;
+            }
+            let q = *p.proyectiles.last().expect("acaba de soplar");
+            // Apuntada a ella: hacia abajo y hacia la izquierda.
+            let a_ella = (p.jugadora.pos - q.pos).normalize();
+            assert!(q.vel.normalize().dot(a_ella) > 0.98, "no apunta");
+            assert!(q.vel.y > 0.0 && q.forma == Forma::Corchea);
+            rosas += usize::from(q.rosa);
+            if dentro == 0 {
+                rafagas.push(0);
+            }
+            *rafagas.last_mut().expect("rafaga empezada") += 1;
+        }
+        assert_eq!(rafagas, [3, 3, 2, 3, 3, 2]);
+        assert_eq!(rosas, 2, "una rosa por compas");
+        // Y despierto pero con la jugadora fuera de su alcance, calla.
+        let lejos = p.def.salida + ALCANCE_CHICAGO + 40.0;
+        let mut p = Paseo::new(uno(Tipo::Saxo, lejos, 330.0), 1);
+        correr(&mut p, 0, 144);
+        assert_eq!(p.enemigos.len(), 1, "tenia que estar despierto");
+        assert!(p.proyectiles.is_empty(), "sopla sin nadie delante");
+    }
+
+    #[test]
+    fn el_saltarin_brinca_alto_alto_bajo_y_no_se_tira() {
+        // En una azotea corta, sin acera debajo, y la jugadora lejos a su
+        // izquierda: tiene que venir brincando y pararse en el borde.
+        let mut def = uno(Tipo::Saltarin, 700.0, 300.0);
+        def.tiempo = 36;
+        def.suelo = vec![(0.0, 200.0), (900.0, 3200.0)];
+        def.plataformas = vec![Plataforma {
+            x: 300.0,
+            y: 300.0,
+            ancho: 500.0,
+        }];
+        let mut p = Paseo::new(def, 1);
+        p.jugadora.iframes = 10;
+        let pie = 300.0 - Tipo::Saltarin.alto();
+        let mut cumbres = [0.0_f32; 3];
+        let mut xs = Vec::new();
+        for _ in 0..(144 * 4) {
+            p.jugadora.iframes = 10;
+            let (golpe, _, _) = clave(p.tick, 36);
+            p.step(InputFrame::NONE);
+            let e = &p.enemigos[0];
+            cumbres[golpe] = cumbres[golpe].max(pie - e.pos.y);
+            xs.push(e.pos.x);
+        }
+        // Dos brincos por encima de ella y uno que hay que saltar.
+        let cabeza = PIES + CUERPO_MEDIO + CUERPO_RADIO;
+        assert!(cumbres[0] > 100.0 && cumbres[1] > 100.0, "{cumbres:?}");
+        assert!(
+            cumbres[2] < cabeza,
+            "el bajo se pasaba por debajo: {cumbres:?}"
+        );
+        // Ha venido hacia ella, y sin salirse de su tejado.
+        let e = &p.enemigos[0];
+        assert!(xs.iter().all(|&x| (300.0..=800.0).contains(&x)), "se tiro");
+        assert!(e.pos.x < 420.0, "no ha venido: {}", e.pos.x);
+        assert_eq!(e.pos.y, pie, "acaba con los pies en el tejado");
+    }
+
+    #[test]
+    fn caer_desde_una_azotea_devuelve_a_la_azotea() {
+        // Dos tejados sin calle debajo. Se cae entre los dos: tiene que volver
+        // al primero, no a la acera de la salida.
+        let mut def = calle();
+        def.suelo = vec![(0.0, 300.0), (2000.0, 3200.0)];
+        def.plataformas = vec![
+            Plataforma {
+                x: 300.0,
+                y: 470.0,
+                ancho: 400.0,
+            },
+            Plataforma {
+                x: 1000.0,
+                y: 470.0,
+                ancho: 400.0,
+            },
+        ];
+        let mut p = Paseo::new(def, 1);
+        let mut caida = false;
+        for _ in 0..240 {
+            p.step(pulsar(DERECHA));
+            caida |= p.events.player_died;
+            if caida {
+                break;
+            }
+        }
+        assert!(caida, "tenia que caerse entre los tejados");
+        let x = p.jugadora.pos.x;
+        assert!((340.0..=660.0).contains(&x), "vuelve al tejado: {x}");
+        assert_eq!(p.jugadora.pos.y + PIES, 470.0);
+    }
+
+    /// Un bot invulnerable que corre y dispara, y salta cuando tiene un hueco
+    /// delante o algo que subir. Como en Viena, no prueba que sea facil: prueba
+    /// que se puede. En Chicago eso incluye subir la escalera de incendios.
+    fn bot_anda(def: PaseoDef) -> Paseo {
+        let mut p = Paseo::new(def, 3);
+        let mut salto = 0;
+        for _ in 0..(60 * 90) {
+            p.jugadora.iframes = 5;
+            let j = &p.jugadora;
+            let (x, pies) = (j.pos.x, j.pos.y + PIES);
+            // Hueco: nada que pisar un poco por delante, ni a la altura de los
+            // pies ni en los 200 de debajo.
+            let hay_debajo = |dx: f32| {
+                (pies <= SUELO_Y && p.def.hay_suelo(x + dx) && SUELO_Y - pies < 200.0)
+                    || p.def.plataformas.iter().any(|pl| {
+                        pl.y >= pies - 0.5
+                            && pl.y - pies < 200.0
+                            && x + dx >= pl.x
+                            && x + dx <= pl.x + pl.ancho
+                    })
+            };
+            // Algo que subir: una plataforma por encima, a tiro de salto, y
+            // donde se caeria corriendo (unas 130 por delante) dentro de ella.
+            let subir = p.def.plataformas.iter().any(|pl| {
+                let cae = x + 130.0;
+                pies - pl.y > 20.0
+                    && pies - pl.y < 140.0
+                    && cae > pl.x + 10.0
+                    && cae < pl.x + pl.ancho - 10.0
+            });
+            if j.on_ground && (!hay_debajo(30.0) || subir) {
+                salto = 22;
+            }
+            let bits = DERECHA | DISPARA | if salto > 0 { InputFrame::JUMP } else { 0 };
+            salto = if salto > 0 { salto - 1 } else { 0 };
+            p.step(pulsar(bits));
+            if p.completado.is_some() {
+                break;
+            }
+        }
+        p
+    }
+
+    #[test]
+    fn chicago_se_puede_andar_entera() {
+        let p = bot_anda(de_serie("El Charleston"));
+        assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
+        assert_eq!(p.vidas, VIDAS, "no se ha caido de ningun tejado");
+    }
+
+    #[test]
     fn viena_se_puede_andar_entera() {
         // Un bot que corre, dispara y salta cuando tiene un foso delante. Es
         // invulnerable, asi que no prueba que sea facil: prueba que ningun foso
         // es mas ancho que un salto y que no hay nada que tape la puerta.
-        let def = PaseoDef::de_serie().remove(0);
+        let def = de_serie("El Vals");
         let mut p = Paseo::new(def, 3);
         let mut salto = 0;
         for _ in 0..(60 * 60) {

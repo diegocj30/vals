@@ -46,10 +46,13 @@ const RUTAS: [&str; vals_core::boss::DEFAULT_BOSS_RONS.len()] = [
 /// Los paseos, en el orden de `PASEO_RONS`. El tamano sale de esa lista, asi
 /// que anadir un paseo sin su ruta aqui no compila.
 #[cfg(not(target_arch = "wasm32"))]
-const RUTAS_PASEOS: [&str; vals_core::paseo::PASEO_RONS.len()] = [concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/paseos/viena.ron"
-)];
+const RUTAS_PASEOS: [&str; vals_core::paseo::PASEO_RONS.len()] = [
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/paseos/viena.ron"),
+    concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/paseos/chicago.ron"
+    ),
+];
 
 /// Cuantos frames se muestra el aviso de recarga.
 #[cfg(not(target_arch = "wasm32"))]

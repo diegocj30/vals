@@ -1,0 +1,115 @@
+// EL PASEO DE CHICAGO. La ciudad que se cruza antes de bailar El Charleston.
+//
+// Chicago en 1925, de noche: rascacielos Art Deco, el tren elevado sobre su
+// caballete de acero y una puerta de sotano por la que se sale el jazz. Viena
+// era una calle; esto es una ciudad que se cruza **por arriba**. La calle se
+// corta al borde del terraplen, y para seguir hay que subir por la escalera de
+// incendios, correr por las azoteas y bajar por las vias del elevado.
+//
+// Cuatro tramos, de izquierda a derecha (la puerta esta en x 7000):
+//
+//   1. State Street        0 - 2280   la calle, con el saxo en su escalera de
+//                                     incendios y la primera flapper. Al final,
+//                                     tres rellanos que suben hasta los tejados.
+//   2. Las azoteas      2360 - 4280   cuatro tejados con el vacio entre medias.
+//                                     Caer es caer a la calle de abajo: una
+//                                     vida, y vuelves al ultimo tejado pisado.
+//   3. El elevado       4440 - 5800   las vias, cortadas por la mitad.
+//   4. El club          5700 - 7400   otra vez en la calle, hasta la puerta del
+//                                     sotano.
+//
+// En nativo hay HOT-RELOAD, igual que con los jefes: guarda y el nivel se
+// rehace sin recompilar, con la jugadora donde estaba.
+//
+// Coordenadas: x crece hacia la derecha, y hacia abajo. La calle esta en y 470
+// (`SUELO_Y`), y la vista mide 960 x 540. El salto sube unas 155 unidades y
+// cruza unas 200 corriendo; subiendo 40, unas 190. Los huecos entre tejados
+// son de 160: se saltan desde el borde, no desde la mitad.
+//
+// Guia de campos (los de Viena, mas los de aqui):
+//   tiempo        ticks por tiempo. El Maple Leaf va a 100, 36 ticks: el
+//                 compas son 144 y la clave 3-3-2 cae en 0, 54 y 108.
+//   suelo         tramos de calle. Entre los dos, todo es vacio.
+//   plataformas   el dibujo sabe que es cada una por donde esta:
+//                   encima de la calle        rellano de escalera de incendios
+//                   sobre el vacio, y < 320   azotea: el edificio entero debajo
+//                   sobre el vacio, y >= 320  las vias del elevado
+//                   encima de otra            deposito de agua en su tejado
+//   enemigos      tipo: Flapper (planta; el collar suelta perlas en la clave,
+//                                y = superficie donde baila),
+//                       Saxo (en una escalera; rafagas de 3-3-2 notas a ti),
+//                       Saltarin (brinca hacia ti: alto, alto, bajo; no se
+//                                 tira de su tejado),
+//                       Nota (el jazz que se sale del sotano; y = altura).
+//                 rosa: true solo en notas. La flapper y el saxo sueltan su
+//                 rosa solos, en el golpe de dos.
+(
+  nombre: "El paseo de Chicago",
+  jefe: "El Charleston",
+  subtitulo: "Por encima de la ciudad",
+  tiempo: 36,
+  largo: 7400.0,
+  salida: 140.0,
+  puerta: 7000.0,
+  suelo: [
+    (0.0, 2280.0),
+    (5700.0, 7400.0),
+  ],
+  plataformas: [
+    // State Street: la escalera del saxo, que se puede subir a por el.
+    (x: 1150.0, y: 400.0, ancho: 130.0),
+    (x: 1150.0, y: 330.0, ancho: 130.0),
+    // La subida: tres rellanos hacia la derecha.
+    (x: 1860.0, y: 400.0, ancho: 160.0),
+    (x: 1950.0, y: 330.0, ancho: 160.0),
+    (x: 2040.0, y: 260.0, ancho: 190.0),
+    // Las azoteas, con el deposito de agua encima de dos.
+    (x: 2360.0, y: 230.0, ancho: 440.0),
+    (x: 2500.0, y: 150.0, ancho: 80.0),
+    (x: 2960.0, y: 280.0, ancho: 380.0),
+    (x: 3060.0, y: 200.0, ancho: 80.0),
+    (x: 3500.0, y: 240.0, ancho: 300.0),
+    (x: 3960.0, y: 200.0, ancho: 320.0),
+    // El elevado, cortado.
+    (x: 4440.0, y: 330.0, ancho: 560.0),
+    (x: 5160.0, y: 330.0, ancho: 640.0),
+    // El club: la otra escalera, con otro saxo.
+    (x: 6250.0, y: 400.0, ancho: 130.0),
+    (x: 6250.0, y: 330.0, ancho: 130.0),
+  ],
+  enemigos: [
+    // --- State Street ---
+    (tipo: Saltarin, x: 700.0),
+    (tipo: Nota, x: 950.0, y: 330.0),
+    (tipo: Nota, x: 1010.0, y: 290.0),
+    (tipo: Nota, x: 1070.0, y: 330.0),
+    (tipo: Saxo, x: 1215.0, y: 330.0),
+    (tipo: Flapper, x: 1560.0),
+    (tipo: Saltarin, x: 1760.0),
+    (tipo: Nota, x: 2080.0, y: 180.0, rosa: true),
+    // --- Las azoteas ---
+    (tipo: Flapper, x: 2680.0, y: 230.0),
+    (tipo: Saltarin, x: 3260.0, y: 280.0),
+    (tipo: Saxo, x: 3100.0, y: 200.0),
+    (tipo: Nota, x: 3410.0, y: 200.0),
+    (tipo: Nota, x: 3470.0, y: 160.0, rosa: true),
+    (tipo: Flapper, x: 3680.0, y: 240.0),
+    (tipo: Saltarin, x: 4180.0, y: 200.0),
+    (tipo: Nota, x: 4340.0, y: 260.0),
+    (tipo: Nota, x: 4400.0, y: 220.0),
+    // --- El elevado ---
+    (tipo: Saltarin, x: 4720.0, y: 330.0),
+    (tipo: Flapper, x: 4920.0, y: 330.0),
+    (tipo: Nota, x: 5080.0, y: 250.0, rosa: true),
+    (tipo: Saltarin, x: 5400.0, y: 330.0),
+    (tipo: Flapper, x: 5660.0, y: 330.0),
+    // --- El club ---
+    (tipo: Saltarin, x: 6000.0),
+    (tipo: Saxo, x: 6315.0, y: 330.0),
+    (tipo: Flapper, x: 6560.0),
+    (tipo: Nota, x: 6660.0, y: 330.0),
+    (tipo: Nota, x: 6720.0, y: 290.0, rosa: true),
+    (tipo: Nota, x: 6780.0, y: 330.0),
+    (tipo: Saltarin, x: 6870.0),
+  ],
+)

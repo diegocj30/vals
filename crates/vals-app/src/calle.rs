@@ -18,10 +18,13 @@
 
 use macroquad::prelude::*;
 use vals_core::math::{PI, sin_cos};
-use vals_core::paseo::{CADENCIA_CAMARERO, Enemigo, PIES, Paseo, SUELO_Y, Tipo, VISTA_H, VISTA_W};
+use vals_core::paseo::{
+    CADENCIA_CAMARERO, Enemigo, Forma, PIES, Paseo, SUELO_Y, Tipo, VISTA_H, VISTA_W,
+};
 use vals_core::player::{PARRY_RADIUS, SUPER_TICKS};
 use vals_core::rng::Pcg32;
 
+use crate::calle_chicago;
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{Instrumento, arco, circulo, linea, musico, rect, tri};
 use crate::fuentes::{self, Cara};
@@ -58,8 +61,8 @@ const ADOQUIN_LUZ: Color = color_u8!(66, 62, 82, 255);
 const AGUA: Color = color_u8!(14, 20, 42, 255);
 const MARMOL: Color = color_u8!(226, 216, 198, 255);
 const MADERA: Color = color_u8!(98, 50, 40, 255);
-const HUESO: Color = color_u8!(240, 232, 212, 255);
-const ROSA: Color = color_u8!(238, 112, 158, 255);
+pub(crate) const HUESO: Color = color_u8!(240, 232, 212, 255);
+pub(crate) const ROSA: Color = color_u8!(238, 112, 158, 255);
 const DISPARO: Color = color_u8!(248, 238, 206, 255);
 const DEFEAT: Color = color_u8!(214, 78, 84, 255);
 const TEXTO: Color = color_u8!(216, 200, 170, 255);
@@ -86,12 +89,21 @@ pub fn dibujar(p: &Paseo, alpha: f32, l: &Layout, pulso: f32, baile: usize) {
     let calle = capa(1.0);
 
     // El fondo es de cada ciudad. Un baile sin calle propia anda por Viena.
-    fondo_de_viena(p, l, &capa, cam, pulso);
-    acera(p, &calle, cam, t);
-    plataformas(p, &calle);
-    puerta(p, &calle, alpha, t, tintas);
+    match baile {
+        2 => calle_chicago::fondo(p, l, &capa, cam, pulso),
+        _ => fondo_de_viena(p, l, &capa, cam, pulso),
+    }
+    // Y lo que se pisa tambien: el canal de Viena no es el vacio de Chicago.
+    match baile {
+        2 => calle_chicago::calle(p, &calle, alpha, cam, t, pulso),
+        _ => {
+            acera(p, &calle, cam, t);
+            plataformas(p, &calle);
+            puerta(p, &calle, alpha, t, tintas);
+        }
+    }
     for e in &p.enemigos {
-        enemigo(e, &calle, p.tick, t, tintas);
+        enemigo(e, &calle, p.tick, t, p.def.tiempo, tintas);
     }
     platos(p, &calle, t, tintas.0);
     disparos(p, &calle);
@@ -732,12 +744,12 @@ fn puerta(p: &Paseo, l: &Layout, alpha: f32, t: f32, (tinta, ropa): (Color, Colo
 /// Pinta una silueta dos veces: engordada en tinta y encima en su color. Es el
 /// mismo contorno que `draw_figura`, para piezas sueltas. `pinta` recibe el
 /// engorde y si es la pasada de tinta.
-fn con_tinta(pinta: impl Fn(f32, bool)) {
+pub(crate) fn con_tinta(pinta: impl Fn(f32, bool)) {
     pinta(2.2, true);
     pinta(0.0, false);
 }
 
-fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tintas: (Color, Color)) {
+fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tiempo: u32, tintas: (Color, Color)) {
     let edad = (tick - e.nacio) as f32 + (t - tick as f32);
     // El parpadeo del golpe: el color se va a blanco un par de ticks.
     let golpe = if e.golpe > 0 { 0.6 } else { 0.0 };
@@ -746,6 +758,9 @@ fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tintas: (Color, Color)) {
         Tipo::Pareja => pareja(e, l, edad, tintas, &tinte),
         Tipo::Camarero => camarero(e, l, &tinte),
         Tipo::Nota => nota(e, l, t, &tinte),
+        Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin => {
+            calle_chicago::enemigo(e, l, tick, t, tiempo, tintas, &tinte);
+        }
     }
 }
 
@@ -987,6 +1002,10 @@ fn nota(e: &Enemigo, l: &Layout, t: f32, tinte: &dyn Fn(Color) -> Color) {
 /// azul de la vajilla. Los rosas, con el anillo de parry.
 fn platos(p: &Paseo, l: &Layout, t: f32, azul: Color) {
     for (i, q) in p.proyectiles.iter().enumerate() {
+        if q.forma != Forma::Plato {
+            calle_chicago::proyectil(q, l, t);
+            continue;
+        }
         let s = l.to_screen(q.pos.x, q.pos.y);
         let giro = (t * 0.35 + i as f32).sin().abs().max(0.25);
         let (rx, ry) = (l.len(11.0), l.len(11.0 * giro));
