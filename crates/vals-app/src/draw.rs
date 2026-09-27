@@ -18,6 +18,7 @@ use crate::protagonista;
 use crate::salon;
 use crate::skeleton::{self, HUESOS, N_CINTA, N_FALDA, Pose, REMATES};
 use crate::stats::FrameStats;
+use crate::trazo;
 use vals_core::rng::Pcg32;
 
 // El arte del juego es procedural: no se dibuja nada a mano. Lo que cambia
@@ -955,10 +956,17 @@ fn programa(world: &World, cx: f32, y0: f32, ancho: f32, alto: f32) {
 }
 
 /// Una orla de cartel: papel un punto mas claro, tinta gruesa y un filete.
+///
+/// Hierve con la linea, sembrada por donde esta: las dos del cartel y el
+/// programa son distintas y no tiemblan a la par.
 fn orla(x: f32, y: f32, w: f32, h: f32) {
-    draw_rectangle(x, y, w, h, fade(WHITE, 0.18));
-    draw_rectangle_lines(x, y, w, h, 3.5, TINTA);
-    draw_rectangle_lines(x - 6.0, y - 6.0, w + 12.0, h + 12.0, 1.2, fade(TINTA, 0.55));
+    let centro = vec2(x + w * 0.5, y + h * 0.5);
+    let semilla = (x as u64) << 20 ^ y as u64;
+    trazo::hervir(centro, centro.distance(vec2(x, y)), semilla, || {
+        draw_rectangle(x, y, w, h, fade(WHITE, 0.18));
+        draw_rectangle_lines(x, y, w, h, 3.5, TINTA);
+        draw_rectangle_lines(x - 6.0, y - 6.0, w + 12.0, h + 12.0, 1.2, fade(TINTA, 0.55));
+    });
 }
 
 /// El paspartu: el papel de alrededor, puesto **encima** de lo que se sale.
@@ -1002,7 +1010,17 @@ pub(crate) fn paspartu_de(l: &Layout, tam: Vec2) {
 /// El borde sigue siendo informacion —dice hasta donde se puede llegar— y por
 /// eso sigue nitido. Lo que cambia es que ahora tambien dice que lo de dentro
 /// esta impreso.
+///
+/// Y hierve como la orla del cartel: es tinta repasada a mano. Un pixel como
+/// mucho, y la linea gorda tapa de sobra el borde del paspartu al moverse.
 fn marco(l: &Layout, tam: Vec2) {
+    let o = l.to_screen(0.0, 0.0);
+    let medio = vec2(l.len(tam.x), l.len(tam.y)) * 0.5;
+    let semilla = (o.x as u64) << 20 ^ o.y as u64;
+    trazo::hervir(o + medio, medio.length(), semilla, || trazar_marco(l, tam));
+}
+
+fn trazar_marco(l: &Layout, tam: Vec2) {
     let o = l.to_screen(0.0, 0.0);
     let (w, h) = (l.len(tam.x), l.len(tam.y));
     let gordo = l.len(5.0);
@@ -1274,7 +1292,7 @@ pub(crate) fn draw_figura(
     };
 
     let tinta = fade(TINTA, alfa);
-    silueta(TINTA_GRUESA, tinta, tinta);
+    trazo::tinta(|| silueta(TINTA_GRUESA, tinta, tinta));
     silueta(0.0, fade(cuerpo, alfa), fade(tela, alfa));
 }
 

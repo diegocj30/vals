@@ -216,10 +216,14 @@ pub fn dibujar(p: &Pose, g: &Gesto, centro: Vec2, l: &Layout, alfa: f32, alma: b
         k: l.scale(),
         alma,
     };
+    // Hierve dentro de la lamina y no alrededor: si no, la lamina entera se
+    // torceria encima de la figura ya torcida y temblaria el doble.
+    let radio = 30.0 * pin.k;
+    let hierve = || crate::trazo::hervir(centro, radio, 0x0E11A, || pintar(pin, p, g));
     if alfa >= 1.0 {
-        pintar(pin, p, g);
+        hierve();
     } else {
-        en_lamina(alfa, || pintar(pin, p, g));
+        en_lamina(alfa, hierve);
     }
 }
 
@@ -820,7 +824,7 @@ impl Pincel {
     fn contorno(&self, pts: &[Vec2], grosor: f32) {
         let mut cerrado = pts.to_vec();
         cerrado.push(pts[0]);
-        self.linea(&cerrado, grosor, TINTA);
+        crate::trazo::tinta(|| self.linea(&cerrado, grosor, TINTA));
     }
 
     /// Una pieza: contorno de tinta y el relleno encima, que se come la mitad
@@ -833,6 +837,13 @@ impl Pincel {
     /// Una manguera de grosor variable, engordada `engorde`: con tinta y
     /// engorde sale el contorno, con cero y color el relleno.
     fn tubo(&self, pts: &[(Vec2, f32)], engorde: f32, c: Color) {
+        if engorde > 0.0 {
+            return crate::trazo::tinta(|| self.tubo_de(pts, engorde, c));
+        }
+        self.tubo_de(pts, engorde, c);
+    }
+
+    fn tubo_de(&self, pts: &[(Vec2, f32)], engorde: f32, c: Color) {
         let c = self.tinte(c);
         for w in pts.windows(2) {
             let ((a, ra), (b, rb)) = (w[0], w[1]);

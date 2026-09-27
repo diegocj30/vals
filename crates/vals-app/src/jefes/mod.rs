@@ -61,11 +61,16 @@ pub struct Escena {
 }
 
 /// Dibuja al jefe de un baile.
+///
+/// Aqui hierve la linea (`trazo::hervir`), para los cuatro a la vez: ninguno
+/// tiene que saberlo.
 pub fn dibujar(baile: usize, e: &Escena) {
-    match baile {
+    // El aro de golpeo mide 46 unidades de arena, y la figura lo llena.
+    let radio = 46.0 * e.escala / crate::bailarines::ESCALA;
+    crate::trazo::hervir(e.centro, radio, 0xB0_55 + baile as u64, || match baile {
         0 => caja_de_musica::dibujar(e),
         1 => bandoneon::dibujar(e),
         2 => gramofono::dibujar(e),
         _ => coristas::dibujar(e),
-    }
+    });
 }

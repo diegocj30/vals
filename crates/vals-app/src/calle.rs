@@ -778,7 +778,7 @@ fn puerta(p: &Paseo, l: &Layout, alpha: f32, t: f32, (tinta, ropa): (Color, Colo
 /// mismo contorno que `draw_figura`, para piezas sueltas. `pinta` recibe el
 /// engorde y si es la pasada de tinta.
 pub(crate) fn con_tinta(pinta: impl Fn(f32, bool)) {
-    pinta(2.2, true);
+    crate::trazo::tinta(|| pinta(2.2, true));
     pinta(0.0, false);
 }
 
@@ -787,7 +787,10 @@ fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tiempo: u32, tintas: (Col
     // El parpadeo del golpe: el color se va a blanco un par de ticks.
     let golpe = if e.golpe > 0 { 0.6 } else { 0.0 };
     let tinte = |c: Color| mezcla(c, WHITE, golpe);
-    match e.tipo {
+    // Cada enemigo hierve a su aire: la semilla es cuando desperto, que no
+    // cambia mientras vive.
+    let centro = l.to_screen(e.pos.x, e.pos.y);
+    crate::trazo::hervir(centro, l.len(40.0), e.nacio, || match e.tipo {
         Tipo::Pareja => pareja(e, l, edad, tintas, &tinte),
         Tipo::Camarero => camarero(e, l, &tinte),
         Tipo::Nota => nota(e, l, t, &tinte),
@@ -800,7 +803,7 @@ fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tiempo: u32, tintas: (Col
         Tipo::Compadrito => calle_arrabal::compadrito(e, l, t, tintas, &tinte),
         Tipo::Florista => calle_arrabal::florista(e, l, tintas, &tinte),
         Tipo::Rosa => calle_arrabal::rosa(e, l, edad, t, tintas.0, &tinte),
-    }
+    });
 }
 
 pub(crate) fn mezcla(a: Color, b: Color, k: f32) -> Color {

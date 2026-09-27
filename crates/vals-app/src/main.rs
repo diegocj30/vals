@@ -36,6 +36,7 @@ mod replay_io;
 mod salon;
 mod skeleton;
 mod stats;
+mod trazo;
 mod zumo;
 
 use audio::{Audio, Sfx};
@@ -360,6 +361,13 @@ async fn run_game() {
         }
         if is_key_pressed(KeyCode::M) {
             audio.toggle_mute();
+        }
+        // La linea que hierve se puede parar: a quien le marea no le sirve
+        // de nada que sea bonita.
+        if is_key_pressed(KeyCode::T) {
+            let vivo = trazo::alternar();
+            let msg = if vivo { "trazo vivo" } else { "trazo quieto" };
+            aviso = Some((msg.to_owned(), false, 120));
         }
         // De la pista se entra al baile que se tenga delante.
         //
