@@ -16,11 +16,10 @@ use macroquad::prelude::*;
 use vals_core::pista::{ENTRADA, Nodo, Pista};
 use vals_core::{ARENA_H, ARENA_W};
 
-use crate::draw::{
-    FALDA, Layout, METER_FULL, PLAYER_BODY, TEXT_DIM, TITLE, draw_figura, fade, paspartu,
-};
+use crate::draw::{Layout, METER_FULL, TEXT_DIM, TITLE, fade, paspartu};
 use crate::fuentes::{self, Cara};
 use crate::paleta::{self, LUZ, ORO, PAPEL, PARED, TARIMA, TINTA, TINTA_TENUE, VETA};
+use crate::protagonista;
 use crate::skeleton;
 
 /// La tarima de la pista, un punto mas oscura que la del combate: aqui lo que
@@ -691,12 +690,15 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32) {
 /// La bailarina, en su sitio de la pista.
 fn dibujar_bailarina(p: &Pista, alpha: f32, t: f32, l: &Layout) {
     // Es la misma figura del combate: se le pasa la velocidad para que la
-    // falda y las cintas se queden atras al andar, y bailas mejor cuanto mas
-    // llevas hecho.
+    // falda se quede atras y la cara mire hacia donde anda, y bailas mejor
+    // cuanto mas llevas hecho.
     let pos = p.render_pos(alpha);
     let (s, escala) = suelo(l, pos.x, pos.y);
-    let pose = skeleton::pose(&p.figura(), t, false, p.respeto());
-    let ls = l.escalado(escala);
+    let figura = p.figura();
+    let pose = skeleton::pose(&figura, t, false, p.respeto());
+    // Mas grande que su esqueleto, como en el combate: al lado de un palacio,
+    // a tamano 1, la cara no era mas que un punto.
+    let ls = l.escalado(escala * 1.5);
 
     // Los pies van justo donde pisa, no el centro del cuerpo: si no, la
     // bailarina flota y se despega de su sombra.
@@ -711,7 +713,8 @@ fn dibujar_bailarina(p: &Pista, alpha: f32, t: f32, l: &Layout) {
         0.0,
         fade(FOCO, 0.55),
     );
-    draw_figura(&pose, centro, &ls, 1.0, PLAYER_BODY, FALDA);
+    let gesto = protagonista::Gesto::de(&figura, t);
+    protagonista::dibujar(&pose, &gesto, centro, &ls, 1.0, false);
 }
 
 /// El mapa entero.

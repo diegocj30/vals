@@ -26,6 +26,7 @@ mod music;
 mod paleta;
 mod particulas;
 mod pelicula;
+mod protagonista;
 mod replay_io;
 mod salon;
 mod skeleton;

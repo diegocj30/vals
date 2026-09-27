@@ -14,6 +14,7 @@ use crate::jefes;
 use crate::music::Tema;
 use crate::paleta;
 use crate::particulas::Particulas;
+use crate::protagonista;
 use crate::salon;
 use crate::skeleton::{self, HUESOS, N_CINTA, N_FALDA, Pose, REMATES};
 use crate::stats::FrameStats;
@@ -23,11 +24,8 @@ use vals_core::rng::Pcg32;
 // respecto al neon de antes no es el detalle, es el material: esto es un cartel
 // impreso, y por eso hay papel, tinta y colores de epoca. Ver `paleta.rs`.
 const PLAYER_GLOW: Color = color_u8!(255, 226, 170, 40);
-/// La protagonista va en hueso sobre la tarima oscura: es lo que mas tiene que
-/// destacar de la pantalla despues de las balas.
-pub(crate) const PLAYER_BODY: Color = color_u8!(240, 232, 212, 255);
 /// Lo que se agranda la protagonista respecto a su esqueleto.
-const TALLA: f32 = 1.4;
+const TALLA: f32 = 1.6;
 const TRAIL: Color = color_u8!(214, 198, 164, 255);
 const TRAIL_DASH: Color = color_u8!(232, 96, 142, 255);
 const HITBOX: Color = color_u8!(226, 58, 92, 255);
@@ -84,10 +82,6 @@ pub(crate) const METER_FULL: Color = color_u8!(246, 206, 104, 255);
 const VEIL: Color = color_u8!(20, 13, 15, 205);
 pub(crate) const TITLE: Color = color_u8!(244, 232, 204, 255);
 const DEFEAT: Color = color_u8!(214, 78, 84, 255);
-
-/// La falda va mas fria que el cuerpo: separa la tela de la piel sin necesidad
-/// de dibujar ni una linea de detalle.
-pub(crate) const FALDA: Color = color_u8!(196, 178, 148, 255);
 
 const TEXT: Color = color_u8!(216, 200, 170, 255);
 pub(crate) const TEXT_DIM: Color = color_u8!(142, 124, 102, 255);
@@ -374,16 +368,40 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 4]>) 
     let cx = o.x + w * 0.5;
     draw_rectangle(o.x, o.y, w, h, fade(VEIL, 0.8));
 
-    // La bailarina del vals, enorme y en penumbra detras del titulo: el cartel
-    // de un baile se anuncia con su figura, no con una lista de teclas.
-    let figura = Layout {
-        origin: Vec2::ZERO,
-        scale: l.scale() * 11.0,
+    // La protagonista, la estrella del cartel. Antes era la bailarina del vals
+    // en penumbra, pero el vals es un jefe, y el cartel de un espectaculo lo
+    // protagoniza quien lo baila. Va a todo color y **debajo** del titulo, no
+    // detras: con las letras cruzandole la cara no se leia ni ella ni VALS.
+    // Quieta, en su mejor porte, mirando alrededor, y cada cinco segundos le
+    // guina un ojo a quien mira.
+    let t = world.tick as f32;
+    let mut ella = world.player.clone();
+    ella.vel *= 0.0;
+    ella.dash.ticks_left = 0;
+    ella.parry_window = 0;
+    ella.focus_t = 0.0;
+    let pose = skeleton::pose(&ella, t, false, 1.0);
+    let gesto = protagonista::Gesto {
+        cara: if t.rem_euclid(300.0) < 24.0 {
+            protagonista::Expresion::Guino
+        } else {
+            protagonista::Expresion::Normal
+        },
+        mirada: vec2((t * 0.013).sin() * 0.6, 0.1),
+        ..protagonista::Gesto::de(&ella, t)
     };
-    let (sombra, ropa) = (color_u8!(34, 44, 78, 255), color_u8!(52, 64, 108, 255));
-    for pose in bailarines::poses(0, 0, world.tick as f32, 1.0) {
-        draw_figura(&pose, vec2(cx, o.y + h * 0.40), &figura, 1.0, sombra, ropa);
-    }
+    // Mide unas 37 unidades del lazo a los zapatos, 15 de ellas por debajo del
+    // centro de la pose: asi los pies caen justo encima de la carta de controles.
+    let estrella = Layout::con_escala(h * 0.32 / 37.0);
+    let pies = o.y + h * 0.80;
+    protagonista::dibujar(
+        &pose,
+        &gesto,
+        vec2(cx, pies - estrella.len(15.0)),
+        &estrella,
+        1.0,
+        false,
+    );
 
     // El titulo, con sombra de tinta y una orla Deco debajo.
     let grande = 150.0 * l.scale().min(1.2);
@@ -413,7 +431,8 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 4]>) 
 
     // La invitacion, latiendo: es lo unico que hay que hacer en esta pantalla.
     let latido = 0.65 + 0.35 * (get_time() as f32 * 3.0).sin();
-    let mut y = o.y + h * 0.60;
+    // Justo bajo el subtitulo: mas abajo esta ella.
+    let mut y = o.y + h * 0.46;
     for linea in &lineas[..1] {
         con_sombra(
             |dx, c| fuentes::centrado(linea, cx + dx, y + dx, 21.0, Cara::Cuerpo, c),
@@ -1044,17 +1063,12 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
         0.0
     };
     let figura = skeleton::pose(&world.player, t, world.mode == Mode::Platform, elegancia);
-    // Un 40 % mas grande que el esqueleto. A tamano 1 media 27 pixeles, que es
-    // un marcianito; asi se lee como una bailarina. La hitbox no cambia: es el
-    // punto de 2.5 que se dibuja encima de todo, y ese es el que manda.
-    draw_figura(
-        &figura,
-        s,
-        &l.escalado(TALLA),
-        body_alpha,
-        PLAYER_BODY,
-        FALDA,
-    );
+    // Un 60 % mas grande que el esqueleto. A tamano 1 media 27 pixeles, que es
+    // un marcianito; a 1.4 ya era una bailarina, y a 1.6 ademas se le ve la
+    // cara. La hitbox no cambia: es el punto de 2.5 que se dibuja encima de
+    // todo, y ese es el que manda.
+    let gesto = protagonista::Gesto::de(&world.player, t);
+    protagonista::dibujar(&figura, &gesto, s, &l.escalado(TALLA), body_alpha, false);
 
     // Anillo de focus: se cierra sobre la hitbox conforme entras en modo lento.
     let ft = world.player.focus_t;
@@ -1259,21 +1273,22 @@ pub fn fantasma(world: &World, donde: (f32, f32), edad: f32, l: &Layout) {
     let vaiven = (edad * 6.0).sin() * 7.0;
     let centro = l.to_screen(donde.0, donde.1 - k * 110.0) + vec2(vaiven, 0.0);
     let ls = l.escalado(TALLA);
-    let pose = skeleton::pose(&world.player, world.tick as f32, false, 1.0);
-    let alma = color_u8!(250, 244, 226, 255);
-    draw_figura(&pose, centro, &ls, alfa, alma, alma);
+    let t = world.tick as f32;
+    let pose = skeleton::pose(&world.player, t, false, 1.0);
+    let gesto = protagonista::Gesto {
+        cara: protagonista::Expresion::Alma,
+        ..protagonista::Gesto::de(&world.player, t)
+    };
+    protagonista::dibujar(&pose, &gesto, centro, &ls, alfa, true);
 
-    let cabeza = centro
-        + vec2(
-            pose.joints[skeleton::CABEZA].x,
-            pose.joints[skeleton::CABEZA].y,
-        ) * ls.scale();
-    let r = ls.len(skeleton::RADIO_CABEZA);
+    // La aureola, por encima del lazo.
+    let (cabeza, r) = protagonista::cabeza(&pose);
+    let (cabeza, r) = (centro + cabeza * ls.scale(), ls.len(r));
     draw_ellipse_lines(
         cabeza.x,
-        cabeza.y - r * 2.2,
-        r * 1.3,
-        r * 0.45,
+        cabeza.y - r * 2.0,
+        r * 1.1,
+        r * 0.35,
         0.0,
         2.0,
         fade(METER_FULL, alfa * 1.4),
