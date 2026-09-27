@@ -114,12 +114,12 @@ impl Mando {
     /// Los cuatro botones de la derecha, con el nombre que llevan escrito
     /// encima en **este** mando.
     ///
-    /// Devuelve (disparar, dash, parry, super).
-    pub fn botones(&self) -> [&'static str; 4] {
+    /// Devuelve (disparar, dash, parry, super, saltar).
+    pub fn botones(&self) -> [&'static str; 5] {
         if self.actual & PLAYSTATION != 0 {
-            ["X", "cuadrado", "circulo", "triangulo"]
+            ["X", "cuadrado", "circulo", "triangulo", "R1"]
         } else {
-            ["A", "X", "B", "Y"]
+            ["A", "X", "B", "Y", "RB"]
         }
     }
 
@@ -192,9 +192,14 @@ impl Mando {
             InputFrame::RIGHT,
             ax > ZONA_MUERTA || pad.is_pressed(Button::DPadRight),
         );
-        // Igual que en el teclado, saltar es "arriba": en el modo con gravedad
-        // el eje vertical no mueve y la direccion queda libre.
-        set(InputFrame::JUMP, arriba);
+        // Saltar va en un gatillo y no en "arriba": con el stick, apuntar en
+        // diagonal hacia delante saltaba sin querer, y en el paseo arriba es
+        // tambien apuntar. En R1 o R2 se salta con el indice sin soltar el
+        // disparo del pulgar.
+        set(
+            InputFrame::JUMP,
+            pad.is_pressed(Button::RightTrigger) || pad.is_pressed(Button::RightTrigger2),
+        );
 
         set(InputFrame::SHOOT, pad.is_pressed(Button::South));
         set(InputFrame::DASH, pad.is_pressed(Button::West));

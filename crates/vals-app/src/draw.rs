@@ -343,7 +343,7 @@ fn draw_hud(world: &World, l: &Layout) {
 /// que el super era el triangulo probando los cuatro botones es exactamente lo
 /// que una pantalla de controles existe para evitar, y una lista doble se lee
 /// peor que la que toca.
-pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 4]>) {
+pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 5]>) {
     let cola = if intentos == 0 {
         String::new()
     } else {
@@ -360,14 +360,14 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 4]>) 
             "stick o cruceta   mover".to_owned(),
             format!("{}  disparar     {}  dash", b[0], b[1]),
             format!("{}  parry        {}  super", b[2], b[3]),
-            "L2  focus        M  mudo".to_owned(),
+            format!("{}  saltar       L2  focus", b[4]),
             "Parriar las balas ROSAS llena la barra SUPER;".to_owned(),
             format!("llena, {} limpia la pantalla y hace mucho dano.", b[3]),
         ],
         None => vec![
             format!("Z   entrar a la pista{cola}"),
             "flechas mover    Z disparar    X dash".to_owned(),
-            "C parry    SHIFT focus    M mudo".to_owned(),
+            "C parry    ARRIBA saltar    SHIFT focus".to_owned(),
             "Parriar las balas ROSAS llena la barra SUPER.".to_owned(),
             "Llena, ESPACIO limpia la pantalla y hace mucho dano.".to_owned(),
         ],
@@ -649,7 +649,7 @@ fn sello_de_derrota(l: &Layout, world: &World) {
     y += 26.0;
     let pct = (hecho * 100.0).round() as u32;
     fuentes::centrado(
-        &format!("te comiste el {pct}% del baile"),
+        &format!("llegaste al {pct}% del baile"),
         cx,
         y,
         17.0,
@@ -1563,7 +1563,7 @@ pub fn debug_overlay(
     stats: &FrameStats,
     steps: u32,
     chispas: usize,
-    mando: Option<[&str; 4]>,
+    mando: Option<[&str; 5]>,
 ) {
     let mut y = 26.0;
     stats_block(stats, steps, &mut y);
@@ -1652,10 +1652,10 @@ pub fn debug_overlay(
     // mientras el menu decia otra cosa era peor que no tener ninguna.
     let help = match mando {
         Some(b) => format!(
-            "{} disparar  {} dash  {} parry  {} super  L2 focus  M mudo  F1  R  F3 saltar",
-            b[0], b[1], b[2], b[3]
+            "{} disparar  {} saltar  {} dash  {} parry  {} super  L2 focus  M mudo  F1  R  F3 pasar",
+            b[0], b[4], b[1], b[2], b[3]
         ),
-        None => "Z disparar  X dash  C parry  ESPACIO super  SHIFT focus  M mudo  F1  R  F3 saltar"
+        None => "Z disparar  X dash  C parry  ESPACIO super  SHIFT focus  M mudo  F1  R  F3 pasar"
             .to_owned(),
     };
     fuentes::texto(
@@ -1745,7 +1745,7 @@ mod tests {
     }
 
     #[test]
-    fn el_recorrido_dice_cuanto_te_comiste() {
+    fn el_recorrido_dice_hasta_donde_llegaste() {
         // La barra del KO es lo que convierte cien intentos a ciegas en cien
         // intentos con informacion, asi que tiene que ser honesta.
         let mut w = World::with_mode(7, Mode::Flight);
