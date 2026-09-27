@@ -1,175 +1,106 @@
 # VALS
 
-Boss-rush danmaku escrito en Rust. Jugable en nativo y en navegador.
+**Un boss-rush danmaku con niveles de correr y disparar, escrito en Rust. Cada
+jefe es un baile, y sus balas son la coreografia.**
 
-Los patrones de balas de este genero son coreografia: de ahi el nombre.
+**[Jugar en el navegador](https://diegocj30.github.io/vals/)** — teclado o mando,
+sin instalar nada.
 
-Una pista de baile y cuatro jefes —El Vals, El Charleston, El Cancan y El
-Tango, cada uno con sus figuras—, que se presentan con su cartela antes de bailarlos. Tres vidas y
-un parry que te empuja a meterte donde estan las balas en vez de huir de todas.
+![El paseo de Montmartre, un nivel de correr y disparar](docs/media/paseo.gif)
 
-Dos modos: **volar** por la arena, como el danmaku clasico, o **plataformas**
-con gravedad y salto, mas cerca de Cuphead. El modo no se elige: lo trae cada
-baile. El vals y el tango se bailan en el aire; el charleston y el cancan, en
-el suelo, con figuras hechas para eso —arcos que aterrizan y hay que esquivar
-corriendo, y patadas a ras de suelo que hay que saltar—.
-
-Y antes de un jefe, **su paseo**: un nivel de correr y disparar de lado, a lo
-Cuphead, por la calle de la ciudad de su baile. Hoy existe el de Viena, antes
-del vals: parejas que bailan hacia ti, camareros que tiran platos y notas que
-vuelan, y al final la puerta del salon. Es un RON en `assets/paseos/`, como los
-jefes.
-
-## Estructura
-
-| Crate | Que hace |
+| El Vals, tercera figura | La pista, el mapa entre bailes |
 |---|---|
-| `crates/vals-core` | Simulacion determinista. **Sin dependencias graficas, a proposito.** |
-| `crates/vals-app`  | Ventana, render, input y audio (macroquad). |
+| ![Combate contra El Vals](docs/media/jefe.gif) | ![El mapa del juego](docs/media/mapa.gif) |
 
-La separacion no es decorativa. `vals-core` no importa macroquad nunca, y eso
-es lo que permite testear el gameplay en headless, medirlo con `criterion` sin
-ruido de GPU, y cambiar de renderer mas adelante sin reescribir el juego.
+## Que hay dentro
 
-## Ejecutar
+- **Cuatro jefes que son objetos vivos**: El Vals es una caja de musica, El
+  Tango un bandoneon, El Charleston un gramofono y El Cancan una fila de
+  coristas. Cada uno tiene sus figuras (fases), su musica y una gramatica de
+  balas propia: el vals gira, el tango frena en seco, el charleston curva.
+- **Cuatro paseos**, niveles de correr y disparar de lado antes de cada jefe:
+  Viena, un arrabal de Buenos Aires, las azoteas de Chicago y la cuesta de
+  Montmartre hasta el Moulin Rouge.
+- **Un mapa** con un monumento por baile, que se abre segun avanzas, y el
+  progreso guardado entre partidas.
+- **Parry y super**: parriar las balas rosas llena el medidor y el super limpia
+  la pantalla. El juego premia meterse entre las balas en vez de huir de todas.
+- Dos formas de jugar el combate: **volando**, como el danmaku clasico, o **en
+  el suelo** con gravedad y salto. La trae cada baile.
+- Estetica de **cartel de la Belle Epoque**, con grano de pelicula, y musica de
+  piezas de dominio publico (Strauss, Juventino Rosas, Joplin, Offenbach)
+  transcritas a tablas de notas.
 
-```bash
-cargo run -p vals-app            # nativo, perfil dev
-cargo run -p vals-app --profile fast   # nativo, optimizado, compila rapido
-cargo test                       # tests, incluido el de determinismo
-```
+## Controles
 
-Controles:
+| | Teclado | Mando |
+|---|---|---|
+| Mover | Flechas / WASD | Stick o cruceta |
+| Disparar | `Z` | R1 / R2 |
+| Saltar (en el suelo y en los paseos) | Arriba / `W` / `K` | Boton de abajo (X en PlayStation, A en Xbox) |
+| Dash, con invulnerabilidad | `X` | Cuadrado / X |
+| Parry | `C` | Circulo / B |
+| Super | `Espacio` | Triangulo / Y |
+| Focus (lento; en los paseos, plantarse y apuntar) | `Shift` | L1 / L2 |
+| Volver al mapa o al menu | `Esc` | Triangulo / Y, fuera del combate |
 
-| Tecla | |
-|---|---|
-| Flechas / WASD | mover (en plataformas, arriba salta) |
-| `Z` | disparar |
-| `X` | dash con i-frames |
-| `C` | **parry**: neutraliza las balas rosas que tengas cerca y llena el medidor |
-| `ESPACIO` | **super**: con el medidor lleno, limpia la pantalla y pega fuerte |
-| `SHIFT` | focus: lento, con la hitbox y el radio de roce marcados |
-| `M` | silenciar |
-| `F1` / `R` | overlay de debug / reiniciar |
+## Como esta hecho
 
-Parriar las balas **rosas** llena la barra `SUPER`; cuando esta llena, `ESPACIO`
-limpia la pantalla y hace mucho dano. Rozar balas sin que te den tambien la
-llena, poco a poco. La idea es que acercarse compense.
+- **Simulacion determinista en un crate puro.** `vals-core` es todo el juego
+  —balas, jefes, jugadora, paseos, mapa— y no depende de macroquad ni de
+  ninguna libreria grafica. Avanza a paso fijo de 60 Hz con su propio generador
+  aleatorio, y `vals-app` solo pone ventana, render, input y audio encima,
+  interpolando entre ticks.
+- **Replays y un test de regresion dorado.** Como la simulacion es
+  determinista, una partida es una semilla mas la lista de inputs: 30 segundos
+  ocupan 4 KB. Hay un replay versionado que se reproduce en cada push
+  comparando huellas del estado; si cambia la jugabilidad sin querer, falla.
+  Eso es lo que permite optimizar el bucle caliente sin miedo.
+- **Jefes y niveles son datos.** Cada jefe es un fichero RON con un pequeno
+  lenguaje de patrones (`Fire`, `Turn`, `Repeat`, `Parallel`, `MoveTo`...) y
+  cada paseo otro RON con su suelo, plataformas y enemigos. En nativo hay
+  **hot-reload**: se guarda el fichero y el cambio entra sin recompilar.
+- **Cero imagenes.** Todo lo que se ve se dibuja con codigo: personajes como
+  esqueletos animados con miembros en curva Bezier, balas desde un shader con
+  render instanciado (a 32.000 balas, 144 fps frente a 30 con las primitivas de
+  macroquad) y decorados procedurales. La musica y los efectos se sintetizan al
+  arrancar. Los unicos ficheros de arte son dos tipografias con licencia OFL.
+- **El mismo codigo en nativo y en web.** Compila a `wasm32` sin
+  `wasm-bindgen`; el mando (gilrs en nativo, Gamepad API en web) y el guardado
+  (`localStorage`) se conectan con plugins de miniquad de unas pocas lineas.
+- **335 tests**, entre ellos bots que recorren cada paseo de punta a punta y
+  tests que exigen que cada baile use su verbo del motor y no el de otro. El CI
+  pasa `cargo fmt`, `clippy -D warnings`, los tests, el replay dorado y el
+  build web en cada push.
+- **Las mediciones estan escritas.** [`docs/PERF.md`](docs/PERF.md) es el
+  historico de rendimiento, con cada optimizacion medida antes y despues.
 
-Al perder se reintenta **ese** jefe, no la carrera entera.
+## Compilar
 
-Los unicos assets del repositorio son **dos tipografias** con licencia SIL OFL
-—Poiret One y Barlow—, y son una herramienta, no arte del juego. Todo lo que se
-dibuja lo genera el codigo.
-
-**Se ve como un cartel de la Belle Epoque**, que es la epoca del juego: papel
-crema con grano fuera, la arena como una lamina impresa encima con su marco de
-tinta, y **una tinta por baile** —el vals azul de Prusia, el tango carmin, el
-charleston mostaza, el cancan rosa Moulin Rouge—, asi que los cuatro se
-distinguen de un vistazo con el sonido quitado. Las balas son la excepcion y a
-proposito: su color dice el tamano y la velocidad de lo que viene, y eso no
-puede cambiar de un baile a otro. **Cada baile tiene su decorado** —Viena de
-noche, un arrabal de Buenos Aires, un club Art Deco y el Moulin Rouge con las
-aspas girando—, y todo se ve **a traves de una pelicula** con grano, parpadeo y
-rayas a 24 fotogramas por segundo.
-
-Las balas salen de un shader a partir de la distancia al centro. Los personajes
-—la protagonista y los jefes— son esqueletos de articulaciones animados por
-codigo, **con contorno de tinta y miembros arqueados**: los huesos se trazan con
-una Bezier cuyo control se desplaza en perpendicular, asi que el brazo se curva
-y el codo no se ve. No hay caras; cada bailarin lleva su tocado, que es como un
-cartel resuelve un personaje.
-
-Y **cada jefe baila la misma gramatica con la que dispara**: el vals gira, el
-tango es una pareja que se para en seco, el charleston patea en la clave 3-3-2,
-el cancan levanta una pierna en cada tiempo. El salon —pared, tarima en
-perspectiva, lampara y focos— **late con el compas del tema que suena**, sin
-analizar audio: los bpm y los tiempos por compas ya estan en la partitura; las
-chispas y la sacudida se disparan desde los sucesos que publica el
-nucleo, y **el sonido y la musica se sintetizan al arrancar**: cada jefe
-tiene su vals — y como el jefe es el baile entero, **la musica va por figura**.
-El paso base suena a El Danubio azul (Strauss II, 1866) y el molinete a Sobre
-las olas (Juventino Rosas, 1888), las dos de dominio publico y transcritas a una
-tabla de notas. El espejo no toca una pieza nueva: toca **el Danubio
-reflejado**, con cada intervalo invertido alrededor de la tonica y leido en
-menor. Y la coda tampoco: es el tema del principio otra vez, un tono mas arriba
-y a toda velocidad, que es literalmente lo que una coda es.
-
-## Disenar un jefe
-
-**Un baile es un jefe, y cada fase suya es una figura de ese baile.** El vals
-vive en `assets/patterns/boss1.ron` y el tango en `boss2.ron`, **no en codigo**.
-Anadir un baile es escribir su fichero y meterlo en `DEFAULT_BOSS_RONS`: la
-pista le pone el nodo sola y la musica lo busca por indice.
-
-Lo que separa un baile de otro no es la melodia, es la gramatica: **cada uno
-tiene un verbo del motor que es solo suyo**. El vals gira (`Turn`, espirales);
-el tango frena y vuelve (`accel` negativa, el corte); el charleston curva
-(`spin`, el arco del swing-out). Hay un test que exige las dos direcciones: que
-cada baile use el suyo y que no use el de nadie mas.
-
-Al ritmo le pasa lo mismo —tres tiempos, cuatro tiempos, clave 3-3-2— y las
-esperas de cada patron son multiplos de su tiempo en ticks, asi que **las balas
-caen con la musica**. El fichero
-lleva en la cabecera la guia de los pasos del lenguaje (`Wait`, `Fire`, `Turn`,
-`Repeat`, `Forever`, `Parallel`, `MoveTo`).
-
-Con el juego abierto en nativo hay **hot-reload**: guarda el RON y el cambio
-entra sin recompilar. Si el fichero tiene un error de sintaxis se avisa y se
-sigue jugando con la ultima version buena.
-
-## Replays
-
-Un replay es **una semilla mas la lista de inputs**: como la simulacion es
-determinista, con eso se recrea la partida entera. Treinta segundos ocupan
-4 KB.
-
-Se graba siempre mientras juegas; `F2` guarda la partida en `replays/`.
+Hace falta Rust estable.
 
 ```bash
-cargo run -p vals-app -- --replay replays/1234567890.valsrpl   # reproducir
-cargo run -p vals-core --example replay_tool -- verify <fichero>
-cargo run -p vals-core --example replay_tool -- info <fichero>
+cargo run -p vals-app --release   # jugar en nativo
+cargo test                        # tests, incluido el replay dorado
 ```
 
-`assets/replays/golden.valsrpl` es el **replay dorado**: 30 segundos versionados
-que el CI reproduce en cada push comparando huellas de estado. Es la red que
-permite reescribir el bucle caliente demostrando que el comportamiento no
-cambia. Si tocas la jugabilidad a proposito, falla — y hay que regrabarlo:
-
-```bash
-cargo run -p vals-core --example replay_tool -- record-golden
-```
-
-## Medir
-
-```bash
-cargo bench -p vals-core --bench sim                                  # simulacion aislada
-cargo run -p vals-app --release -- --bench-scene 20000 --frames 400   # frame completo
-cargo run -p vals-app --release -- --bench-scene 20000 --frames 400 --legacy-render
-```
-
-El ultimo usa el render anterior a H6 (primitivas de macroquad, dos circulos
-por bala) en vez del instanciado. Se conserva para que la comparacion de
-`docs/PERF.md` se pueda repetir: **a 32.000 balas van 30 fps contra 144**.
-
-El segundo imprime el resumen y sale solo. Los resultados van a
-[`docs/PERF.md`](docs/PERF.md), que es el historico contra el que se comparan
-las optimizaciones futuras.
-
-## Build web
+Build web (Windows; en otro sistema son los mismos dos pasos del script):
 
 ```powershell
 powershell -File scripts/build-web.ps1
-```
-
-Deja en `web/` un `.wasm` autocontenido. Sirvelo con cualquier servidor
-estatico:
-
-```bash
 python -m http.server 8080 --directory web
 ```
 
-## Documentacion
+Replays y mediciones:
 
-- [`docs/PERF.md`](docs/PERF.md) — historico de mediciones.
+```bash
+cargo run -p vals-core --example replay_tool -- verify assets/replays/golden.valsrpl
+cargo run -p vals-app -- --replay replays/<fichero>.valsrpl   # F2 guarda la partida en curso
+cargo bench -p vals-core --bench sim
+cargo run -p vals-app --release -- --bench-scene 20000 --frames 400
+```
+
+| Crate | Que hace |
+|---|---|
+| `crates/vals-core` | La simulacion: determinista, sin dependencias graficas. |
+| `crates/vals-app` | Ventana, render, input y audio con macroquad. |
