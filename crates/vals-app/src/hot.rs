@@ -57,7 +57,7 @@ const AVISO_FRAMES: u32 = 180;
 
 pub struct HotReload {
     #[cfg(not(target_arch = "wasm32"))]
-    last: [Option<std::time::SystemTime>; 3],
+    last: [Option<std::time::SystemTime>; RUTAS.len()],
     /// La fecha del paseo que se esta andando, y cual es.
     #[cfg(not(target_arch = "wasm32"))]
     last_paseo: Option<(usize, std::time::SystemTime)>,
@@ -69,7 +69,7 @@ impl HotReload {
     pub fn new() -> Self {
         Self {
             #[cfg(not(target_arch = "wasm32"))]
-            last: [None; 3],
+            last: [None; RUTAS.len()],
             #[cfg(not(target_arch = "wasm32"))]
             last_paseo: None,
             aviso: None,

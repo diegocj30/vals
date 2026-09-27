@@ -85,12 +85,8 @@ pub fn dibujar(p: &Paseo, alpha: f32, l: &Layout, pulso: f32, baile: usize) {
     let capa = |f: f32| l.sacudido(vec2(-cam * f, 0.0));
     let calle = capa(1.0);
 
-    cielo(l, pulso);
-    silueta_de_viena(&capa(0.15), cam * 0.15);
-    fachadas(&capa(0.45), cam * 0.45, pulso);
-    balaustrada(&capa(0.75), cam * 0.75);
-
-    farolas(p, &calle, cam, pulso);
+    // El fondo es de cada ciudad. Un baile sin calle propia anda por Viena.
+    fondo_de_viena(p, l, &capa, cam, pulso);
     acera(p, &calle, cam, t);
     plataformas(p, &calle);
     puerta(p, &calle, alpha, t, tintas);
@@ -101,6 +97,15 @@ pub fn dibujar(p: &Paseo, alpha: f32, l: &Layout, pulso: f32, baile: usize) {
     disparos(p, &calle);
     dibujar_jugadora(p, alpha, t, &calle);
     parry_y_super(p, alpha, &calle);
+}
+
+/// El fondo de Viena, de lo mas lejano a las farolas de la acera.
+fn fondo_de_viena(p: &Paseo, l: &Layout, capa: &dyn Fn(f32) -> Layout, cam: f32, pulso: f32) {
+    cielo(l, pulso);
+    silueta_de_viena(&capa(0.15), cam * 0.15);
+    fachadas(&capa(0.45), cam * 0.45, pulso);
+    balaustrada(&capa(0.75), cam * 0.75);
+    farolas(p, &capa(1.0), cam, pulso);
 }
 
 /// Lo que va encima de la calle y dentro de la lamina: el papel de alrededor,
