@@ -3,14 +3,15 @@
 use glam::Vec2;
 
 use crate::boss::{Boss, BossDef};
-use crate::bullets::{Bullets, KIND_NEEDLE, Spawn};
+use crate::bullets::{Bullets, KIND_MEDIUM, KIND_NEEDLE, Spawn};
+use crate::equipo::{ABANICO, Tiro};
 use crate::events::Events;
 use crate::hash::Fnv1a;
+use crate::math::sin_cos;
 use crate::player::{
-    GRAZE_METER, GRAZE_RADIUS, PARRY_RADIUS, PLAYER_HITBOX_RADIUS, SHOT_DAMAGE, SHOT_EVERY,
-    SHOT_SPEED, SHOT_SPREAD, SUPER_DAMAGE,
+    GRAZE_METER, GRAZE_RADIUS, PARRY_RADIUS, SHOT_SPEED, SHOT_SPREAD, SUPER_DAMAGE,
 };
-use crate::{ARENA_H, ARENA_W, DT, InputFrame, Pcg32, Player};
+use crate::{ARENA_H, ARENA_W, DT, Equipo, InputFrame, Pcg32, Player};
 
 /// Como se juega: volando por la arena o pisando el suelo.
 ///
@@ -93,6 +94,9 @@ pub struct World {
     pub defeat: bool,
     /// Volando o pisando el suelo.
     pub mode: Mode,
+    /// El tiro y el amuleto que se llevan. Es una entrada, como
+    /// la semilla: no cambia durante la partida y el replay lo guarda.
+    pub equipo: Equipo,
     /// Lo que ha pasado en el ultimo tick. Lo lee la capa de presentacion para
     /// saber que sonido tocar. No entra en el hash: es informacion derivada.
     pub events: Events,
@@ -124,6 +128,7 @@ impl World {
             victory: false,
             defeat: false,
             mode: Mode::Flight,
+            equipo: Equipo::default(),
             events: Events::default(),
             boss_defs: defs,
             prev_input: InputFrame::NONE,
@@ -181,6 +186,22 @@ impl World {
         w
     }
 
+    /// Lo mismo que `empezar_en`, con el equipo que se lleve puesto.
+    ///
+    /// Es la unica puerta por la que entra un equipo, y el relicario se cobra
+    /// aqui: la vida de mas se pone al empezar, igual que al reintentar.
+    pub fn empezar_con(seed: u64, mode: Mode, jefe: usize, equipo: Equipo) -> Self {
+        let mut w = Self::empezar_en(seed, mode, jefe);
+        w.equipo = equipo;
+        w.lives = w.vidas_de_salida();
+        w
+    }
+
+    /// Las vidas con las que se empieza: tres, y una mas con el relicario.
+    fn vidas_de_salida(&self) -> u32 {
+        STARTING_LIVES + self.equipo.amuleto.vidas_extra()
+    }
+
     /// Da el baile por bailado sin tener que bailarlo.
     ///
     /// Es una trampa, y esta puesta a proposito: ver como avanza el juego no
@@ -218,7 +239,7 @@ impl World {
         self.player = Player::new(Self::spawn_pos_for(self.mode));
         self.bullets.clear();
         self.player_shots.clear();
-        self.lives = STARTING_LIVES;
+        self.lives = self.vidas_de_salida();
         self.defeat = false;
         self.victory = false;
         self.events = Events::default();
@@ -309,14 +330,21 @@ impl World {
     /// nada del entorno: mismo estado + mismo input = mismo resultado, siempre.
     pub fn step(&mut self, input: InputFrame) {
         self.events = Events::default();
-        self.player
-            .update(input, self.prev_input, self.mode.gravity());
+        self.player.update(
+            input,
+            self.prev_input,
+            self.mode.gravity(),
+            self.equipo.amuleto.ventana_parry(),
+        );
         self.player_shoot(input);
 
         if self.boss_enabled && !self.is_over() {
             self.boss.update(&mut self.bullets, self.player.pos);
         }
         self.bullets.update(DT);
+        if self.equipo.tiro == Tiro::Serpentina && !self.boss.defeated {
+            self.player_shots.perseguir(self.boss.pos);
+        }
         self.player_shots.update(DT);
 
         self.resolve_parry();
@@ -333,18 +361,38 @@ impl World {
         if !input.is_down(InputFrame::SHOOT) || self.player.shot_cooldown > 0 {
             return;
         }
-        self.player.shot_cooldown = SHOT_EVERY;
+        let tiro = self.equipo.tiro;
+        self.player.shot_cooldown = tiro.cada();
         self.events.player_shot = true;
-        // Dos chorros paralelos. Uno solo se siente escuchimizado, y dos muy
-        // separados obligarian a apuntar, que no es de lo que va este juego.
-        for dx in [-SHOT_SPREAD, SHOT_SPREAD] {
-            self.player_shots.spawn(Spawn {
-                pos: self.player.pos + Vec2::new(dx, -10.0),
-                vel: Vec2::new(0.0, -SHOT_SPEED),
-                ttl: 2.0,
-                kind: KIND_NEEDLE,
-                ..Default::default()
-            });
+        let boca = self.player.pos + Vec2::new(0.0, -10.0);
+        let bala = |dx: f32, vel: Vec2, kind: u8| Spawn {
+            pos: boca + Vec2::new(dx, 0.0),
+            vel,
+            ttl: tiro.ttl(),
+            kind,
+            ..Default::default()
+        };
+        let arriba = Vec2::new(0.0, -SHOT_SPEED);
+        match tiro {
+            // Dos chorros paralelos. Uno solo se siente escuchimizado, y dos
+            // muy separados obligarian a apuntar, que no es de lo que va este
+            // juego. La serpentina sale igual y luego se tuerce.
+            Tiro::Aguja | Tiro::Serpentina => {
+                for dx in [-SHOT_SPREAD, SHOT_SPREAD] {
+                    self.player_shots.spawn(bala(dx, arriba, KIND_NEEDLE));
+                }
+            }
+            Tiro::Abanico => {
+                let (s, c) = sin_cos(ABANICO);
+                for (x, y) in [(-s, c), (0.0, 1.0), (s, c)] {
+                    let vel = Vec2::new(x, -y) * SHOT_SPEED;
+                    self.player_shots.spawn(bala(0.0, vel, KIND_NEEDLE));
+                }
+            }
+            // Una sola y gorda: el golpe se ve antes de que llegue.
+            Tiro::Castanuela => {
+                self.player_shots.spawn(bala(0.0, arriba, KIND_MEDIUM));
+            }
         }
     }
 
@@ -399,7 +447,7 @@ impl World {
             return;
         }
         self.events.boss_hit = true;
-        if self.boss.damage(impactos as i32 * SHOT_DAMAGE) {
+        if self.boss.damage(impactos as i32 * self.equipo.tiro.dano()) {
             // Cambio de fase o caida: en ambos casos se limpia la pantalla.
             // Heredar la pared de balas de la fase anterior seria una muerte
             // imposible de evitar justo en el momento de celebrar.
@@ -421,7 +469,7 @@ impl World {
         }
         if self
             .bullets
-            .hit_circle(self.player.pos, PLAYER_HITBOX_RADIUS)
+            .hit_circle(self.player.pos, self.equipo.amuleto.hitbox())
             .is_some()
         {
             self.lives = self.lives.saturating_sub(1);
@@ -485,6 +533,13 @@ impl World {
         self.boss.hash_into(&mut h);
         self.bullets.hash_into(&mut h);
         self.player_shots.hash_into(&mut h);
+        // El equipo entra solo si no es el de serie: asi la huella de una
+        // partida sin equipo es la de siempre, y el replay dorado sigue valiendo
+        // sin regrabarlo.
+        if self.equipo != Equipo::default() {
+            let [t, a] = self.equipo.a_bytes();
+            h.write_u64(u64::from(t) << 8 | u64::from(a));
+        }
 
         h.finish()
     }
@@ -1664,6 +1719,142 @@ mod tests {
         assert!(!w.defeat);
         assert_eq!(w.boss.phase, 0, "y el jefe empieza entero");
         assert_eq!(w.bullets.live_count(), 0);
+    }
+
+    // --- El equipo ---
+
+    use crate::equipo::{Amuleto, Tiro};
+
+    fn con(tiro: Tiro, amuleto: Amuleto) -> World {
+        let mut w = mundo(0);
+        w.equipo = Equipo { tiro, amuleto };
+        w
+    }
+
+    /// Dano que hace un tiro en `ticks` disparando desde `(dx, dy)` del jefe.
+    fn dano_de(tiro: Tiro, dx: f32, dy: f32, ticks: usize) -> i32 {
+        let mut w = con(tiro, Amuleto::Ninguno);
+        w.boss.hp = 1_000_000;
+        for _ in 0..ticks {
+            w.player.pos = w.boss.pos + Vec2::new(dx, dy);
+            w.step(DISPARAR);
+        }
+        1_000_000 - w.boss.hp
+    }
+
+    #[test]
+    fn cada_tiro_sale_como_dice() {
+        let rafaga = |tiro| {
+            let mut w = con(tiro, Amuleto::Ninguno);
+            w.step(DISPARAR);
+            w.player_shots.iter_live().collect::<Vec<_>>()
+        };
+        let aguja = rafaga(Tiro::Aguja);
+        assert_eq!(aguja.len(), 2);
+        assert!(aguja.iter().all(|b| b.vel == Vec2::new(0.0, -SHOT_SPEED)));
+
+        let abanico = rafaga(Tiro::Abanico);
+        assert_eq!(abanico.len(), 3, "tres a la vez");
+        let mut xs: Vec<f32> = abanico.iter().map(|b| b.vel.x).collect();
+        xs.sort_by(f32::total_cmp);
+        assert!(
+            xs[0] < 0.0 && xs[1] == 0.0 && xs[2] > 0.0,
+            "en abanico: {xs:?}"
+        );
+
+        let castanuela = rafaga(Tiro::Castanuela);
+        assert_eq!(castanuela.len(), 1, "un solo golpe");
+        assert_eq!(castanuela[0].kind, KIND_MEDIUM, "y gordo");
+
+        // La castanuela no llega lejos; la aguja, si.
+        for (tiro, vivas) in [(Tiro::Castanuela, false), (Tiro::Aguja, true)] {
+            let mut w = con(tiro, Amuleto::Ninguno);
+            w.step(DISPARAR);
+            correr(&mut w, NADA, 30);
+            assert_eq!(w.player_shots.live_count() > 0, vivas, "{tiro:?}");
+        }
+
+        // La serpentina se tuerce hacia el jefe, que esta a la izquierda.
+        let mut w = con(Tiro::Serpentina, Amuleto::Ninguno);
+        w.player.pos = w.boss.pos + Vec2::new(200.0, 400.0);
+        w.step(DISPARAR);
+        correr(&mut w, NADA, 10);
+        assert!(w.player_shots.iter_live().all(|b| b.vel.x < 0.0));
+    }
+
+    #[test]
+    fn cada_tiro_pega_lo_suyo() {
+        // De cerca: la castanuela pega mas que la aguja, el abanico casi lo
+        // mismo y la serpentina la mitad.
+        let aguja = dano_de(Tiro::Aguja, 0.0, 150.0, 120);
+        assert!(dano_de(Tiro::Castanuela, 0.0, 150.0, 120) > aguja);
+        let abanico = dano_de(Tiro::Abanico, 0.0, 150.0, 120);
+        assert!(
+            abanico > aguja * 8 / 10 && abanico <= aguja,
+            "{abanico} vs {aguja}"
+        );
+        assert_eq!(dano_de(Tiro::Serpentina, 0.0, 150.0, 120) * 2, aguja);
+        // De lejos: la castanuela no llega y del abanico entra el del centro.
+        assert_eq!(dano_de(Tiro::Castanuela, 0.0, 500.0, 120), 0);
+        assert!(
+            dano_de(Tiro::Abanico, 0.0, 450.0, 120) * 2 < dano_de(Tiro::Aguja, 0.0, 450.0, 120)
+        );
+        // Y a un lado: la aguja no le da y la serpentina si.
+        assert_eq!(dano_de(Tiro::Aguja, 200.0, 350.0, 120), 0);
+        assert!(dano_de(Tiro::Serpentina, 200.0, 350.0, 120) > 0);
+    }
+
+    #[test]
+    fn el_relicario_da_una_vida_mas_tambien_al_reintentar() {
+        let equipo = Equipo {
+            amuleto: Amuleto::Relicario,
+            ..Default::default()
+        };
+        let mut w = World::empezar_con(0, Mode::Flight, 0, equipo);
+        assert_eq!(w.lives, STARTING_LIVES + 1);
+        w.lives = 0;
+        w.defeat = true;
+        w.retry_current_boss();
+        assert_eq!(w.lives, STARTING_LIVES + 1);
+        assert_eq!(
+            World::empezar_con(0, Mode::Flight, 0, Equipo::default()).lives,
+            STARTING_LIVES
+        );
+    }
+
+    #[test]
+    fn el_guante_deja_el_parry_abierto_mas_tiempo() {
+        for (amuleto, ticks) in [
+            (Amuleto::Ninguno, PARRY_WINDOW_TICKS),
+            (Amuleto::Guante, 12),
+        ] {
+            let mut w = con(Tiro::Aguja, amuleto);
+            w.step(PARRY);
+            let mut abierto = 0;
+            while w.player.is_parrying() {
+                abierto += 1;
+                w.step(NADA);
+            }
+            assert_eq!(abierto, ticks, "{amuleto:?}");
+        }
+    }
+
+    #[test]
+    fn el_corse_deja_pasar_una_bala_que_a_pelo_mata() {
+        // Una bala pequena (radio 4) a 6 del centro: dentro de 4 + 2,5 y fuera
+        // de 4 + 1,5.
+        for (amuleto, muere) in [(Amuleto::Ninguno, true), (Amuleto::Corse, false)] {
+            let mut w = con(Tiro::Aguja, amuleto);
+            let pos = w.player.pos + Vec2::new(6.0, 0.0);
+            w.bullets
+                .spawn(crate::bullets::Spawn {
+                    pos,
+                    ..Default::default()
+                })
+                .unwrap();
+            w.step(NADA);
+            assert_eq!(w.events.player_died, muere, "{amuleto:?}");
+        }
     }
 }
 

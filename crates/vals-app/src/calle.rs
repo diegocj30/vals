@@ -19,7 +19,7 @@
 use macroquad::prelude::*;
 use vals_core::math::{PI, sin_cos};
 use vals_core::paseo::{
-    CADENCIA_CAMARERO, Enemigo, Forma, PIES, Paseo, SUELO_Y, Tipo, VISTA_H, VISTA_W,
+    CADENCIA_CAMARERO, Enemigo, Forma, PIES, Paseo, RADIO_FICHA, SUELO_Y, Tipo, VISTA_H, VISTA_W,
 };
 use vals_core::player::{PARRY_RADIUS, SUPER_TICKS};
 use vals_core::rng::Pcg32;
@@ -30,6 +30,7 @@ use crate::calle_montmartre;
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{Instrumento, arco, circulo, linea, musico, rect, tri};
 use crate::fuentes::{self, Cara};
+use crate::modista;
 use crate::paleta::{self, LUZ, ORO, PAPEL, TINTA};
 use crate::protagonista;
 use crate::skeleton;
@@ -134,6 +135,7 @@ pub fn dibujar(p: &Paseo, alpha: f32, l: &Layout, pulso: f32, baile: usize) {
             puerta(p, &calle, alpha, t, tintas);
         }
     }
+    fichas(p, &calle, t);
     for e in &p.enemigos {
         enemigo(e, &calle, p.tick, t, p.def.tiempo, tintas);
     }
@@ -167,6 +169,19 @@ pub fn encima(p: &Paseo, l: &Layout) {
         &p.jugadora,
     );
     camino(p, l);
+
+    // Las fichas del paseo arriba a la izquierda: llenas las que ya no estan
+    // en la calle, huecas las que quedan. Cuantas hay se sabe desde el primer
+    // segundo, que es lo que invita a buscarlas.
+    for i in 0..p.fichas.len() {
+        let c = o + vec2(26.0 + i as f32 * 24.0, 30.0);
+        if p.fichas[i] {
+            modista::ficha(c, 9.0, 0.0);
+        } else {
+            draw_circle(c.x, c.y, 9.0, fade(TINTA, 0.45));
+            draw_circle_lines(c.x, c.y, 9.0, 1.6, fade(ORO, 0.8));
+        }
+    }
 
     // El nombre del paseo arriba a la derecha, con sombra de tinta, como el
     // del baile en el combate.
@@ -1065,6 +1080,23 @@ fn platos(p: &Paseo, l: &Layout, t: f32, azul: Color) {
                 fade(WHITE, 0.4 + 0.4 * k),
             );
         }
+    }
+}
+
+/// Las fichas que quedan en la calle. Flotan y dan vueltas
+/// sobre si mismas, cada una a su paso, con un halo de oro: tienen que verse
+/// desde lejos aunque esten en un sitio dificil, que el reto es llegar, no
+/// encontrarlas.
+fn fichas(p: &Paseo, l: &Layout, t: f32) {
+    for (i, &(x, y)) in p.def.fichas.iter().enumerate() {
+        if p.fichas[i] {
+            continue;
+        }
+        let flota = (t * 0.06 + i as f32 * 1.7).sin() * 3.0;
+        let c = l.to_screen(x, y + flota);
+        draw_circle(c.x, c.y, l.len(22.0), fade(ORO, 0.10));
+        draw_circle(c.x, c.y, l.len(16.0), fade(ORO, 0.12));
+        modista::ficha(c, l.len(RADIO_FICHA), t * 0.05 + i as f32);
     }
 }
 

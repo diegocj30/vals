@@ -117,4 +117,15 @@
     (tipo: Compadrito, x: 6720.0),
     (tipo: Nota, x: 6850.0, y: 300.0, rosa: true),
   ],
+  // Las fichas. Se quedan al llegar a la puerta, no al cogerlas.
+  fichas: [
+    // En el techo de la marquesina del tranvia.
+    (850.0, 300.0),
+    // En la acera, entre dos compadritos.
+    (1450.0, 435.0),
+    // En el bote amarrado sobre el Riachuelo: hay que caer en el, no saltarlo.
+    (3970.0, 395.0),
+    // Detras de la ultima florista, en su balcon de Caminito.
+    (6535.0, 305.0),
+  ],
 )

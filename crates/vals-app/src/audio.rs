@@ -128,9 +128,10 @@ pub enum Sfx {
     CaeTango,
     CaeCharleston,
     CaeCancan,
+    Ficha,
 }
 
-const TODOS: [Sfx; 14] = [
+const TODOS: [Sfx; 15] = [
     Sfx::Disparo,
     Sfx::Parry,
     Sfx::Graze,
@@ -145,6 +146,7 @@ const TODOS: [Sfx; 14] = [
     Sfx::CaeTango,
     Sfx::CaeCharleston,
     Sfx::CaeCancan,
+    Sfx::Ficha,
 ];
 
 impl Sfx {
@@ -249,6 +251,12 @@ impl Sfx {
                 }
                 v
             }
+            // Si y mi, la segunda encima de la primera: el tintineo de una
+            // moneda de toda la vida, en seno para que sea laton y no lata.
+            Sfx::Ficha => vec![
+                Voz::new(Sine, 988.0, 988.0, 0.08, 0.22, 3.0),
+                Voz::new(Sine, 1319.0, 1319.0, 0.30, 0.24, 2.2).tras(0.07),
+            ],
         }
     }
 }
@@ -401,6 +409,9 @@ impl Audio {
         }
         if ev.super_fired {
             self.play(Sfx::Super, 1.0);
+        }
+        if ev.fichas > 0 {
+            self.play(Sfx::Ficha, 1.0);
         }
         if ev.player_died {
             self.play(Sfx::Muerte, 1.0);

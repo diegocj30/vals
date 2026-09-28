@@ -398,8 +398,17 @@ impl Player {
     /// `prev` es el input del tick anterior, y hace falta para detectar
     /// flancos: el dash reacciona a la pulsacion, no a mantener la tecla.
     ///
-    /// `gravity` decide si se juega volando por la arena o pisando el suelo.
-    pub(crate) fn update(&mut self, input: InputFrame, prev: InputFrame, gravity: bool) {
+    /// `gravity` decide si se juega volando por la arena o pisando el suelo, y
+    /// `ventana_parry` lo que queda abierto el parry, que es lo que cambia el
+    /// guante. Se pasa en vez de guardarlo en la jugadora
+    /// porque la jugadora se rehace al reintentar, y el equipo no.
+    pub(crate) fn update(
+        &mut self,
+        input: InputFrame,
+        prev: InputFrame,
+        gravity: bool,
+        ventana_parry: u32,
+    ) {
         self.prev_pos = self.pos;
 
         // Los contadores bajan al PRINCIPIO del tick, antes de poder arrancar
@@ -437,7 +446,7 @@ impl Player {
             && !prev.is_down(InputFrame::PARRY)
             && self.parry_cooldown == 0
         {
-            self.parry_window = PARRY_WINDOW_TICKS;
+            self.parry_window = ventana_parry;
             self.parry_cooldown = PARRY_COOLDOWN_TICKS;
         }
 

@@ -14,14 +14,24 @@
 //!
 //! Y con la disciplina del replay: **un guardado ilegible no revienta**, vuelve
 //! al valor por defecto. Perder el progreso es malo; no arrancar es peor.
+//!
+//! Las fichas, las compras y el equipo van en la misma linea,
+//! cada una con su prefijo (`ficha:`, `compra:`, `tiro:`, `amuleto:`). Asi la
+//! version no sube: un guardado de antes se lee igual —con cero fichas y nada
+//! comprado— y uno de ahora abierto por una version vieja solo le da nombres de
+//! baile que no existen, que ignora.
 
-/// Cabecera del formato. Si cambia lo que se guarda, sube el numero y los
-/// guardados viejos se ignoran solos.
+use vals_core::Equipo;
+use vals_core::equipo::{Amuleto, Tiro};
+
+/// Cabecera del formato. Si cambia lo que se guarda **de forma que lo viejo no
+/// se entienda**, sube el numero y los guardados viejos se ignoran solos.
 const MAGIA: &str = "VALS1";
 
-/// Tope de lo que se lee. Con ocho bailes sobra de largo, y pone un limite a lo
-/// que un `localStorage` manipulado a mano puede meter en memoria.
-const TOPE: usize = 1024;
+/// Tope de lo que se lee. Con ocho bailes y sus fichas sobra de largo (hoy no
+/// pasa de 800), y pone un limite a lo que un `localStorage` manipulado a mano
+/// puede meter en memoria.
+const TOPE: usize = 4096;
 
 #[cfg(target_arch = "wasm32")]
 unsafe extern "C" {
@@ -36,6 +46,15 @@ unsafe extern "C" {
 pub struct Guardado {
     /// Los bailes que ya se han sacado, por nombre.
     pub bailados: Vec<String>,
+    /// Las fichas que ya son tuyas, como `paseo:indice`: el nombre del paseo y
+    /// su sitio en la lista del RON. Por nombre, igual que los bailes.
+    pub fichas: Vec<String>,
+    /// Lo comprado a la modista, por nombre. Lo que se tiene en el bolsillo no
+    /// se guarda: sale de restar lo comprado a lo cogido, y asi no puede
+    /// desincronizarse.
+    pub compras: Vec<String>,
+    /// Lo que se lleva puesto.
+    pub equipo: Equipo,
 }
 
 impl Guardado {
@@ -57,23 +76,56 @@ impl Guardado {
         self.bailados.iter().any(|n| n == nombre)
     }
 
+    pub fn tiene_ficha(&self, paseo: &str, i: usize) -> bool {
+        let clave = clave_ficha(paseo, i);
+        self.fichas.contains(&clave)
+    }
+
+    pub fn marcar_ficha(&mut self, paseo: &str, i: usize) {
+        if !self.tiene_ficha(paseo, i) {
+            self.fichas.push(clave_ficha(paseo, i));
+        }
+    }
+
+    pub fn compro(&self, nombre: &str) -> bool {
+        self.compras.iter().any(|c| c == nombre)
+    }
+
     /// Una linea: la cabecera y los nombres separados por punto y coma.
     ///
     /// Es texto a proposito. Un guardado que se puede abrir con el bloc de
     /// notas se depura mirandolo, y aqui no hay nada que proteger.
-    fn a_texto(&self) -> String {
+    pub(crate) fn a_texto(&self) -> String {
         let mut out = String::from(MAGIA);
-        for n in &self.bailados {
+        let mut poner = |prefijo: &str, n: &str| {
             // El punto y coma separa, asi que un nombre que lo lleve rompería
             // el formato. Ningun baile se llama asi, pero mas vale quitarlo que
             // fiarse.
             out.push(';');
+            out.push_str(prefijo);
             out.push_str(&n.replace(';', " "));
+        };
+        for n in &self.bailados {
+            poner("", n);
+        }
+        for n in &self.fichas {
+            poner(FICHA, n);
+        }
+        for n in &self.compras {
+            poner(COMPRA, n);
+        }
+        // Lo de serie no se escribe: un guardado sin equipo sale igual que
+        // antes de que lo hubiera.
+        if self.equipo.tiro != Tiro::default() {
+            poner(TIRO, self.equipo.tiro.nombre());
+        }
+        if self.equipo.amuleto != Amuleto::default() {
+            poner(AMULETO, self.equipo.amuleto.nombre());
         }
         out
     }
 
-    fn desde_texto(texto: &str) -> Self {
+    pub(crate) fn desde_texto(texto: &str) -> Self {
         let texto = texto.trim();
         let mut trozos = texto.split(';');
         if trozos.next() != Some(MAGIA) {
@@ -81,14 +133,33 @@ impl Guardado {
             // cero en vez de adivinar.
             return Self::default();
         }
-        Self {
-            bailados: trozos
-                .map(str::trim)
-                .filter(|n| !n.is_empty())
-                .map(str::to_owned)
-                .collect(),
+        let mut g = Self::default();
+        for n in trozos.map(str::trim).filter(|n| !n.is_empty()) {
+            if let Some(f) = n.strip_prefix(FICHA) {
+                g.fichas.push(f.to_owned());
+            } else if let Some(c) = n.strip_prefix(COMPRA) {
+                g.compras.push(c.to_owned());
+            } else if let Some(t) = n.strip_prefix(TIRO) {
+                // Un nombre que no se conoce (de una version con mas tiros, o
+                // tocado a mano) deja el de serie: mejor la aguja que nada.
+                g.equipo.tiro = Tiro::por_nombre(t).unwrap_or_default();
+            } else if let Some(a) = n.strip_prefix(AMULETO) {
+                g.equipo.amuleto = Amuleto::por_nombre(a).unwrap_or_default();
+            } else {
+                g.bailados.push(n.to_owned());
+            }
         }
+        g
     }
+}
+
+const FICHA: &str = "ficha:";
+const COMPRA: &str = "compra:";
+const TIRO: &str = "tiro:";
+const AMULETO: &str = "amuleto:";
+
+fn clave_ficha(paseo: &str, i: usize) -> String {
+    format!("{paseo}:{i}")
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +289,42 @@ mod tests {
         g.marcar("El Vals; y algo mas");
         let leido = Guardado::desde_texto(&g.a_texto());
         assert_eq!(leido.bailados.len(), 1);
+    }
+
+    #[test]
+    fn las_fichas_las_compras_y_el_equipo_se_vuelven_a_leer() {
+        let mut g = Guardado::default();
+        g.marcar("El Vals");
+        g.marcar_ficha("El paseo de Viena", 2);
+        g.marcar_ficha("El paseo de Viena", 2);
+        g.compras.push("Abanico".into());
+        g.equipo.tiro = Tiro::Abanico;
+        g.equipo.amuleto = Amuleto::Guante;
+        let leido = Guardado::desde_texto(&g.a_texto());
+        assert_eq!(leido, g);
+        assert_eq!(leido.fichas.len(), 1, "una ficha es una sola vez");
+        assert!(leido.tiene_ficha("El paseo de Viena", 2));
+        assert!(!leido.tiene_ficha("El paseo de Viena", 0));
+        assert!(leido.compro("Abanico"));
+        assert!(!leido.tiene("ficha:El paseo de Viena:2"), "no es un baile");
+    }
+
+    #[test]
+    fn un_guardado_de_antes_de_las_fichas_carga_sin_nada() {
+        // Tal cual lo escribia la version anterior.
+        let g = Guardado::desde_texto("VALS1;El Vals;El paseo de Viena");
+        assert!(g.tiene("El Vals") && g.tiene("El paseo de Viena"));
+        assert!(g.fichas.is_empty() && g.compras.is_empty());
+        assert_eq!(g.equipo, Equipo::default());
+        // Y sin fichas ni equipo se escribe igual que entonces.
+        assert_eq!(g.a_texto(), "VALS1;El Vals;El paseo de Viena");
+    }
+
+    #[test]
+    fn un_equipo_que_no_existe_cae_en_el_de_serie() {
+        let g = Guardado::desde_texto("VALS1;tiro:Trabuco;amuleto:Herradura");
+        assert_eq!(g.equipo, Equipo::default());
+        assert!(g.bailados.is_empty());
     }
 
     #[test]

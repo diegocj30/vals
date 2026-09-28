@@ -272,6 +272,23 @@ impl Bullets {
         }
     }
 
+    /// Tuerce cada bala viva hacia `objetivo`, sin cambiar su velocidad.
+    ///
+    /// Solo lo usa la serpentina, contra el jefe, y va aparte de `update` a
+    /// proposito: el bucle caliente de las balas del jefe no paga ni una
+    /// comparacion por un tiro que la mayoria de partidas no lleva.
+    pub(crate) fn perseguir(&mut self, objetivo: Vec2) {
+        for i in 0..self.high_water {
+            if !self.alive[i] {
+                continue;
+            }
+            let p = Vec2::new(self.pos_x[i], self.pos_y[i]);
+            let v = crate::equipo::guiar(Vec2::new(self.vel_x[i], self.vel_y[i]), objetivo - p);
+            self.vel_x[i] = v.x;
+            self.vel_y[i] = v.y;
+        }
+    }
+
     /// Primera bala que solapa el circulo `(p, r)`.
     ///
     /// Fuerza bruta sobre arrays contiguos, y a proposito: el jugador es **un

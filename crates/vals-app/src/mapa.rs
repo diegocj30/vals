@@ -13,11 +13,12 @@
 //! la perspectiva, los caminos y los monumentos solo existen aqui.
 
 use macroquad::prelude::*;
-use vals_core::pista::{ENTRADA, Nodo, Pista};
+use vals_core::pista::{ENTRADA, MODISTA, Nodo, Pista};
 use vals_core::{ARENA_H, ARENA_W};
 
 use crate::draw::{Layout, METER_FULL, TEXT_DIM, TITLE, fade, paspartu};
 use crate::fuentes::{self, Cara};
+use crate::modista;
 use crate::paleta::{self, LUZ, ORO, PAPEL, PARED, TARIMA, TINTA, TINTA_TENUE, VETA};
 use crate::protagonista;
 use crate::skeleton;
@@ -602,9 +603,79 @@ fn escarapela(c: Vec2, r: f32, tinta: Color) {
     lp.disco(0.0, 0.0, 5.0, tinta);
 }
 
+/// La tienda de la modista: una fachada verde con su toldo a
+/// rayas, el escaparate encendido con un vestido dentro y una ficha de oro
+/// colgando de la muestra, que dice de un vistazo que ahi se paga con fichas.
+fn tienda(l: &Layout, t: f32, cerca: bool) {
+    let (s, escala) = suelo(l, MODISTA.x, MODISTA.y);
+    let k = l.len(TAMANO) * escala;
+    let foco = if cerca {
+        0.6 + 0.4 * (0.5 + 0.5 * (t * 0.08).sin())
+    } else {
+        0.45
+    };
+    draw_ellipse(s.x, s.y, 46.0 * k, 12.0 * k, 0.0, fade(FOCO, foco));
+    let lp = Lapiz::new(s, k, false);
+    let verde = color_u8!(30, 54, 46, 255);
+    let carmin = color_u8!(176, 44, 58, 255);
+
+    lp.caja(-34.0, -52.0, 68.0, 52.0, verde);
+    lp.caja(-37.0, -57.0, 74.0, 6.0, TINTA);
+    // El escaparate, con el vestido de ella dentro.
+    lp.caja(-28.0, -34.0, 36.0, 28.0, lp.luz(t));
+    lp.tri_tinta(
+        (-10.0, -28.0),
+        (-17.0, -8.0),
+        (-3.0, -8.0),
+        protagonista::VESTIDO,
+    );
+    lp.disco(-10.0, -28.0, 2.2, protagonista::LAZO);
+    // La puerta.
+    lp.caja(14.0, -30.0, 13.0, 30.0, color_u8!(98, 50, 40, 255));
+    lp.disco(24.0, -15.0, 1.0, ORO);
+    // El toldo: rayas en triangulo, colgando por delante.
+    for i in 0..8 {
+        let x = -36.0 + i as f32 * 9.0;
+        let color = if i % 2 == 0 { PAPEL } else { carmin };
+        lp.tri((x, -46.0), (x + 9.0, -46.0), (x + 4.5, -38.0), color);
+        lp.caja(x, -50.0, 9.0, 4.0, color);
+    }
+    // La muestra: un brazo de hierro y una ficha colgando que da vueltas.
+    lp.linea((34.0, -46.0), (46.0, -46.0), 1.6, TINTA);
+    lp.linea((44.0, -46.0), (44.0, -42.0), 1.0, TINTA);
+    modista::ficha(lp.p(44.0, -36.0), 6.0 * k, t * 0.04);
+
+    // La placa, como la de un baile.
+    placa(s, "La modista", false);
+}
+
+/// La placa de papel con un nombre debajo de un sitio del mapa. Devuelve su
+/// rectangulo, que es donde se cuelga lo demas.
+fn placa(s: Vec2, nombre: &str, cerrado: bool) -> Rect {
+    // Va en Barlow y no en Poiret: la Poiret es de trazo tan fino que a este
+    // tamano, en tinta sobre papel, se quedaba en gris.
+    let tam = 16.0;
+    let m = fuentes::medir(nombre, tam, Cara::Cuerpo);
+    let (w, h) = (m.width + 14.0, tam + 6.0);
+    let (x, y) = (s.x - w * 0.5, s.y + 6.0);
+    let (fondo, letra) = if cerrado {
+        (TINTA_TENUE, PAPEL)
+    } else {
+        (PAPEL, TINTA)
+    };
+    draw_rectangle(x - 2.0, y - 2.0, w + 4.0, h + 4.0, TINTA);
+    draw_rectangle(x, y, w, h, fondo);
+    // Dos pasadas separadas medio pixel: una negrita de imprenta. A este
+    // tamano la letra sola salia gris.
+    for dx in [0.0, 0.6] {
+        fuentes::centrado(nombre, s.x + dx, y + tam * 0.9, tam, Cara::Cuerpo, letra);
+    }
+    Rect::new(x, y, w, h)
+}
+
 /// Un baile plantado en la pista: el foco, su monumento, su placa y lo que
 /// diga su estado.
-fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32) {
+fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32, fichas: Option<(usize, usize)>) {
     let (s, escala) = suelo(l, nodo.pos.x, nodo.pos.y);
     let k = l.len(TAMANO) * escala;
     let cerrado = !abierto;
@@ -647,32 +718,8 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32) {
     // lee igual sobre la tarima oscura que sobre cualquier monumento. Un baile
     // cerrado no dice lo dificil que es —eso se descubre bailandolo—, solo que
     // esta cerrado.
-    // Va en Barlow y no en Poiret: la Poiret es de trazo tan fino que a este
-    // tamano, en tinta sobre papel, se quedaba en gris.
-    let tam = 16.0;
-    let m = fuentes::medir(&nodo.nombre, tam, Cara::Cuerpo);
-    let (w, h) = (m.width + 14.0, tam + 6.0);
-    let (x, y) = (s.x - w * 0.5, s.y + 6.0);
-    let (fondo, letra) = if cerrado {
-        (TINTA_TENUE, PAPEL)
-    } else {
-        (PAPEL, TINTA)
-    };
-    draw_rectangle(x - 2.0, y - 2.0, w + 4.0, h + 4.0, TINTA);
-    draw_rectangle(x, y, w, h, fondo);
+    let Rect { x, y, w, h } = placa(s, &nodo.nombre, cerrado);
     modo(vec2(x - 13.0, y + h * 0.5), nodo.suelo, cerrado);
-    // Dos pasadas separadas medio pixel: una negrita de imprenta. A este
-    // tamano la letra sola salia gris.
-    for dx in [0.0, 0.6] {
-        fuentes::centrado(
-            &nodo.nombre,
-            s.x + dx,
-            y + tam * 0.9,
-            tam,
-            Cara::Cuerpo,
-            letra,
-        );
-    }
 
     if nodo.vencido {
         escarapela(vec2(x + w, y + h * 0.5), 9.0, tinta);
@@ -684,6 +731,22 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32) {
             Cara::Cuerpo,
             fade(LUZ, 0.85),
         );
+    }
+
+    // Las fichas de su paseo, si ya se anduvo: llenas las tuyas y huecas las
+    // que quedan en la calle. Es lo que dice, sin acercarse, a donde volver.
+    if let Some((tuyas, total)) = fichas {
+        let paso = 15.0;
+        let x0 = s.x - paso * (total as f32 - 1.0) * 0.5;
+        let fy = y + h + if nodo.vencido { 30.0 } else { 16.0 };
+        for i in 0..total {
+            let c = vec2(x0 + paso * i as f32, fy);
+            if i < tuyas {
+                modista::ficha(c, 5.5, 0.0);
+            } else {
+                draw_circle_lines(c.x, c.y, 5.5, 1.5, fade(ORO, 0.6));
+            }
+        }
     }
 }
 
@@ -717,8 +780,19 @@ fn dibujar_bailarina(p: &Pista, alpha: f32, t: f32, l: &Layout) {
     protagonista::dibujar(&pose, &gesto, centro, &ls, 1.0, false);
 }
 
-/// El mapa entero.
-pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
+/// Lo que el mapa cuenta de las fichas.
+pub struct Fichas {
+    /// Las que quedan en el bolsillo.
+    pub bolsillo: u32,
+    /// Por nodo: si su paseo ya se anduvo, cuantas de sus fichas son tuyas y
+    /// cuantas tiene. Un paseo andado es uno al que se puede volver a por
+    /// ellas.
+    pub paseos: Vec<Option<(usize, usize)>>,
+}
+
+/// El mapa entero. `teclas` son los nombres de aceptar y de dash en lo que se
+/// este usando, para que la ayuda diga el boton que hay que pulsar.
+pub fn pista(p: &Pista, alpha: f32, l: &Layout, fichas: &Fichas, teclas: [&str; 2]) {
     clear_background(PAPEL);
     let o = l.to_screen(0.0, 0.0);
     draw_rectangle(o.x, o.y, l.len(ARENA_W), l.len(ARENA_H), TARIMA);
@@ -754,6 +828,7 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
     enum Pieza {
         Baile(usize),
         Atrezo(usize),
+        Modista,
     }
     let mut orden: Vec<(f32, Pieza)> = p
         .nodos
@@ -766,12 +841,17 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
                 .enumerate()
                 .map(|(k, a)| (a.1, Pieza::Atrezo(k))),
         )
+        .chain([(MODISTA.y, Pieza::Modista)])
         .collect();
     orden.sort_by(|a, b| a.0.total_cmp(&b.0));
     let ella = p.render_pos(alpha).y;
     let detras = orden.iter().take_while(|(y, _)| *y <= ella).count();
     let pinta = |pieza: &Pieza| match *pieza {
-        Pieza::Baile(i) => dibujar_nodo(l, &p.nodos[i], p.abierto(i), t),
+        Pieza::Baile(i) => {
+            let suyas = fichas.paseos.get(i).copied().flatten();
+            dibujar_nodo(l, &p.nodos[i], p.abierto(i), t, suyas);
+        }
+        Pieza::Modista => tienda(l, t, p.en_la_modista()),
         Pieza::Atrezo(k) => {
             let (x, y, que) = ATREZO[k];
             dibujar_atrezo(l, x, y, que, t);
@@ -796,7 +876,15 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
     let cuenta = format!("{hechos} / {} bailes", p.nodos.len());
     fuentes::centrado(&cuenta, cx, o.y + 66.0, 15.0, Cara::Cuerpo, TEXT_DIM);
 
+    // El bolsillo, arriba a la derecha: la ficha dando vueltas y cuantas hay.
+    let b = l.to_screen(ARENA_W - 30.0, 0.0);
+    let n = fichas.bolsillo.to_string();
+    let ancho = fuentes::medir(&n, 22.0, Cara::Cuerpo).width;
+    modista::ficha(vec2(b.x - ancho - 16.0, o.y + 36.0), 10.0, t * 0.05);
+    fuentes::derecha(&n, b.x, o.y + 44.0, 22.0, Cara::Cuerpo, METER_FULL);
+
     let pie_y = l.to_screen(0.0, ARENA_H).y - 16.0;
+    let [ok, dash] = teclas;
     let aviso = match p.nodo_cerca() {
         Some(i) if p.abierto(i) => {
             let donde = if p.nodos[i].suelo {
@@ -804,7 +892,14 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
             } else {
                 "volando"
             };
-            format!("Z    bailar {}, {donde}", p.nodos[i].nombre)
+            let bailar = format!("{ok}    bailar {}, {donde}", p.nodos[i].nombre);
+            // Si su paseo ya se anduvo, se puede volver a el a por fichas.
+            match fichas.paseos.get(i).copied().flatten() {
+                Some((tuyas, total)) => {
+                    format!("{bailar}     {dash}    pasear ({tuyas}/{total} fichas)")
+                }
+                None => bailar,
+            }
         }
         // Un baile cerrado dice **por que** lo esta. "Bloqueado" a secas manda
         // a probar cosas al azar; decir que falta el nivel de antes no.
@@ -812,9 +907,10 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout) {
             "{} todavia no: antes hay que sacar lo anterior",
             p.nodos[i].nombre
         ),
+        None if p.en_la_modista() => format!("{ok}    entrar a la modista"),
         None => "flechas andar    ESC menu".to_string(),
     };
-    let color = if p.nodo_cerca().is_some_and(|i| p.abierto(i)) {
+    let color = if p.nodo_cerca().is_some_and(|i| p.abierto(i)) || p.en_la_modista() {
         // Late, para que se vea que ahi hay algo que hacer.
         let pulso = 0.7 + 0.3 * (t * 0.12).sin();
         fade(METER_FULL, pulso)
@@ -841,6 +937,12 @@ mod tests {
             .collect();
         let p = Pista::new(bailes);
         for (x, y, _) in ATREZO {
+            // Ni la tienda de la modista, que es mas ancha que un baile.
+            let d = vec2(x - MODISTA.x, y - MODISTA.y).length();
+            assert!(
+                d > 80.0,
+                "el atrezo en ({x}, {y}) pisa la modista (a {d:.0})"
+            );
             for n in &p.nodos {
                 let d = vec2(x - n.pos.x, y - n.pos.y).length();
                 assert!(

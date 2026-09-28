@@ -36,6 +36,8 @@
 //                       Nota (vuela hacia la izquierda en onda; y = altura).
 //                 rosa: true solo en notas: se pueden parriar.
 //                 Despiertan cuando la jugadora esta a 640 de su x.
+//   fichas        (x, y) del centro de cada ficha. Se guardan
+//                 por su sitio en esta lista: las nuevas, AL FINAL.
 (
   nombre: "El paseo de Viena",
   jefe: "El Vals",
@@ -97,5 +99,17 @@
     (tipo: Pareja, x: 5950.0),
     (tipo: Nota, x: 6100.0, y: 290.0, rosa: true),
     (tipo: Nota, x: 6160.0, y: 330.0),
+  ],
+  // Las fichas. Una en el camino, una que pide subir y otra que pide
+  // arriesgar. Se quedan al llegar a la puerta, no al cogerlas.
+  fichas: [
+    // En la acera del Ring, para que la primera se coja sin buscarla.
+    (620.0, 435.0),
+    // Encima del balcon del Ring: desde la acera no se llega, desde el
+    // balcon si.
+    (1055.0, 245.0),
+    // A ras de agua, en mitad del primer canal. El salto pasa por encima:
+    // hay que saltar y dar el dash enseguida.
+    (3440.0, 410.0),
   ],
 )

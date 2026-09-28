@@ -776,9 +776,20 @@ fn draw_hp_bar(world: &World, l: &Layout) {
 fn draw_player_shots(world: &World, l: &Layout) {
     for b in world.player_shots.iter_live() {
         let s = l.to_screen(b.pos.x, b.pos.y);
-        let largo = l.len(14.0);
-        draw_line(s.x, s.y - largo, s.x, s.y + largo, 2.0, fade(SHOT, 0.85));
-        draw_circle(s.x, s.y, l.len(2.5), SHOT);
+        // A lo largo de por donde va: el abanico sale en diagonal y la
+        // serpentina se tuerce. La castanuela es gorda.
+        let d = b.vel.normalize_or_zero() * l.len(14.0);
+        let gorda = b.kind != vals_core::bullets::KIND_NEEDLE;
+        let (grueso, r) = if gorda { (5.0, 6.0) } else { (2.0, 2.5) };
+        draw_line(
+            s.x - d.x,
+            s.y - d.y,
+            s.x + d.x,
+            s.y + d.y,
+            grueso,
+            fade(SHOT, 0.85),
+        );
+        draw_circle(s.x, s.y, l.len(r), SHOT);
     }
 }
 

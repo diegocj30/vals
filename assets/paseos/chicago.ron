@@ -112,4 +112,16 @@
     (tipo: Nota, x: 6780.0, y: 330.0),
     (tipo: Saltarin, x: 6870.0),
   ],
+  // Las fichas. Se quedan al llegar a la puerta, no al cogerlas.
+  fichas: [
+    // En State Street, para ir abriendo boca.
+    (600.0, 435.0),
+    // Encima del deposito de agua de la primera azotea.
+    (2540.0, 115.0),
+    // En el hueco entre las dos primeras azoteas, a la altura del tejado. El
+    // salto pasa muy por encima: se coge con un dash desde el borde.
+    (2880.0, 205.0),
+    // Al final del primer tramo del elevado, detras de la flapper.
+    (4975.0, 295.0),
+  ],
 )

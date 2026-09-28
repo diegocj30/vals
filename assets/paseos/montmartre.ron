@@ -131,4 +131,18 @@
     (tipo: Nota, x: 7010.0, y: -80.0, rosa: true),
     (tipo: Corista, x: 7100.0),
   ],
+  // Las fichas. Se quedan al llegar a la puerta, no al cogerlas.
+  fichas: [
+    // En el boulevard.
+    (600.0, 435.0),
+    // En el balcon del pintor de la escalera, detras de el.
+    (2945.0, 60.0),
+    // Sobre el primer vacio de los tejados, a ras de tejado: el salto pasa
+    // por encima, y se coge con un dash desde el borde.
+    (3875.0, 190.0),
+    // En la mesa de la terraza del Tertre, detras de la botella.
+    (5710.0, 20.0),
+    // En la cumbre, detras del ultimo pintor.
+    (6550.0, -165.0),
+  ],
 )

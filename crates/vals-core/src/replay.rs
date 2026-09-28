@@ -16,13 +16,17 @@
 
 use crate::boss::DEFAULT_BOSS_RONS;
 use crate::hash::Fnv1a;
-use crate::{InputFrame, Mode, World};
+use crate::{Equipo, InputFrame, Mode, World};
 
-/// Cabecera del formato. El ultimo digito es la version.
 /// Cabecera del formato. El ultimo digito es la version; subio a 2 al anadir
 /// el modo de juego, porque un replay de plataformas no se puede reproducir
-/// como si fuera de vuelo.
-const MAGIC: &[u8; 8] = b"VALSRPL3";
+/// como si fuera de vuelo, a 3 con el baile y a 4 con el equipo.
+const MAGIC: &[u8; 8] = b"VALSRPL4";
+
+/// La version de antes del equipo. Se sigue leyendo, con el equipo de serie,
+/// que es con el que se grabo todo lo que la lleva: el replay dorado entre
+/// ellos, que por eso no hubo que regrabar.
+const MAGIC_SIN_EQUIPO: &[u8; 8] = b"VALSRPL3";
 
 /// Cada cuantos ticks se guarda una huella de estado.
 ///
@@ -61,6 +65,9 @@ pub struct Replay {
     /// reproducirla. Sin esto, un replay del charleston se reproducia contra el
     /// vals y divergia en el primer tick.
     pub baile: u8,
+    /// El tiro y el amuleto. Cambian la simulacion igual que el
+    /// modo, asi que la misma leccion por tercera vez.
+    pub equipo: Equipo,
     pub inputs: Vec<InputFrame>,
     pub checkpoints: Vec<Checkpoint>,
 }
@@ -116,6 +123,7 @@ impl Replay {
         out.extend_from_slice(&self.checkpoint_every.to_le_bytes());
         out.push(self.mode.as_u8());
         out.push(self.baile);
+        out.extend_from_slice(&self.equipo.a_bytes());
         out.extend_from_slice(&(self.inputs.len() as u32).to_le_bytes());
         for i in &self.inputs {
             out.extend_from_slice(&i.bits().to_le_bytes());
@@ -131,7 +139,9 @@ impl Replay {
     /// Lee un replay. Nunca entra en panico con un fichero corrupto.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ReplayError> {
         let mut c = Cursor::new(bytes);
-        if c.take(8)? != MAGIC {
+        let magia = c.take(8)?;
+        let con_equipo = magia == MAGIC;
+        if !con_equipo && magia != MAGIC_SIN_EQUIPO {
             return Err(ReplayError::BadMagic);
         }
         let seed = c.u64()?;
@@ -139,6 +149,11 @@ impl Replay {
         let checkpoint_every = c.u32()?;
         let mode = Mode::from_u8(c.u8()?);
         let baile = c.u8()?;
+        let equipo = if con_equipo {
+            Equipo::de_bytes([c.u8()?, c.u8()?])
+        } else {
+            Equipo::default()
+        };
 
         let n_inputs = c.u32()? as usize;
         // Se comprueba que los bytes existan antes de reservar: sin esto, un
@@ -166,9 +181,17 @@ impl Replay {
             checkpoint_every: checkpoint_every.max(1),
             mode,
             baile,
+            equipo,
             inputs,
             checkpoints,
         })
+    }
+
+    /// El mundo recien empezado que reproduce este replay: su semilla, su
+    /// modo, su baile y su equipo. Lo usan `verify` y el visor, para que los
+    /// dos monten el mismo.
+    pub fn mundo(&self) -> World {
+        World::empezar_con(self.seed, self.mode, self.baile as usize, self.equipo)
     }
 
     /// Reproduce el replay y comprueba que el mundo pasa por las mismas
@@ -184,7 +207,7 @@ impl Replay {
             return Err(VerifyError::NoCheckpoints);
         }
 
-        let mut world = World::empezar_en(self.seed, self.mode, self.baile as usize);
+        let mut world = self.mundo();
         let mut siguiente = 0usize;
 
         for input in self.inputs.iter().copied() {
@@ -287,7 +310,9 @@ impl Recorder {
 
     /// Graba lo que haga falta para reproducir este mundo.
     pub fn for_world(world: &World) -> Self {
-        Self::new(world.seed(), world.mode, world.baile)
+        let mut r = Self::new(world.seed(), world.mode, world.baile);
+        r.replay.equipo = world.equipo;
+        r
     }
 
     pub fn with_interval(seed: u64, mode: Mode, baile: usize, checkpoint_every: u32) -> Self {
@@ -298,6 +323,7 @@ impl Recorder {
                 checkpoint_every: checkpoint_every.max(1),
                 mode,
                 baile: baile.min(u8::MAX as usize) as u8,
+                equipo: Equipo::default(),
                 inputs: Vec::new(),
                 checkpoints: Vec::new(),
             },
@@ -346,10 +372,30 @@ pub fn record_scripted(
     inputs: &[InputFrame],
     checkpoint_every: u32,
 ) -> Replay {
-    let mut world = World::empezar_en(seed, mode, baile);
+    record_scripted_con(
+        seed,
+        mode,
+        baile,
+        Equipo::default(),
+        inputs,
+        checkpoint_every,
+    )
+}
+
+/// Lo mismo, con un equipo puesto.
+pub fn record_scripted_con(
+    seed: u64,
+    mode: Mode,
+    baile: usize,
+    equipo: Equipo,
+    inputs: &[InputFrame],
+    checkpoint_every: u32,
+) -> Replay {
+    let mut world = World::empezar_con(seed, mode, baile, equipo);
     // Se graba el modo del mundo y no el pedido: un baile de suelo se baila en
     // el suelo aunque se pida vuelo, y el fichero tiene que decir la verdad.
     let mut rec = Recorder::with_interval(seed, world.mode, baile, checkpoint_every);
+    rec.replay.equipo = equipo;
     for input in inputs.iter().copied() {
         world.step(input);
         rec.record(input, &world);
@@ -703,6 +749,37 @@ mod tests {
             usa(InputFrame::LEFT) + usa(InputFrame::RIGHT) > 500,
             "y moverse"
         );
+    }
+
+    #[test]
+    fn un_replay_con_equipo_se_verifica_y_se_distingue() {
+        use crate::equipo::{Amuleto, Tiro};
+        let inputs = inputs_de_prueba(12, 600);
+        let equipo = Equipo {
+            tiro: Tiro::Serpentina,
+            amuleto: Amuleto::Guante,
+        };
+        let r = record_scripted_con(5, Mode::Flight, 0, equipo, &inputs, 30);
+        let vuelta = Replay::from_bytes(&r.to_bytes()).unwrap();
+        assert_eq!(vuelta.equipo, equipo, "el equipo va en la cabecera");
+        vuelta.verify().expect("y se reproduce con el");
+        // Sin el equipo, la misma partida es otra.
+        let sin = record_scripted(5, Mode::Flight, 0, &inputs, 30);
+        assert_ne!(sin.checkpoints, r.checkpoints);
+    }
+
+    #[test]
+    fn un_replay_de_antes_del_equipo_se_lee_con_el_de_serie() {
+        // Un VALSRPL3 es un VALSRPL4 sin los dos bytes del equipo, que van
+        // justo detras del baile (8 + 8 + 8 + 4 + 1 + 1 = 30).
+        let nuevo = replay_de_prueba(120);
+        let mut viejo = nuevo.to_bytes();
+        viejo[..8].copy_from_slice(MAGIC_SIN_EQUIPO);
+        viejo.drain(30..32);
+        let r = Replay::from_bytes(&viejo).expect("un replay viejo se sigue leyendo");
+        assert_eq!(r.equipo, Equipo::default());
+        assert_eq!(r, nuevo);
+        r.verify().expect("y se reproduce igual");
     }
 
     #[test]

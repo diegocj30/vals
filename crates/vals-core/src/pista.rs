@@ -34,6 +34,11 @@ pub const MARGEN: f32 = 46.0;
 /// Donde empieza la bailarina: delante del todo, mirando a la pista.
 pub const ENTRADA: Vec2 = vec2(ARENA_W * 0.5, ARENA_H - 110.0);
 
+/// La tienda de la modista: a la izquierda de la entrada, en
+/// la primera fila. Es lo primero que se ve al salir y no esta en ningun
+/// camino, asi que no se confunde con un baile.
+pub const MODISTA: Vec2 = vec2(165.0, 700.0);
+
 /// Un baile plantado en la pista.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Nodo {
@@ -165,6 +170,12 @@ impl Pista {
             }
         }
         mejor.map(|(i, _)| i)
+    }
+
+    /// Si la bailarina esta a la puerta de la modista. Un baile cerca gana,
+    /// por lo mismo que en `nodo_cerca`: acercarse a uno nunca mete en otro.
+    pub fn en_la_modista(&self) -> bool {
+        (MODISTA - self.bailarina).length() <= RADIO_NODO && self.nodo_cerca().is_none()
     }
 
     pub fn marcar_vencido(&mut self, i: usize) {
@@ -485,5 +496,20 @@ mod tests {
             p.bailarina
         };
         assert_eq!(correr(), correr());
+    }
+
+    #[test]
+    fn la_modista_esta_a_mano_y_no_pisa_ningun_baile() {
+        let mut p = pista_de(4);
+        assert!(!p.en_la_modista(), "se sale de la entrada, no de la tienda");
+        for n in &p.nodos {
+            assert!(
+                (n.pos - MODISTA).length() > RADIO_NODO * 2.0,
+                "{}",
+                n.nombre
+            );
+        }
+        p.bailarina = MODISTA;
+        assert!(p.en_la_modista());
     }
 }

@@ -28,6 +28,8 @@ pub struct Events {
     pub super_fired: bool,
     pub victory: bool,
     pub defeat: bool,
+    /// Fichas cogidas en la calle. En el combate no hay.
+    pub fichas: u32,
 }
 
 impl Events {
@@ -47,6 +49,7 @@ impl Events {
         self.super_fired |= o.super_fired;
         self.victory |= o.victory;
         self.defeat |= o.defeat;
+        self.fichas += o.fichas;
     }
 
     pub fn is_empty(&self) -> bool {

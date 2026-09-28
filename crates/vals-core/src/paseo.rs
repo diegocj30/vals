@@ -22,16 +22,17 @@
 use glam::Vec2;
 use serde::Deserialize;
 
+use crate::equipo::{ABANICO, Tiro, guiar};
 use crate::events::Events;
 use crate::hash::Fnv1a;
 use crate::math::{TAU, sin, sin_cos};
 use crate::player::{
     AIR_CONTROL, COYOTE_TICKS, DASH_COOLDOWN_TICKS, DASH_IFRAME_TICKS, DASH_SPEED, DASH_TICKS,
     Dash, FOCUS_RAMP_TICKS, GRAVITY, INPUT_BUFFER_TICKS, JUMP_BUFFER_TICKS, JUMP_CUT, JUMP_SPEED,
-    PARRY_COOLDOWN_TICKS, PARRY_RADIUS, PARRY_WINDOW_TICKS, PLAYER_ACCEL_TICKS, PLAYER_DECEL_TICKS,
-    PLAYER_SPEED, SHOT_EVERY, SHOT_SPEED, mover_hacia,
+    PARRY_COOLDOWN_TICKS, PARRY_RADIUS, PLAYER_ACCEL_TICKS, PLAYER_DECEL_TICKS, PLAYER_SPEED,
+    SHOT_SPEED, mover_hacia,
 };
-use crate::{DT, InputFrame, Pcg32, Player};
+use crate::{DT, Equipo, InputFrame, Pcg32, Player};
 
 /// Los paseos que trae el juego, embebidos como los jefes.
 ///
@@ -84,12 +85,17 @@ const OLVIDAR: f32 = 900.0;
 /// Cuanto por debajo de la acera se da por caida en un foso.
 const CAIDA: f32 = 180.0;
 
-/// El alcance de un disparo: lo que vive, a `SHOT_SPEED`. Unas 630 unidades,
-/// dos tercios de la vista: dispara a lo que ves, no a lo que aun no ha salido.
-const DISPARO_TTL: f32 = 0.7;
+/// El alcance de un disparo es lo que vive, a `SHOT_SPEED`: con la aguja,
+/// unas 630 unidades, dos tercios de la vista. Dispara a lo que ves, no a lo
+/// que aun no ha salido. Cada tiro lo dice en `Tiro::ttl_calle`.
 const DISPARO_RADIO: f32 = 6.0;
-/// Tope de disparos vivos. A 15 por segundo con 0,7 de vida nunca pasan de 11.
-const MAX_DISPAROS: usize = 16;
+/// Tope de disparos vivos. La aguja, a 15 por segundo con 0,7 de vida, nunca
+/// pasa de 11; el abanico, de tres en tres cada 6 ticks, llega a 21.
+const MAX_DISPAROS: usize = 32;
+
+/// El radio de una ficha. Algo mas gorda que un plato: se coge al rozarla, y
+/// el sitio dificil tiene que ser llegar, no acertarle al pixel.
+pub const RADIO_FICHA: f32 = 12.0;
 
 /// Los platos caen mas despacio que la jugadora: un arco que se lee con
 /// tiempo, no una pedrada.
@@ -477,6 +483,11 @@ pub struct PaseoDef {
     /// `SUELO_Y`, que es lo que era antes de que las hubiera.
     #[serde(default)]
     pub escaleras: Vec<Escalera>,
+    /// Las fichas del paseo: el centro de cada una. Se guardan
+    /// por el nombre del paseo y su sitio en esta lista, asi que **se anaden
+    /// al final**: meter una en medio cambiaria cual tiene cada uno.
+    #[serde(default)]
+    pub fichas: Vec<(f32, f32)>,
 }
 
 impl PaseoDef {
@@ -606,6 +617,12 @@ pub struct Paseo {
     /// plano (ver `mover`).
     pub jugadora: Player,
     pub vidas: u32,
+    /// El tiro y el amuleto que se llevan, igual que en el
+    /// combate.
+    pub equipo: Equipo,
+    /// Las fichas de `def.fichas` que ya no estan en la calle: cogidas en este
+    /// paseo, o en uno anterior (eso lo pone la app antes de empezar).
+    pub fichas: Vec<bool>,
     /// Hacia donde dispara: de frente, o arriba si se planta y apunta.
     pub apunta: Vec2,
     pub enemigos: Vec<Enemigo>,
@@ -640,7 +657,12 @@ pub struct Paseo {
 }
 
 impl Paseo {
-    pub fn new(mut def: PaseoDef, seed: u64) -> Self {
+    /// Un paseo sin equipo, que es como se anda si no se ha comprado nada.
+    pub fn new(def: PaseoDef, seed: u64) -> Self {
+        Self::con_equipo(def, seed, Equipo::default())
+    }
+
+    pub fn con_equipo(mut def: PaseoDef, seed: u64, equipo: Equipo) -> Self {
         // Ordenadas por x: es lo que deja despertarlas con un solo indice. Con
         // `total_cmp` para que un NaN en el RON no cambie el orden segun la
         // plataforma, y estable para que dos en la misma x salgan como se
@@ -650,11 +672,14 @@ impl Paseo {
         let mut jugadora = Player::new(salida);
         jugadora.facing = Vec2::new(1.0, 0.0);
         jugadora.on_ground = true;
+        let fichas = vec![false; def.fichas.len()];
         Self {
             def,
             tick: 0,
             jugadora,
-            vidas: VIDAS,
+            vidas: VIDAS + equipo.amuleto.vidas_extra(),
+            equipo,
+            fichas,
             apunta: Vec2::new(1.0, 0.0),
             enemigos: Vec::with_capacity(32),
             proyectiles: Vec::with_capacity(32),
@@ -679,8 +704,10 @@ impl Paseo {
     /// no se despierta.
     pub fn recargar(&mut self, def: PaseoDef) {
         let (pos, vidas) = (self.jugadora.pos, self.vidas);
-        let seguro = self.seguro;
-        *self = Self::new(def, self.rng.next_u32().into());
+        let (seguro, mut fichas) = (self.seguro, std::mem::take(&mut self.fichas));
+        *self = Self::con_equipo(def, self.rng.next_u32().into(), self.equipo);
+        fichas.resize(self.def.fichas.len(), false);
+        self.fichas = fichas;
         self.jugadora.pos = pos;
         self.jugadora.prev_pos = pos;
         self.vidas = vidas;
@@ -734,6 +761,7 @@ impl Paseo {
 
         self.mover(input);
         self.caida();
+        self.recoger();
         self.disparar(input);
         self.parry();
         self.super_(input);
@@ -750,6 +778,23 @@ impl Paseo {
 
         self.prev_input = input;
         self.tick += 1;
+    }
+
+    /// Las fichas que toca, se las lleva. Aunque sea en un dash o recien
+    /// golpeada: cogerla es pasar por donde esta, y el riesgo es llegar.
+    fn recoger(&mut self) {
+        for i in 0..self.fichas.len() {
+            let (x, y) = self.def.fichas[i];
+            if !self.fichas[i] && self.toca(Vec2::new(x, y), RADIO_FICHA) {
+                self.fichas[i] = true;
+                self.events.fichas += 1;
+            }
+        }
+    }
+
+    /// Cuantas fichas de este paseo estan ya fuera de la calle.
+    pub fn fichas_cogidas(&self) -> usize {
+        self.fichas.iter().filter(|f| **f).count()
     }
 
     fn llegar(&mut self) {
@@ -814,7 +859,7 @@ impl Paseo {
         };
 
         if flanco(InputFrame::PARRY) && p.parry_cooldown == 0 {
-            p.parry_window = PARRY_WINDOW_TICKS;
+            p.parry_window = self.equipo.amuleto.ventana_parry();
             p.parry_cooldown = PARRY_COOLDOWN_TICKS;
         }
         if flanco(InputFrame::DASH) {
@@ -980,15 +1025,25 @@ impl Paseo {
         {
             return;
         }
-        p.shot_cooldown = SHOT_EVERY;
+        let tiro = self.equipo.tiro;
+        p.shot_cooldown = tiro.cada_calle();
         self.events.player_shot = true;
         // Sale de la mano, a media altura: de frente pasa por encima de una
         // nota baja y le da a una pareja en el pecho.
-        self.disparos.push(Disparo {
-            pos: self.boca(),
-            vel: self.apunta * SHOT_SPEED,
-            ttl: DISPARO_TTL,
-        });
+        let (pos, ttl) = (self.boca(), tiro.ttl_calle());
+        let disparo = |vel: Vec2| Disparo { pos, vel, ttl };
+        if tiro == Tiro::Abanico {
+            // Tres, abiertos hacia donde apunta: el de arriba alcanza lo que
+            // vuela y el de abajo lo que viene por la acera sin plantarse.
+            for a in [-ABANICO, 0.0, ABANICO] {
+                let (s, c) = sin_cos(a);
+                let d = self.apunta;
+                let vel = Vec2::new(d.x * c - d.y * s, d.x * s + d.y * c) * SHOT_SPEED;
+                self.disparos.push(disparo(vel));
+            }
+        } else {
+            self.disparos.push(disparo(self.apunta * SHOT_SPEED));
+        }
     }
 
     /// De donde salen los disparos. El dibujo la usa para el fogonazo.
@@ -1527,7 +1582,17 @@ impl Paseo {
     }
 
     fn mover_disparos(&mut self) {
+        let serpentina = self.equipo.tiro == Tiro::Serpentina;
         for d in &mut self.disparos {
+            // La serpentina se tuerce hacia el enemigo vivo mas cercano.
+            if serpentina
+                && let Some(e) = self.enemigos.iter().filter(|e| e.vida > 0).min_by(|a, b| {
+                    let (da, db) = (a.pos.distance_squared(d.pos), b.pos.distance_squared(d.pos));
+                    da.total_cmp(&db)
+                })
+            {
+                d.vel = guiar(d.vel, e.pos - d.pos);
+            }
             d.pos += d.vel * DT;
             d.ttl -= DT;
         }
@@ -1541,7 +1606,7 @@ impl Paseo {
                 e.vida > 0 && e.pos.distance_squared(d.pos) <= r * r
             });
             if let Some(e) = blanco {
-                e.vida -= 1;
+                e.vida -= self.equipo.tiro.dano_calle();
                 e.golpe = 6;
                 self.events.boss_hit = true;
                 self.impacto = d.pos;
@@ -1574,8 +1639,9 @@ impl Paseo {
     /// Si la capsula de la jugadora toca un circulo.
     fn toca(&self, c: Vec2, r: f32) -> bool {
         let p = self.jugadora.pos;
-        let y = c.y.clamp(p.y - CUERPO_MEDIO, p.y + CUERPO_MEDIO);
-        let rr = r + CUERPO_RADIO;
+        let (radio, medio) = self.equipo.amuleto.cuerpo(CUERPO_RADIO, CUERPO_MEDIO);
+        let y = c.y.clamp(p.y - medio, p.y + medio);
+        let rr = r + radio;
         Vec2::new(p.x, y).distance_squared(c) <= rr * rr
     }
 
@@ -1684,6 +1750,11 @@ impl Paseo {
         }
         h.write_u64(self.completado.unwrap_or(u64::MAX));
         h.write_u64(u64::from(self.derrota));
+        let [t, a] = self.equipo.a_bytes();
+        h.write_u64(u64::from(t) << 8 | u64::from(a));
+        for f in &self.fichas {
+            h.write_u64(u64::from(*f));
+        }
         h.finish()
     }
 }
@@ -1713,6 +1784,7 @@ mod tests {
             plataformas: vec![],
             enemigos: vec![],
             escaleras: vec![],
+            fichas: vec![],
         }
     }
 
@@ -2683,5 +2755,190 @@ mod tests {
         assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
         assert_eq!(p.vidas, VIDAS, "no ha caido a ningun foso");
         assert!(p.jugadora.pos.y < SUELO_Y - 400.0, "no ha llegado arriba");
+    }
+
+    // --- Las fichas y el equipo ---
+
+    use crate::equipo::Amuleto;
+
+    fn con_fichas(fichas: Vec<(f32, f32)>) -> PaseoDef {
+        PaseoDef { fichas, ..calle() }
+    }
+
+    fn equipado(def: PaseoDef, tiro: Tiro, amuleto: Amuleto) -> Paseo {
+        Paseo::con_equipo(def, 1, Equipo { tiro, amuleto })
+    }
+
+    #[test]
+    fn las_fichas_de_serie_estan_donde_se_puede_llegar() {
+        let mut total = 0;
+        for def in PaseoDef::de_serie() {
+            let n = def.fichas.len();
+            assert!((3..=5).contains(&n), "{}: {n} fichas", def.nombre);
+            total += n;
+            for &(x, y) in &def.fichas {
+                assert!(
+                    x > def.salida && x < def.puerta,
+                    "{}: ficha en x {x}",
+                    def.nombre
+                );
+                // Por encima de donde se da por caida: si no, cogerla mata.
+                assert!(
+                    y < def.altura(x) + CAIDA - 60.0,
+                    "{}: ficha hundida en {x}",
+                    def.nombre
+                );
+            }
+        }
+        assert_eq!(total, 16, "los precios de la modista cuentan con 16");
+    }
+
+    #[test]
+    fn una_ficha_se_coge_al_pasar_y_una_sola_vez() {
+        let mut p = Paseo::new(
+            con_fichas(vec![(400.0, SUELO_Y - PIES - 5.0), (400.0, 100.0)]),
+            1,
+        );
+        let mut cogidas = 0;
+        for _ in 0..120 {
+            p.step(pulsar(DERECHA));
+            cogidas += p.events.fichas;
+        }
+        assert!(p.jugadora.pos.x > 450.0, "ha pasado de largo");
+        assert_eq!(cogidas, 1, "la de la acera, una vez; la del cielo, no");
+        assert_eq!(p.fichas, vec![true, false]);
+        assert_eq!(p.fichas_cogidas(), 1);
+    }
+
+    #[test]
+    fn una_ficha_de_otra_vez_no_esta_en_la_calle() {
+        // La app marca las que ya se tienen antes de empezar.
+        let mut p = Paseo::new(con_fichas(vec![(400.0, SUELO_Y - PIES)]), 1);
+        p.fichas[0] = true;
+        let mut cogidas = 0;
+        for _ in 0..120 {
+            p.step(pulsar(DERECHA));
+            cogidas += p.events.fichas;
+        }
+        assert_eq!(cogidas, 0);
+    }
+
+    #[test]
+    fn el_bot_coge_la_ficha_del_camino_en_cada_paseo() {
+        // La primera ficha que esta a la altura del cuerpo sobre la acera es
+        // la "del camino": andar la calle tiene que darla sin buscarla.
+        for def in PaseoDef::de_serie() {
+            let camino = def
+                .fichas
+                .iter()
+                .position(|&(x, y)| (def.altura(x) - PIES - y).abs() < 10.0)
+                .unwrap_or_else(|| panic!("{} no tiene ficha en el camino", def.nombre));
+            let nombre = def.nombre.clone();
+            let p = bot_anda(def);
+            assert!(
+                p.fichas[camino],
+                "{nombre}: el bot no ha cogido la del camino"
+            );
+        }
+    }
+
+    #[test]
+    fn recargar_no_devuelve_las_fichas_a_la_calle() {
+        let mut p = Paseo::new(con_fichas(vec![(400.0, SUELO_Y - PIES)]), 1);
+        correr(&mut p, DERECHA, 120);
+        assert_eq!(p.fichas, vec![true]);
+        let def = p.def.clone();
+        p.recargar(def);
+        assert_eq!(p.fichas, vec![true]);
+    }
+
+    #[test]
+    fn el_abanico_sale_de_tres_en_tres_abierto() {
+        let mut p = equipado(calle(), Tiro::Abanico, Amuleto::Ninguno);
+        p.step(pulsar(DISPARA));
+        assert_eq!(p.disparos.len(), 3);
+        let mut ys: Vec<f32> = p.disparos.iter().map(|d| d.vel.y).collect();
+        ys.sort_by(f32::total_cmp);
+        assert!(ys[0] < 0.0 && ys[1] == 0.0 && ys[2] > 0.0, "{ys:?}");
+        assert!(
+            p.disparos.iter().all(|d| d.vel.x > 0.0),
+            "todos hacia delante"
+        );
+    }
+
+    /// Ticks disparando hasta tumbar a un camarero (8 de vida) plantado a `x`,
+    /// o `None` si no cae en dos segundos.
+    fn ticks_para_tumbar(tiro: Tiro, x: f32) -> Option<usize> {
+        let mut p = equipado(uno(Tipo::Camarero, x, 0.0), tiro, Amuleto::Ninguno);
+        for t in 0..120 {
+            p.jugadora.iframes = 5;
+            p.step(pulsar(DISPARA));
+            if p.caidos > 0 {
+                return Some(t);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn la_castanuela_tumba_antes_pero_de_cerca() {
+        let aguja = ticks_para_tumbar(Tiro::Aguja, 320.0).expect("la aguja tumba");
+        let castanuela = ticks_para_tumbar(Tiro::Castanuela, 320.0).expect("de cerca tumba");
+        assert!(castanuela < aguja, "{castanuela} vs {aguja}");
+        assert!(ticks_para_tumbar(Tiro::Aguja, 600.0).is_some());
+        assert_eq!(
+            ticks_para_tumbar(Tiro::Castanuela, 600.0),
+            None,
+            "de lejos no llega"
+        );
+    }
+
+    #[test]
+    fn la_serpentina_busca_a_lo_que_vuela_y_dispara_la_mitad() {
+        let nota = uno(Tipo::Nota, 450.0, 330.0);
+        for (tiro, busca) in [(Tiro::Aguja, false), (Tiro::Serpentina, true)] {
+            let mut p = equipado(nota.clone(), tiro, Amuleto::Ninguno);
+            let mut disparos = 0;
+            for _ in 0..16 {
+                p.step(pulsar(DISPARA));
+                disparos += u32::from(p.events.player_shot);
+            }
+            assert_eq!(p.disparos.iter().any(|d| d.vel.y < 0.0), busca, "{tiro:?}");
+            assert_eq!(disparos, if busca { 2 } else { 4 }, "{tiro:?}");
+        }
+    }
+
+    #[test]
+    fn el_relicario_y_el_guante_en_la_calle() {
+        assert_eq!(
+            equipado(calle(), Tiro::Aguja, Amuleto::Relicario).vidas,
+            VIDAS + 1
+        );
+        for (amuleto, ticks) in [(Amuleto::Ninguno, 7), (Amuleto::Guante, 12)] {
+            let mut p = equipado(calle(), Tiro::Aguja, amuleto);
+            p.step(pulsar(InputFrame::PARRY));
+            let mut abierto = 0;
+            while p.jugadora.is_parrying() {
+                abierto += 1;
+                p.step(InputFrame::NONE);
+            }
+            assert_eq!(abierto, ticks, "{amuleto:?}");
+        }
+    }
+
+    #[test]
+    fn el_corse_estrecha_el_cuerpo_que_recibe() {
+        // Una perla (radio 7) a 16 del centro: dentro de 10 + 7, fuera de 6 + 7.
+        for (amuleto, golpe) in [(Amuleto::Ninguno, true), (Amuleto::Corse, false)] {
+            let mut p = equipado(calle(), Tiro::Aguja, amuleto);
+            p.proyectiles.push(Proyectil {
+                pos: p.jugadora.pos + Vec2::new(16.0, 0.0),
+                vel: Vec2::ZERO,
+                rosa: false,
+                forma: Forma::Perla,
+            });
+            p.step(InputFrame::NONE);
+            assert_eq!(p.events.player_died, golpe, "{amuleto:?}");
+        }
     }
 }
