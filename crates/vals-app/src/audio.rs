@@ -123,9 +123,14 @@ pub enum Sfx {
     Victoria,
     Derrota,
     Empezar,
+    /// La caida de cada jefe, en el orden de los bailes.
+    CaeVals,
+    CaeTango,
+    CaeCharleston,
+    CaeCancan,
 }
 
-const TODOS: [Sfx; 10] = [
+const TODOS: [Sfx; 14] = [
     Sfx::Disparo,
     Sfx::Parry,
     Sfx::Graze,
@@ -136,9 +141,23 @@ const TODOS: [Sfx; 10] = [
     Sfx::Victoria,
     Sfx::Derrota,
     Sfx::Empezar,
+    Sfx::CaeVals,
+    Sfx::CaeTango,
+    Sfx::CaeCharleston,
+    Sfx::CaeCancan,
 ];
 
 impl Sfx {
+    /// Lo que suena cuando cae el jefe del baile `baile`.
+    pub fn caida(baile: usize) -> Self {
+        [
+            Sfx::CaeVals,
+            Sfx::CaeTango,
+            Sfx::CaeCharleston,
+            Sfx::CaeCancan,
+        ][baile.min(3)]
+    }
+
     fn indice(self) -> usize {
         TODOS.iter().position(|s| *s == self).unwrap_or(0)
     }
@@ -184,6 +203,52 @@ impl Sfx {
                 Voz::new(Sine, 100.0, 40.0, 0.90, 0.20, 1.2),
             ],
             Sfx::Empezar => vec![Voz::new(Sine, 440.0, 880.0, 0.15, 0.25, 2.0)],
+            // La caja sin cuerda: la melodia bajando, cada nota mas tarde y
+            // un pelo mas desafinada que la anterior, y el portazo de la tapa.
+            Sfx::CaeVals => {
+                let mut v: Vec<Voz> = [1568.0, 1319.0, 1175.0, 988.0, 880.0, 659.0, 587.0]
+                    .iter()
+                    .scan(0.0f32, |t, &f| {
+                        let n = Voz::new(Sine, f, f * 0.97, 0.3, 0.16, 3.0).tras(*t);
+                        *t += 0.09 + *t * 0.25;
+                        Some(n)
+                    })
+                    .collect();
+                v.push(Voz::new(Noise, 1.0, 1.0, 0.09, 0.3, 4.0).tras(1.32));
+                v.push(Voz::new(Square, 120.0, 55.0, 0.12, 0.18, 3.0).tras(1.32));
+                v
+            }
+            // El fuelle: coge aire y lo suelta en un resoplido largo que se
+            // va quedando grave, como una lengueta sin aire.
+            Sfx::CaeTango => vec![
+                Voz::new(Noise, 1.0, 1.0, 0.25, 0.05, 0.6),
+                Voz::new(Saw, 330.0, 60.0, 1.5, 0.12, 0.7).tras(0.26),
+                Voz::new(Saw, 336.0, 64.0, 1.5, 0.08, 0.7).tras(0.26),
+                Voz::new(Noise, 1.0, 1.0, 1.4, 0.07, 0.8).tras(0.26),
+            ],
+            // El disco rayado: tres rascadas, el plato frenando y el disco
+            // silbando al salir volando.
+            Sfx::CaeCharleston => {
+                let mut v = Vec::new();
+                for t in [0.0, 0.12, 0.22] {
+                    v.push(Voz::new(Noise, 1.0, 1.0, 0.07, 0.28, 3.0).tras(t));
+                    v.push(Voz::new(Saw, 900.0, 300.0, 0.1, 0.1, 2.0).tras(t));
+                }
+                v.push(Voz::new(Saw, 260.0, 40.0, 1.0, 0.13, 1.0).tras(0.35));
+                v.push(Voz::new(Sine, 600.0, 1500.0, 0.45, 0.08, 1.2).tras(0.8));
+                v
+            }
+            // La fila cayendo: un pito de dibujo animado bajando y un golpe
+            // sordo por cada corista que llega al suelo.
+            Sfx::CaeCancan => {
+                let mut v = vec![Voz::new(Sine, 1400.0, 500.0, 0.5, 0.07, 1.2).tras(0.05)];
+                for i in 0..5 {
+                    let t = 0.37 + 0.22 * i as f32;
+                    v.push(Voz::new(Sine, 190.0, 70.0, 0.14, 0.26, 3.0).tras(t));
+                    v.push(Voz::new(Noise, 1.0, 1.0, 0.04, 0.1, 3.0).tras(t));
+                }
+                v
+            }
         }
     }
 }

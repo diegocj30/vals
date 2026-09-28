@@ -254,6 +254,9 @@ async fn run_game() {
     // que baile va, por nombre.
     let paseos = PaseoDef::de_serie();
     let mut paseo: Option<(usize, Paseo)> = None;
+    // Segundos que lleva cayendo el jefe; `None` si no ha
+    // caido.
+    let mut caida: Option<f32> = None;
 
     loop {
         frames += 1;
@@ -561,7 +564,12 @@ async fn run_game() {
         // una partida. Las chispas si, porque son lo que lo hace parecer vivo.
         match (escena, attract.as_ref()) {
             (Escena::Combate, _) => {
-                audio.play_events(&eventos);
+                // La fanfarria de la victoria espera al sello, al final de
+                // la caida del jefe.
+                audio.play_events(&Events {
+                    victory: false,
+                    ..eventos
+                });
                 chispas.reaccionar(&eventos, &world);
                 zumo.reaccionar(&eventos);
                 if eventos.phase_changed && !world.boss.defeated {
@@ -574,6 +582,24 @@ async fn run_game() {
             }
             (Escena::Menu, Some(a)) => chispas.reaccionar(&eventos, &a.world),
             _ => {}
+        }
+
+        // La caida del jefe corre con el reloj de pared, como la cartela, y
+        // no durante el hitstop del golpe: el frame del golpe solo la arma,
+        // y empieza a contar cuando se descongela. Con R o ESC la victoria se
+        // acaba y la caida se desarma sola.
+        let antes = caida.unwrap_or(0.0);
+        caida = match caida {
+            _ if escena != Escena::Combate || !world.victory => None,
+            None => Some(0.0),
+            Some(s) => Some(s + if congelado { 0.0 } else { frame_dt }),
+        };
+        let ahora = caida.unwrap_or(0.0);
+        if antes == 0.0 && ahora > 0.0 {
+            audio.play(Sfx::caida(world.baile), 1.0);
+        }
+        if jefes::caida(antes) < 1.0 && jefes::caida(ahora) >= 1.0 {
+            audio.play(Sfx::Victoria, 1.0);
         }
 
         // Ganar un baile lo tacha en la pista. Una sola vez, que la pantalla
@@ -613,7 +639,11 @@ async fn run_game() {
                 (Escena::Menu, Some(a)) => &a.world,
                 _ => &world,
             };
-            draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut());
+            let cayendo = match escena {
+                Escena::Combate => jefes::caida(caida.unwrap_or(0.0)),
+                _ => 1.0,
+            };
+            draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut(), cayendo);
             draw::particulas(&chispas, &layout);
             if let Some((donde, cuando)) = fantasma
                 && escena == Escena::Combate
@@ -628,7 +658,7 @@ async fn run_game() {
                     mando.conectado().then(|| mando.botones()),
                 );
             } else if world.is_over() {
-                draw::fin_de_partida(&layout, &world);
+                draw::fin_de_partida(&layout, &world, jefes::caida(caida.unwrap_or(0.0)));
             }
         }
         if show_debug && escena == Escena::Combate {
@@ -769,7 +799,7 @@ async fn run_replay(path: String) {
 
         let t1 = get_time();
         let layout = draw::Layout::compute();
-        draw::frame(&world, alpha, &layout, bullets_gpu.as_mut());
+        draw::frame(&world, alpha, &layout, bullets_gpu.as_mut(), 1.0);
         draw::debug_overlay(&world, &stats, steps, 0, None);
         draw::replay_badge(cursor, replay.inputs.len(), divergencia);
         stats.push_render((get_time() - t1) as f32);

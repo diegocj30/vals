@@ -16,13 +16,15 @@
 //! de radio en esas unidades, y asi las medidas de aqui se leen contra el aro
 //! sin hacer cuentas.
 
+use std::f32::consts::{FRAC_PI_2, PI, TAU};
+
 use macroquad::prelude::*;
 
-use super::Escena;
+use super::{Escena, boing, bote, suave, tramo};
 use crate::bailarines;
 use crate::draw::{Layout, draw_figura, fade};
 use crate::music::{self, Tema};
-use crate::paleta::{ORO, TINTA};
+use crate::paleta::{ORO, PAPEL, TINTA};
 use crate::skeleton;
 
 /// La y de las patas: el suelo de la caja. Todo se aplasta y se mece desde
@@ -115,14 +117,14 @@ pub fn dibujar(e: &Escena) {
     // cualquiera: si no, se desacompasa en cuanto cambia el tempo de figura.
     let (ticks, tiempos) = music::compas(Tema::de(0, e.fase));
     let compas = e.t / (ticks * tiempos as f32);
-    let (lado, _) = (compas * std::f32::consts::PI).sin_cos();
+    let (lado, _) = (compas * PI).sin_cos();
     let mut giro = fig.vaiven * lado;
     // Con poca vida tiembla. Determinista: sale del reloj, no de un dado.
     giro += (e.t * 1.9).sin() * 0.03 * (1.0 - e.vida) * fig.furia;
 
     // En la coda bota: despega entre tiempos y cae justo en el golpe.
     let dentro = 1.0 - pulso.powf(1.0 / 2.2);
-    let bote = fig.bote * (dentro * std::f32::consts::PI).sin();
+    let bote = fig.bote * (dentro * PI).sin();
 
     let k = e.escala * ARENA;
     let aplasta = 0.07 * golpe;
@@ -142,46 +144,13 @@ pub fn dibujar(e: &Escena) {
     };
 
     // --- La tapa, detras de todo. En la coda aletea en cada golpe.
-    let alto = fig.tapa + if coda { 10.0 * pulso } else { 0.0 };
-    let arriba = CANTO - alto;
-    lp.poli(
-        &[
-            vec2(-MEDIO + 2.0, CANTO),
-            vec2(-MEDIO + 5.0, arriba),
-            vec2(MEDIO - 5.0, arriba),
-            vec2(MEDIO - 2.0, CANTO),
-        ],
-        e.tinta,
-    );
-    lp.caja(-MEDIO + 4.0, arriba - 1.0, 2.0 * MEDIO - 8.0, 4.0, e.ropa);
-    let medio = CANTO - alto * 0.5;
-    lp.elipse(0.0, medio, MEDIO - 11.0, alto * 0.34 + 2.0, ORO);
-    lp.elipse(0.0, medio, MEDIO - 14.0, alto * 0.34, ESPEJO);
-    // Dos brillos en diagonal: es lo que hace que un gris sea un espejo.
-    let b = alto * 0.22;
-    lp.linea((-13.0, medio + b), (-5.0, medio - b), 1.6, WHITE);
-    lp.linea((-6.0, medio + b), (-1.0, medio - b * 0.4), 1.0, WHITE);
+    tapa(&lp, e, fig.tapa + if coda { 10.0 * pulso } else { 0.0 });
 
     // --- La bailarina, en su peana. No se mece con la caja: gira en su eje,
     // que es lo que hace la de una caja de verdad.
     lp.caja(-6.0, CANTO - 9.0, 12.0, 9.0, ORO);
-    let sd = e.escala * BAILARINA;
     let pie = lp.p(0.0, CANTO - 9.0);
-    for pose in bailarines::poses(0, e.fase, e.t, e.vida) {
-        let pies = pose.joints[skeleton::PIE_I]
-            .y
-            .max(pose.joints[skeleton::PIE_D].y);
-        draw_figura(
-            &pose,
-            pie - vec2(0.0, pies * sd),
-            &Layout::con_escala(sd),
-            1.0,
-            // Las tintas al reves que la caja: de azul sobre la tapa azul se
-            // perdia, y en el cartel lateral, negra sobre negro, desaparecia.
-            e.ropa,
-            e.tinta,
-        );
-    }
+    bailarina(e, e.t, pie, 0.0);
 
     // --- Los muelles de la coda, saltando por las esquinas.
     if coda {
@@ -197,7 +166,75 @@ pub fn dibujar(e: &Escena) {
         }
     }
 
-    // --- El cuerpo: canto, caja y zocalo.
+    cuerpo(&lp, e);
+    for grieta in GRIETAS.iter().take(fig.grietas) {
+        lp.trazo(grieta, 1.6, TINTA);
+    }
+
+    cara(&lp, e, &fig, lado, coda, golpe);
+
+    llave(&lp, e.t * fig.llave * TAU);
+}
+
+/// La tapa abierta, con su espejo. `alto` es lo que se ve de ella: por debajo
+/// de unas pocas unidades esta cerrada, y del espejo no se ve nada.
+fn tapa(lp: &Lapiz, e: &Escena, alto: f32) {
+    let arriba = CANTO - alto;
+    lp.poli(
+        &[
+            vec2(-MEDIO + 2.0, CANTO),
+            vec2(-MEDIO + 5.0, arriba),
+            vec2(MEDIO - 5.0, arriba),
+            vec2(MEDIO - 2.0, CANTO),
+        ],
+        e.tinta,
+    );
+    lp.caja(-MEDIO + 4.0, arriba - 1.0, 2.0 * MEDIO - 8.0, 4.0, e.ropa);
+    if alto < 10.0 {
+        return;
+    }
+    let medio = CANTO - alto * 0.5;
+    lp.elipse(0.0, medio, MEDIO - 11.0, alto * 0.34 + 2.0, ORO);
+    lp.elipse(0.0, medio, MEDIO - 14.0, alto * 0.34, ESPEJO);
+    // Dos brillos en diagonal: es lo que hace que un gris sea un espejo.
+    let b = alto * 0.22;
+    lp.linea((-13.0, medio + b), (-5.0, medio - b), 1.6, WHITE);
+    lp.linea((-6.0, medio + b), (-1.0, medio - b * 0.4), 1.0, WHITE);
+}
+
+/// La bailarina de la caja, con los pies en `pie` (pixeles) y tumbada
+/// `giro` radianes sobre ellos: cero de pie, menos un cuarto de vuelta
+/// tendida con la cabeza a la izquierda. `t` es el reloj de su giro.
+fn bailarina(e: &Escena, t: f32, pie: Vec2, giro: f32) {
+    let sd = e.escala * BAILARINA;
+    let rot = Vec2::from_angle(giro);
+    for mut pose in bailarines::poses(0, e.fase, t, e.vida) {
+        let pies = pose.joints[skeleton::PIE_I]
+            .y
+            .max(pose.joints[skeleton::PIE_D].y);
+        // Todo lo de la pose gira alrededor de los pies. Con giro cero queda
+        // igual que estaba, solo que con los pies en el origen.
+        let g = |v: &mut Vec2| *v = rot.rotate(*v - vec2(0.0, pies));
+        pose.joints.iter_mut().for_each(g);
+        pose.falda.iter_mut().for_each(g);
+        pose.corpino.iter_mut().for_each(g);
+        pose.cintas.iter_mut().flatten().for_each(g);
+        g(&mut pose.mono);
+        draw_figura(
+            &pose,
+            pie,
+            &Layout::con_escala(sd),
+            1.0,
+            // Las tintas al reves que la caja: de azul sobre la tapa azul se
+            // perdia, y en el cartel lateral, negra sobre negro, desaparecia.
+            e.ropa,
+            e.tinta,
+        );
+    }
+}
+
+/// El cuerpo: canto, caja y zocalo, con sus tachuelas y las patas.
+fn cuerpo(lp: &Lapiz, e: &Escena) {
     lp.caja(-MEDIO - 3.0, CANTO, 2.0 * MEDIO + 6.0, 8.0, e.ropa);
     lp.caja(-MEDIO, CANTO + 8.0, 2.0 * MEDIO, 54.0, e.tinta);
     lp.caja(-MEDIO - 3.0, 30.0, 2.0 * MEDIO + 6.0, 10.0, e.ropa);
@@ -207,16 +244,13 @@ pub fn dibujar(e: &Escena) {
     }
     lp.disco(-PATA_X, SUELO - 5.0, 5.0, ORO);
     lp.disco(PATA_X, SUELO - 5.0, 5.0, ORO);
+}
 
-    for grieta in GRIETAS.iter().take(fig.grietas) {
-        lp.trazo(grieta, 1.6, TINTA);
-    }
-
-    cara(&lp, e, &fig, lado, coda, golpe);
-
-    // --- La llave, al costado. Se ve de canto y gira sobre su eje: basta con
-    // aplastar las dos orejas con el coseno para que se lea que da vueltas.
-    let (_, c) = (e.t * fig.llave * std::f32::consts::TAU).sin_cos();
+/// La llave, al costado, girada `angulo` radianes. Se ve de canto y gira
+/// sobre su eje: basta con aplastar las dos orejas con el coseno para que se
+/// lea que da vueltas.
+fn llave(lp: &Lapiz, angulo: f32) {
+    let c = angulo.cos();
     lp.caja(MEDIO, 1.5, 7.0, 4.0, ORO);
     for s in [-1.0, 1.0] {
         lp.elipse(
@@ -228,6 +262,271 @@ pub fn dibujar(e: &Escena) {
         );
     }
     lp.disco(MEDIO + 8.5, 3.5, 2.6, ORO);
+}
+
+/// Cuando se cierra la tapa de golpe: es el KO. Hasta ahi la caja se
+/// desarma asustada; desde ahi tiene los ojos en X.
+const PORTAZO: f32 = 0.6;
+/// Las puas del peine que le saltan de la boca.
+const PUAS: usize = 7;
+
+/// La caida del vals: **la caja se queda sin cuerda**. La llave gira hacia
+/// atras, saltan las puas y los muelles, la bailarina se cae de la peana y la
+/// tapa se cierra de un portazo. Cada campo es una curva de `k`, pura, para
+/// poder probarla sin dibujar.
+#[derive(Debug, Clone, Copy)]
+struct Desarme {
+    /// Vueltas de la llave hacia atras: rapido al principio, frenando.
+    llave: f32,
+    /// Lo que se ve de la tapa, en unidades.
+    tapa: f32,
+    /// De 1 a 0: lo que tiembla la caja y aletea la tapa antes del portazo.
+    tiembla: f32,
+    /// Lo que se tumba la bailarina sobre sus pies, en radianes: hacia la
+    /// izquierda, hasta quedar tendida.
+    bailarina: f32,
+    /// Por donde va su caida de la peana al suelo, de 0 a 1.
+    baja: f32,
+    /// El aplastado del portazo y lo que se desploma despues.
+    sx: f32,
+    sy: f32,
+    giro: f32,
+    /// Por donde va el vuelo de cada pua, de 0 (en la boca) a 1 (en el suelo).
+    puas: [f32; PUAS],
+    /// Lo que asoma cada muelle, de 0 a 1 con su rebote.
+    muelles: [f32; 3],
+    /// Ya fuera de combate: ojos en X.
+    ko: bool,
+}
+
+/// `abierta` es lo que se veia de la tapa al caer.
+fn desarme(k: f32, abierta: f32) -> Desarme {
+    let vuelta = 1.0 - (1.0 - tramo(k, 0.0, 0.75)).powi(3);
+    let cierra = tramo(k, 0.46, PORTAZO);
+    // Se abre de par en par del susto y luego cae acelerando, como cae una
+    // tapa soltada. Al cerrar rebota una vez.
+    let tapa = if k < PORTAZO {
+        (abierta + 8.0 * tramo(k, 0.0, 0.2)) * (1.0 - cierra * cierra)
+    } else {
+        5.0 * (PI * tramo(k, PORTAZO, 0.7)).sin()
+    };
+    let golpe = (PI * tramo(k, PORTAZO, PORTAZO + 0.1)).sin();
+    let hunde = suave(tramo(k, 0.66, 0.9));
+    let vuelca = tramo(k, 0.12, 0.32);
+    Desarme {
+        llave: -6.0 * vuelta,
+        tapa,
+        tiembla: 1.0 - suave(tramo(k, 0.3, PORTAZO)),
+        // Primero se inclina despacio sobre la peana y luego, ya cayendo, se
+        // acaba de tumbar en el aire.
+        bailarina: -1.3 * vuelca * vuelca - (FRAC_PI_2 - 1.3) * tramo(k, 0.32, 0.5),
+        baja: tramo(k, 0.3, 0.56),
+        sx: 1.0 + 0.08 * golpe + 0.04 * hunde,
+        sy: 1.0 - 0.12 * golpe - 0.06 * hunde,
+        giro: 0.07 * hunde,
+        puas: std::array::from_fn(|i| {
+            let a = 0.04 + 0.05 * i as f32;
+            tramo(k, a, a + 0.3)
+        }),
+        muelles: std::array::from_fn(|i| {
+            let a = 0.08 + 0.1 * i as f32;
+            boing(tramo(k, a, a + 0.4))
+        }),
+        ko: k >= PORTAZO,
+    }
+}
+
+/// La caja cayendo, con `k` de 0 a 1.
+pub fn dibujar_muerte(e: &Escena, k: f32) {
+    let fig = figura(e.fase, 0.0);
+    let d = desarme(k, fig.tapa);
+    let px = e.escala * ARENA;
+    let g = (1.8 * px).max(1.5);
+    let fondo = e.centro.y + SUELO * px + g;
+    let o = e.centro - vec2(0.0, alzar(fondo, e.tablas));
+    let giro = d.giro + (e.t * 2.1).sin() * 0.05 * d.tiembla;
+    let lp = Lapiz {
+        o,
+        k: px,
+        g,
+        sx: d.sx,
+        sy: d.sy,
+        rot: giro.sin_cos(),
+        pivote: vec2(PATA_X * d.sx, SUELO),
+    };
+    // Lo que ya no va con la caja —la bailarina, las puas, el polvo— se
+    // dibuja quieto, sin mecerse ni aplastarse con ella.
+    let suelo = Lapiz {
+        sx: 1.0,
+        sy: 1.0,
+        rot: (0.0, 1.0),
+        ..lp
+    };
+
+    tapa(&lp, e, d.tapa + (e.t * 0.9).sin() * 5.0 * d.tiembla);
+    if !d.ko {
+        lp.caja(-6.0, CANTO - 9.0, 12.0, 9.0, ORO);
+    }
+
+    // Los muelles salen de las esquinas y del costado, y se quedan fuera
+    // cimbreandose.
+    let salen = [
+        (vec2(-MEDIO + 2.0, CANTO + 2.0), vec2(-0.7, -1.0)),
+        (vec2(MEDIO - 2.0, CANTO + 2.0), vec2(0.8, -1.0)),
+        (vec2(-MEDIO, 18.0), vec2(-1.0, -0.25)),
+    ];
+    for (i, ((base, dir), m)) in salen.into_iter().zip(d.muelles).enumerate() {
+        if m > 0.02 {
+            let cimbrea = Vec2::from_angle((e.t * 0.5 + i as f32 * 2.0).sin() * 0.12);
+            muelle(&lp, base, cimbrea.rotate(dir), 26.0 * m);
+        }
+    }
+
+    cuerpo(&lp, e);
+    let rotas = 2 + (k * 4.0) as usize;
+    for grieta in GRIETAS.iter().take(rotas) {
+        lp.trazo(grieta, 1.6, TINTA);
+    }
+    if d.tapa < 4.0 {
+        // Cerrada: la tapa es una tabla encima del canto, y tapa la peana.
+        lp.caja(
+            -MEDIO - 1.0,
+            CANTO - 7.0 - d.tapa,
+            2.0 * MEDIO + 2.0,
+            7.0,
+            e.tinta,
+        );
+        lp.caja(
+            -MEDIO + 3.0,
+            CANTO - 8.0 - d.tapa,
+            2.0 * MEDIO - 6.0,
+            2.5,
+            e.ropa,
+        );
+    }
+    cara_ko(&lp, e, &d);
+    llave(&lp, d.llave * TAU);
+
+    // La bailarina: se tumba sobre la peana y se cae por la izquierda,
+    // botando al llegar al suelo.
+    let (desde, hasta) = (vec2(0.0, CANTO - 9.0), vec2(-MEDIO - 12.0, SUELO - 3.0));
+    let pie = vec2(
+        desde.x + (hasta.x - desde.x) * d.baja,
+        desde.y + (hasta.y - desde.y) * bote(d.baja),
+    );
+    bailarina(e, 0.0, suelo.p(pie.x, pie.y), d.bailarina);
+
+    // Las puas del peine, en parabola hasta el suelo, y ahi se quedan
+    // tumbadas. Cada una a un lado y a su distancia.
+    for (i, &v) in d.puas.iter().enumerate() {
+        if v <= 0.0 {
+            continue;
+        }
+        let x0 = -14.0 + 28.0 * (i as f32 + 0.5) / PUAS as f32;
+        let lado = if i % 2 == 0 { -1.0 } else { 1.0 };
+        let x = x0 + lado * (26.0 + 9.0 * (i % 3) as f32) * v;
+        let alto = 18.0 + 4.0 * (i % 2) as f32;
+        let y = 10.0 + (SUELO - 12.0) * v - alto * 4.0 * v * (1.0 - v);
+        let dir = Vec2::from_angle(FRAC_PI_2 + v * TAU * 2.0) * 3.4;
+        let (a, b) = ((x - dir.x, y - dir.y), (x + dir.x, y + dir.y));
+        suelo.linea(a, b, 5.0, TINTA);
+        suelo.linea(a, b, 2.6, ORO);
+    }
+
+    // El portazo levanta polvo en las esquinas y suelta unas rayas de golpe.
+    let polvo = tramo(k, PORTAZO, PORTAZO + 0.25);
+    if polvo > 0.0 && polvo < 1.0 {
+        let a = 1.0 - polvo;
+        for s in [-1.0f32, 1.0] {
+            for j in 0..3 {
+                let j = j as f32;
+                let c = suelo.p(
+                    s * (MEDIO + 4.0 + 14.0 * polvo + 3.0 * j),
+                    CANTO - 4.0 - 6.0 * j * polvo,
+                );
+                let r = (2.0 + 5.0 * polvo) * px;
+                draw_circle(c.x, c.y, r + g, fade(TINTA, a));
+                draw_circle(c.x, c.y, r, fade(PAPEL, a));
+            }
+            for j in 0..3 {
+                let dir = Vec2::from_angle(-FRAC_PI_2 + s * (0.5 + 0.35 * j as f32));
+                let base = vec2(s * (MEDIO - 6.0), CANTO - 12.0);
+                let (p, q) = (
+                    base + dir * (6.0 + 8.0 * polvo),
+                    base + dir * (12.0 + 12.0 * polvo),
+                );
+                suelo.linea((p.x, p.y), (q.x, q.y), 2.2, fade(TINTA, a));
+            }
+        }
+    }
+
+    // Y fuera de combate, estrellitas dando vueltas por encima.
+    if d.ko {
+        for i in 0..3 {
+            let a = e.t * 0.08 + i as f32 * TAU / 3.0;
+            let c = vec2(a.cos() * 24.0, CANTO - 20.0 + a.sin() * 5.0);
+            let puntas: Vec<Vec2> = (0..8)
+                .map(|j| {
+                    let r = if j % 2 == 0 { 4.5 } else { 1.8 };
+                    c + Vec2::from_angle(j as f32 * TAU / 8.0 + a) * r
+                })
+                .collect();
+            suelo.poli(&puntas, ORO);
+        }
+    }
+}
+
+/// La cara de la caida: del susto —ojos como platos, pupilas dando vueltas y
+/// la boca abierta soltando las puas— a los ojos en X del KO, con la lengua
+/// fuera y sin un diente.
+fn cara_ko(lp: &Lapiz, e: &Escena, d: &Desarme) {
+    let ey = -8.0;
+    for s in [-1.0f32, 1.0] {
+        let ex = 14.5 * s;
+        lp.disco_liso(ex + 5.0 * s, ey + 13.0, 5.0, fade(RUBOR, 0.6));
+        if d.ko {
+            for t in [-1.0, 1.0] {
+                lp.linea(
+                    (ex - 5.0, ey - 5.0 * t),
+                    (ex + 5.0, ey + 5.0 * t),
+                    3.2,
+                    TINTA,
+                );
+            }
+            continue;
+        }
+        lp.elipse(ex, ey, 10.0, 13.5, WHITE);
+        // Mareada: las pupilas dan vueltas, cada una a su aire.
+        let a = e.t * 0.35 + s;
+        lp.disco_liso(ex + 3.5 * a.cos(), ey + 4.0 * a.sin(), 2.4, TINTA);
+        lp.linea(
+            (ex - 8.0 * s, ey - 20.0),
+            (ex + 8.0 * s, ey - 23.0),
+            3.0,
+            TINTA,
+        );
+    }
+    if d.ko {
+        // Una raya que hace ondas, y la lengua colgando por un lado.
+        lp.disco(7.0, 13.5, 3.2, RUBOR);
+        let pts: Vec<(f32, f32)> = (0..=8)
+            .map(|i| {
+                let x = -13.0 + 26.0 * i as f32 / 8.0;
+                (x, 11.0 + (x * 0.7).sin() * 1.6)
+            })
+            .collect();
+        lp.trazo(&pts, 2.4, TINTA);
+        return;
+    }
+    // La boca abierta del susto, con las puas que aun no han saltado.
+    lp.elipse(0.0, 14.0, 11.0, 8.5, GARGANTA);
+    for (i, &v) in d.puas.iter().enumerate() {
+        if v <= 0.0 {
+            let x = -14.0 + 28.0 * (i as f32 + 0.5) / PUAS as f32;
+            let y = 14.0 - 8.5 * (1.0 - (x / 11.0).powi(2)).max(0.0).sqrt();
+            lp.caja(x - 1.0, y, 2.0, 3.5, ORO);
+        }
+    }
 }
 
 /// Los ojos, las cejas, el rubor y la boca.
@@ -304,7 +603,7 @@ fn cara(lp: &Lapiz, e: &Escena, fig: &Figura, lado: f32, coda: bool, golpe: f32)
     ];
     const LADOS: usize = 8;
     for i in 1..LADOS {
-        let a = std::f32::consts::PI * i as f32 / LADOS as f32;
+        let a = PI * i as f32 / LADOS as f32;
         let (sa, ca) = a.sin_cos();
         borde.push(vec2(
             ancho * ca,
@@ -497,5 +796,25 @@ mod tests {
         assert_eq!(alzar(500.0, None), 0.0);
         assert_eq!(alzar(500.0, Some(600.0)), 0.0);
         assert_eq!(alzar(640.0, Some(600.0)), 40.0);
+    }
+
+    #[test]
+    fn la_caida_acaba_con_la_tapa_cerrada_y_la_bailarina_en_el_suelo() {
+        let (antes, despues) = (desarme(0.0, 30.0), desarme(1.0, 30.0));
+        assert_eq!(antes.tapa, 30.0);
+        assert_eq!(antes.bailarina, 0.0);
+        assert!(!antes.ko && antes.puas.iter().all(|&v| v == 0.0));
+        assert!(despues.tapa.abs() < 1e-3, "la tapa no se cierra");
+        assert!((despues.bailarina + FRAC_PI_2).abs() < 1e-3);
+        assert_eq!(despues.baja, 1.0);
+        assert!(despues.ko && despues.puas.iter().all(|&v| v == 1.0));
+        // La bailarina se cae y no se levanta, y la llave no vuelve atras.
+        for i in 1..=100 {
+            let (a, b) = (
+                desarme((i - 1) as f32 / 100.0, 30.0),
+                desarme(i as f32 / 100.0, 30.0),
+            );
+            assert!(b.bailarina <= a.bailarina && b.llave <= a.llave);
+        }
     }
 }

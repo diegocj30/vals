@@ -31,7 +31,7 @@ use macroquad::prelude::*;
 use vals_core::math::{PI, TAU, sin_cos};
 use vals_core::rng::Pcg32;
 
-use super::Escena;
+use super::{Escena, bote, suave, tramo};
 use crate::draw::fade;
 use crate::paleta::TINTA;
 use crate::skeleton::trazo;
@@ -121,6 +121,10 @@ struct Corista {
     /// 0 sonrisa, 1 boca abierta.
     boca: f32,
     guino: bool,
+    /// Fuera de combate: ojos en X. Solo al caer.
+    ko: bool,
+    /// Ya se le han caido las plumas del tocado.
+    sin_plumas: bool,
 }
 
 impl Corista {
@@ -223,16 +227,34 @@ fn girar(v: Vec2, ang: f32) -> Vec2 {
     vec2(v.x * c - v.y * s, v.x * s + v.y * c)
 }
 
-fn suave(k: f32) -> f32 {
-    let k = k.clamp(0.0, 1.0);
-    k * k * (3.0 - 2.0 * k)
+/// Cuando empieza a caer la corista `i` de `n`: de izquierda a derecha, en
+/// fila, como fichas de domino. Cada una cae empujada por la de su izquierda.
+fn empieza_a_caer(i: usize, n: usize) -> f32 {
+    0.06 + 0.4 * i as f32 / (n.max(2) - 1) as f32
+}
+
+/// Lo que tarda cada una en caer.
+const CAE: f32 = 0.3;
+
+/// La caida de una corista en `k`: cuanto ha bajado al espagat (de 0 a 1,
+/// con su bote), cuanto se inclina hacia la derecha mientras cae, en
+/// radianes, y si ya ha tocado el suelo. Se inclina empujada y se endereza al
+/// llegar abajo: el numero acaba como acaba un cancan, todas en el suelo con
+/// las piernas abiertas.
+fn domino(k: f32, i: usize, n: usize) -> (f32, f32, bool) {
+    let a = empieza_a_caer(i, n);
+    let c = tramo(k, a, a + CAE);
+    // `bote` toca el suelo por primera vez a 1 / 2.75 de su recorrido.
+    (bote(c), 0.6 * (PI * c).sin(), c >= 1.0 / 2.75)
 }
 
 /// La fila entera en este instante.
 ///
 /// `cartel` es el panel lateral: alli cabe una figura de 30 unidades de ancho y
 /// no una fila de 60, asi que salen tres, mas juntas, con la estrella delante.
-fn fila(e: &Escena, cartel: bool) -> Vec<Corista> {
+///
+/// Con `caida` la fila no baila: cae en domino (ver `domino`).
+fn fila(e: &Escena, cartel: bool, caida: Option<f32>) -> Vec<Corista> {
     let (n, paso) = if cartel { (3, 8.4) } else { (5, PASO) };
     let fase = e.fase.min(2);
     let apuro = 1.0 - e.vida.clamp(0.0, 1.0);
@@ -251,14 +273,21 @@ fn fila(e: &Escena, cartel: bool) -> Vec<Corista> {
             let tl = e.t - desfase(fase, i, n);
             let golpe = (tl / periodo).floor();
             let lado = golpe.rem_euclid(2.0) as usize;
-            let mut brio = subida(tl - golpe * periodo, periodo);
+            let mut brio = if caida.is_some() {
+                0.0
+            } else {
+                subida(tl - golpe * periodo, periodo)
+            };
             let mut alto = ([1.75, 2.45, 2.85][fase] + apuro * 0.35).min(3.0);
 
             // El infierno por compases: patadas, ruedas en las puntas y todas
             // al espagat menos la estrella, que se queda con la pierna arriba.
             let punta = i == 0 || i == n - 1;
-            let rueda = fase == 2 && !cartel && compas == 2 && punta;
-            let espagat = if fase == 2 && !cartel && compas == 3 && !estrella {
+            let rueda = fase == 2 && !cartel && compas == 2 && punta && caida.is_none();
+            let (cae, vuelco, llego) = caida.map_or((0.0, 0.0, false), |k| domino(k, i, n));
+            let espagat = if caida.is_some() {
+                cae
+            } else if fase == 2 && !cartel && compas == 3 && !estrella {
                 suave(en_compas / 5.0) * suave((COMPAS - en_compas) / 8.0)
             } else {
                 0.0
@@ -385,6 +414,8 @@ fn fila(e: &Escena, cartel: bool) -> Vec<Corista> {
                 mirada,
                 boca,
                 guino,
+                ko: false,
+                sin_plumas: false,
             };
 
             if rueda {
@@ -415,6 +446,20 @@ fn fila(e: &Escena, cartel: bool) -> Vec<Corista> {
                 c.cabeza = g(c.cabeza);
                 c.arriba = girar(arriba, ang);
                 c.boca = 1.0;
+            }
+            if caida.is_some() {
+                // Cae con la boca en O del susto y llega abajo mareada, con
+                // los ojos en X y sonriendo: el numero se acaba igual.
+                c.ko = llego;
+                c.sin_plumas = llego;
+                c.ojos = 1.2;
+                c.boca = if cae > 0.0 && !llego { 1.0 } else { 0.0 };
+                c.mirada = 0.0;
+                // Empujada por la vecina: se inclina desde la cadera.
+                let g = |p: Vec2| cadera + girar(p - cadera, vuelco);
+                c.pecho = g(c.pecho);
+                c.cabeza = g(c.cabeza);
+                c.arriba = girar(c.arriba, vuelco);
             }
             c
         })
@@ -489,12 +534,23 @@ pub fn dibujar(e: &Escena) {
     // es la unica forma de saberlo desde aqui, y alli la fila no cabe entera.
     // En combate la tinta es el rosa del baile o el blanco del golpe.
     let cartel = e.tinta.r + e.tinta.g + e.tinta.b < 0.5;
+    let todas = fila(e, cartel, None);
+    // En el cartel no: es una lamina quieta, y las plumas se salian del marco.
+    let plumas = if cartel {
+        Vec::new()
+    } else {
+        plumas_sueltas(e, &todas)
+    };
+    pintar(e, &todas, &plumas, 2.6);
+}
+
+/// La fila, y encima las plumas sueltas: posicion, giro y opacidad, y de
+/// largo `largo` (media pluma).
+fn pintar(e: &Escena, todas: &[Corista], plumas: &[(Vec2, f32, f32)], largo: f32) {
     let esc = e.escala;
     let origen = e.centro - vec2(0.0, elevar(e.centro.y, e.tablas, esc));
     let a = |p: Vec2| origen + p * esc;
     let u = |v: f32| v * esc;
-
-    let todas = fila(e, cartel);
 
     // Tinta y color: todo se pinta dos veces, engordado en tinta y encima del
     // tamano real, igual que `draw_figura`.
@@ -529,7 +585,7 @@ pub fn dibujar(e: &Escena) {
         draw_ellipse(centro.x, centro.y, u(1.6 * t), u(0.85 * t), ang, MEDIA);
     };
 
-    for c in &todas {
+    for c in todas {
         // Las piernas de apoyo, detras de la falda.
         for k in 0..2 {
             if c.patea != Some(k) {
@@ -570,15 +626,29 @@ pub fn dibujar(e: &Escena) {
         );
 
         // Penacho, cabeza, pelo y cara.
-        for (base, punta, sep) in c.penacho(e.pulso, e.fuerte) {
+        let penacho = if c.sin_plumas {
+            Vec::new()
+        } else {
+            c.penacho(e.pulso, e.fuerte)
+        };
+        for (base, punta, sep) in penacho {
             let color = if c.estrella { AVESTRUZ } else { e.tinta };
             miembro(base, punta, 1.1 * c.talla, 0.3, sep * 1.6, color);
         }
         cara(c, &a, &u, e.tinta, e.ropa);
+        if c.ko {
+            // Mareada: dos estrellitas dando vueltas alrededor de la cabeza.
+            for j in 0..2 {
+                let (s, co) = sin_cos(e.t * 0.12 + j as f32 * PI + c.cadera.x);
+                let p = a(c.cabeza + vec2(co * 5.0, -CABEZA * c.talla - 1.5 + s) * c.talla);
+                circulo(p, u(0.75 + TINTA_F), TINTA);
+                circulo(p, u(0.75), ORO);
+            }
+        }
     }
 
     // Los brazos por encima de los cuerpos: son los que atan la fila.
-    for c in &todas {
+    for c in todas {
         for k in 0..2 {
             let t = c.talla;
             let hombro = c.hombros()[k];
@@ -586,7 +656,7 @@ pub fn dibujar(e: &Escena) {
             miembro(c.codo[k], c.mano[k], 0.85 * t, 0.65 * t, 0.0, e.tinta);
         }
     }
-    for c in &todas {
+    for c in todas {
         for m in c.mano {
             let p = a(m);
             circulo(p, u(1.35 * c.talla + TINTA_G), TINTA);
@@ -595,15 +665,14 @@ pub fn dibujar(e: &Escena) {
     }
 
     // Y las patadas por delante de todo, que es el numero.
-    for c in &todas {
+    for c in todas {
         if let Some(k) = c.patea {
             pierna(c, k);
         }
     }
 
-    // En el cartel no: es una lamina quieta, y las plumas se salian del marco.
-    for (p, giro, alfa) in plumas_sueltas(e, &todas).into_iter().filter(|_| !cartel) {
-        let dir = girar(vec2(0.0, -1.0), giro) * 2.6;
+    for &(p, giro, alfa) in plumas {
+        let dir = girar(vec2(0.0, -1.0), giro) * largo;
         let (p0, p1) = (a(p - dir), a(p + dir));
         hueso(
             p0,
@@ -615,6 +684,45 @@ pub fn dibujar(e: &Escena) {
         );
         hueso(p0, p1, u(0.7), u(0.2), u(1.2), fade(e.tinta, alfa));
     }
+}
+
+/// La fila cayendo, con `k` de 0 a 1: en domino hasta el espagat, y las
+/// plumas de los tocados bajando meciendose hasta las tablas.
+pub fn dibujar_muerte(e: &Escena, k: f32) {
+    // Ya no bailan: sin compas ni figura.
+    let quieta = Escena {
+        fase: 0,
+        vida: 1.0,
+        pulso: 0.0,
+        fuerte: false,
+        ..*e
+    };
+    let todas = fila(&quieta, false, Some(k));
+    let n = todas.len();
+    let mut plumas = Vec::new();
+    for i in 0..n {
+        // Se le sueltan al tocar el suelo, del tocado de ese instante: asi
+        // salen justo de donde estaban y no dan un salto.
+        let toca = empieza_a_caer(i, n) + CAE / 2.75;
+        let v = tramo(k, toca, 1.0);
+        if v <= 0.0 {
+            continue;
+        }
+        let c = fila(&quieta, false, Some(toca))[i];
+        for (j, (base, punta, _)) in c.penacho(0.0, false).into_iter().enumerate() {
+            let medio = (base + punta) * 0.5;
+            let fase = i as f32 * 1.7 + j as f32 * 2.3;
+            let (vaiven, _) = sin_cos(v * 8.0 + fase);
+            let (mece, _) = sin_cos(v * 10.0 + fase);
+            let x = medio.x + vaiven * 3.0 * (1.0 - v) + (j as f32 - 1.0) * 5.0 * v;
+            let y = medio.y + (PISO - 1.0 - medio.y) * v;
+            // Se mecen al bajar y se quedan tumbadas en las tablas.
+            plumas.push((vec2(x, y), mece * 0.9 * (1.0 - v) + PI * 0.5 * v, 1.0));
+        }
+    }
+    // Las del tocado, mas grandes que las sueltas del infierno: son plumas
+    // enteras.
+    pintar(&quieta, &todas, &plumas, 4.2);
 }
 
 /// La cabeza con su cara: pelo, ojos con rimel, colorete y los labios
@@ -648,6 +756,18 @@ fn cara(c: &Corista, a: &impl Fn(Vec2) -> Vec2, u: &impl Fn(f32) -> f32, piel: C
     for (k, lado) in [(0, -1.0f32), (1, 1.0)] {
         let guina = c.guino && k == 1;
         let ojo = en(lado * 0.36, 0.12);
+        if c.ko {
+            // Mareada: una X de rimel en cada ojo, sobre su blanco.
+            circulo(en(lado * 0.36, 0.2), u(0.3 * r), OJO);
+            for s in [-1.0, 1.0] {
+                let (p, q) = (
+                    en(lado * 0.36 - 0.22, 0.2 - 0.22 * s),
+                    en(lado * 0.36 + 0.22, 0.2 + 0.22 * s),
+                );
+                draw_line(p.x, p.y, q.x, q.y, u(TINTA_F * 2.2), TINTA);
+            }
+            continue;
+        }
         if guina {
             // Un guino es una raya de rimel curvada hacia abajo.
             let (p, q) = (en(lado * 0.36 - 0.24, 0.1), en(lado * 0.36 + 0.24, 0.1));
@@ -804,7 +924,7 @@ mod tests {
     /// Lo alto que lleva cada corista el pie mas alto, sobre su cadera y a
     /// su talla: la estrella es mas grande y patea igual que las demas.
     fn pies(fase: usize, t: f32) -> Vec<f32> {
-        fila(&escena(fase, t, 1.0), false)
+        fila(&escena(fase, t, 1.0), false, None)
             .iter()
             .map(|c| (c.cadera.y - c.pie[0].y.min(c.pie[1].y)) / c.talla)
             .collect()
@@ -842,7 +962,7 @@ mod tests {
                 let t = paso as f32 * 0.97;
                 for vida in [1.0, 0.1] {
                     let e = escena(fase, t, vida);
-                    for c in fila(&e, false) {
+                    for c in fila(&e, false, None) {
                         let mut puntos = vec![c.cadera, c.pecho, c.cabeza + c.arriba * -CABEZA];
                         puntos.extend(c.rodilla);
                         puntos.extend(c.pie);
@@ -857,7 +977,7 @@ mod tests {
                             );
                         }
                     }
-                    for (p, ..) in plumas_sueltas(&e, &fila(&e, false)) {
+                    for (p, ..) in plumas_sueltas(&e, &fila(&e, false, None)) {
                         assert!(p.y <= PISO, "una pluma atraviesa las tablas: {p}");
                     }
                 }
@@ -876,7 +996,7 @@ mod tests {
         // El aro de golpeo esta en el centro: la fila tiene que estar
         // repartida a los dos lados por igual, y no pasar de ~200 de arena.
         for fase in 0..3 {
-            let todas = fila(&escena(fase, 7.0, 1.0), false);
+            let todas = fila(&escena(fase, 7.0, 1.0), false, None);
             let medio = todas.iter().map(|c| c.cadera.x).sum::<f32>() / todas.len() as f32;
             assert!(medio.abs() < 0.01, "la fila esta descentrada: {medio}");
             let ancho = todas.last().unwrap().cadera.x - todas[0].cadera.x + 2.0 * FALDA * TALLA;
@@ -884,6 +1004,32 @@ mod tests {
                 ancho * crate::bailarines::ESCALA <= 210.0,
                 "fila de {ancho}"
             );
+        }
+    }
+
+    #[test]
+    fn caen_en_domino_hasta_el_espagat_sin_atravesar_las_tablas() {
+        // Cada una empieza a caer despues que la de su izquierda.
+        for i in 1..5 {
+            assert!(empieza_a_caer(i, 5) > empieza_a_caer(i - 1, 5));
+        }
+        // Al final todas abajo, derechas y fuera de combate.
+        for i in 0..5 {
+            let (espagat, vuelco, llego) = domino(1.0, i, 5);
+            assert!((espagat - 1.0).abs() < 1e-3 && vuelco.abs() < 1e-3 && llego);
+            assert_eq!(domino(0.0, i, 5), (0.0, 0.0, false));
+        }
+        let e = escena(0, 50.0, 1.0);
+        for paso in 0..=100 {
+            for c in fila(&e, false, Some(paso as f32 / 100.0)) {
+                let mut puntos = vec![c.cadera, c.pecho, c.cabeza];
+                puntos.extend(c.pie);
+                puntos.extend(c.falda);
+                puntos.extend(c.enagua);
+                for p in puntos {
+                    assert!(p.y <= PISO + 0.01, "en la caida un punto baja a {p}");
+                }
+            }
         }
     }
 }

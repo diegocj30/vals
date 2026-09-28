@@ -206,7 +206,16 @@ fn con_sombra(pinta: impl Fn(f32, Color), color: Color) {
 /// solo draw call, con `None` el viejo a base de primitivas de macroquad. Los
 /// dos conviven a proposito, porque es lo que hace reproducible la comparacion
 /// de `docs/PERF.md` dentro de un ano.
-pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mut BulletRenderer>) {
+///
+/// `caida` es por donde va la caida del jefe si ya ha caido, de 0 a 1
+/// (`jefes::caida`).
+pub fn frame(
+    world: &World,
+    alpha: f32,
+    layout: &Layout,
+    bullets_gpu: Option<&mut BulletRenderer>,
+    caida: f32,
+) {
     papel();
     draw_arena(
         layout,
@@ -217,7 +226,7 @@ pub fn frame(world: &World, alpha: f32, layout: &Layout, bullets_gpu: Option<&mu
     if world.mode == Mode::Platform {
         draw_ground(layout, world.tick as f32 + alpha);
     }
-    draw_boss(world, alpha, layout);
+    draw_boss(world, alpha, layout, caida);
     draw_player_shots(world, layout);
     draw_trail(world, layout);
     // Las balas van encima del jefe pero debajo del jugador: taparte tu propia
@@ -469,9 +478,13 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 5]>) 
     }
 }
 
-pub fn fin_de_partida(l: &Layout, world: &World) {
+/// El sello del final. El de la victoria espera a que el jefe acabe de caer
+/// (`caida` a 1): primero se ve morir, y luego se celebra.
+pub fn fin_de_partida(l: &Layout, world: &World, caida: f32) {
     if world.victory {
-        sello_de_victoria(l, world);
+        if caida >= 1.0 {
+            sello_de_victoria(l, world);
+        }
     } else {
         sello_de_derrota(l, world);
     }
@@ -669,9 +682,12 @@ fn sello_de_derrota(l: &Layout, world: &World) {
 ///
 /// Todo procedural. No hay ni un pixel dibujado a mano en este juego, y esa
 /// decision es la que hace que anadir un jefe nuevo sea escribir un RON.
-fn draw_boss(world: &World, alpha: f32, l: &Layout) {
+///
+/// Tumbado, con la victoria, se dibuja cayendo, sin el aro:
+/// ya no hay donde darle.
+fn draw_boss(world: &World, alpha: f32, l: &Layout, caida: f32) {
     let b = &world.boss;
-    if b.defeated {
+    if b.defeated && !world.victory {
         return;
     }
     let p = b.render_pos(alpha);
@@ -688,11 +704,15 @@ fn draw_boss(world: &World, alpha: f32, l: &Layout) {
     let (tinta_cuerpo, tinta_tela) = paleta::del_baile(world.baile);
     let (pulso, brillo) = bailarines::halo(t, vida);
     let r = l.len(b.radius) * pulso;
-    draw_circle(s.x, s.y, r, fade(BOSS_CORE, 0.55));
-    draw_poly_lines(s.x, s.y, 24, r, 0.0, 1.5, fade(tinta_cuerpo, 0.20 + brillo));
+    if !b.defeated {
+        draw_circle(s.x, s.y, r, fade(BOSS_CORE, 0.55));
+        draw_poly_lines(s.x, s.y, 24, r, 0.0, 1.5, fade(tinta_cuerpo, 0.20 + brillo));
+    }
 
     // Y la figura. El jefe es un bailarin, y baila lo suyo.
-    let golpeado = b.hit_flash > 0;
+    // Al caer, el blanco del golpe solo dura el hitstop: `hit_flash` ya no
+    // baja con el jefe quieto, y un jefe blanco entero no se ve morir.
+    let golpeado = b.hit_flash > 0 && (!b.defeated || caida == 0.0);
     let (cuerpo, tela) = if golpeado {
         (BOSS_FLASH, BOSS_FLASH)
     } else {
@@ -706,21 +726,23 @@ fn draw_boss(world: &World, alpha: f32, l: &Layout) {
         l.to_screen(0.0, player::GROUND_Y + player::PLAYER_SPRITE_RADIUS)
             .y
     });
-    jefes::dibujar(
-        bailarin(world),
-        &jefes::Escena {
-            centro: s,
-            escala: l.escalado(bailarines::ESCALA).scale(),
-            t,
-            fase: b.phase,
-            vida,
-            pulso,
-            fuerte,
-            tinta: cuerpo,
-            ropa: tela,
-            tablas,
-        },
-    );
+    let escena = jefes::Escena {
+        centro: s,
+        escala: l.escalado(bailarines::ESCALA).scale(),
+        t,
+        fase: b.phase,
+        vida,
+        pulso,
+        fuerte,
+        tinta: cuerpo,
+        ropa: tela,
+        tablas,
+    };
+    if b.defeated {
+        jefes::dibujar_muerte(bailarin(world), &escena, caida);
+    } else {
+        jefes::dibujar(bailarin(world), &escena);
+    }
 }
 
 /// Barra de vida de la fase, con una marca por fase superada.

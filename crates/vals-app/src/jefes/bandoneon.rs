@@ -22,8 +22,9 @@
 
 use macroquad::prelude::*;
 
-use super::Escena;
+use super::{Escena, bote, suave, tramo};
 use crate::bailarines;
+use crate::draw::fade;
 use crate::music::{self, Tema};
 use crate::paleta::{ORO, TINTA};
 
@@ -34,6 +35,9 @@ const CREMA: Color = color_u8!(246, 236, 214, 255);
 const ROSA: Color = color_u8!(150, 16, 36, 255);
 const HOJA: Color = color_u8!(74, 112, 58, 255);
 const SUDOR: Color = color_u8!(196, 222, 236, 255);
+/// Los petalos que caen al final: mas claros que la rosa, que caen sobre el
+/// fuelle y del mismo rojo no se verian.
+const PETALO: Color = color_u8!(226, 70, 96, 255);
 
 /// Media caja: 17 x 58. Mas alta que ancha, como las de verdad.
 ///
@@ -282,92 +286,36 @@ pub fn dibujar(e: &Escena) {
     }
     let pl = Pluma::new(o, k, ps.inclina.to_radians());
 
-    // --- Las cajas y los bordes del fuelle. Cada caja gira sobre su centro;
-    // el fuelle se engancha a los cantos de dentro, asi que se abre en V solo
-    // con que las cajas se tuerzan.
-    let medio = 12.0 + 11.0 * ps.abre;
-    let aplasta = 1.0 - 0.06 * acento;
-    let caja = |lado: f32| {
-        let c = vec2(lado * (medio + CAJA.x), CAJA_Y);
-        let ang = (lado * ps.abanico).to_radians();
-        (c, ang)
+    let cu = Cuerpo {
+        medio: 12.0 + 11.0 * ps.abre,
+        abanico: ps.abanico,
+        aplasta: 1.0 - 0.06 * acento,
+        comba: 0.0,
     };
-    let canto = |lado: f32, y: f32| {
-        let (c, ang) = caja(lado);
-        c + Vec2::from_angle(ang).rotate(vec2(-lado * CAJA.x, y * aplasta))
-    };
-    let (it, ib) = (canto(-1.0, -FUELLE), canto(-1.0, FUELLE));
-    let (dt, db) = (canto(1.0, -FUELLE), canto(1.0, FUELLE));
-
-    // --- El fuelle: pliegues alternos claro y oscuro, que es lo que lo hace
-    // leerse como fuelle y no como una caja roja. Los picos de arriba y abajo
-    // son los dobleces asomando.
-    let oscuro = mezcla(e.tinta, TINTA, 0.2);
-    let borde = |i: usize| {
-        let s = i as f32 / PLIEGUES as f32;
-        let pico = if !i.is_multiple_of(2) { 2.5 } else { 0.0 };
-        (
-            it.lerp(dt, s) - vec2(0.0, pico),
-            ib.lerp(db, s) + vec2(0.0, pico),
-        )
-    };
-    let g = vec2(0.0, pl.g);
-    for i in 0..PLIEGUES {
-        let ((a, b), (c, d)) = (borde(i), borde(i + 1));
-        pl.cuad([a - g, c - g, d + g, b + g], TINTA);
-    }
-    for i in 0..PLIEGUES {
-        let ((a, b), (c, d)) = (borde(i), borde(i + 1));
-        let col = if i.is_multiple_of(2) { e.tinta } else { oscuro };
-        pl.cuad([a, c, d, b], col);
-    }
-    for i in 1..PLIEGUES {
-        let (a, b) = borde(i);
-        pl.trazo(&[a, b], 0.8, TINTA);
-    }
-
-    // La raja de la quebrada, con el aire saliendo a cada golpe.
-    if quebrada {
-        let (a, b) = borde(2);
-        let (c, d) = borde(3);
-        let centro = a.lerp(b, 0.72).lerp(c.lerp(d, 0.72), 0.5);
-        raja(&pl, centro, e.pulso);
-    }
-
-    // --- Las cajas: marco de la tinta del baile, tapa de la segunda y los
-    // botones en dorado. En la quebrada faltan algunos: son los que saltan.
-    for lado in [-1.0, 1.0] {
-        let (c, ang) = caja(lado);
-        pl.caja(c, CAJA, ang, e.tinta);
-        pl.rect(c, CAJA - vec2(3.0, 3.5), ang, e.ropa);
-        let giro = Vec2::from_angle(ang);
-        for col in 0..2 {
-            for fila in 0..6 {
-                let donde = c + giro.rotate(boton(col, fila));
-                let falta = quebrada && SALTAN.contains(&(lado as i32, col, fila));
-                let (r, color) = if falta { (1.1, TINTA) } else { (1.8, ORO) };
-                pl.disco_con(donde, r, 0.8, color);
-            }
-        }
-    }
+    let [it, ib, dt, db] = cuerpo(&pl, e, &cu, e.pulso);
+    let caja = |lado| cu.caja(lado);
 
     // --- Los brazos, por delante de las cajas: pegados a su canto, detras
     // no se verian, y un brazo de manguera que no se ve no dice nada.
     for (lado, mano) in [(-1.0, ps.mano_i), (1.0, ps.mano_d)] {
-        let (c, ang) = caja(lado);
-        let hombro = c + Vec2::from_angle(ang).rotate(vec2(lado * CAJA.x, -2.0));
         let loco = if quebrada {
             vec2((e.t * 0.4 + lado).sin(), (e.t * 0.33 + lado).cos()) * 3.0
         } else {
             Vec2::ZERO
         };
-        let mano = hombro + vec2(lado * mano.x, mano.y) + loco;
-        brazo(&pl, hombro, mano, lado, e.tinta);
+        let hombro = cu.hombro(lado);
+        brazo(
+            &pl,
+            hombro,
+            hombro + vec2(lado * mano.x, mano.y) + loco,
+            lado,
+            e.tinta,
+        );
     }
 
     // --- La cara, en medio del fuelle: se estira cuando el fuelle abre.
     let cara = (it + dt + ib + db) * 0.25 - vec2(0.0, 3.0);
-    let separa = 2.5 + 0.3 * medio;
+    let separa = 2.5 + 0.3 * cu.medio;
     let mira = -ps.inclina.signum();
     cara_del_tango(&pl, e, cara, separa, mira, acento);
 
@@ -410,6 +358,324 @@ pub fn dibujar(e: &Escena) {
             pl.ovalo(gota, vec2(1.4, 2.0), 0.0, SUDOR);
         }
     }
+}
+
+/// Como estan las cajas y el fuelle en un instante: lo que se abre, lo que
+/// se tuercen en V y cuanto se aplasta y se comba el fuelle por el medio.
+struct Cuerpo {
+    /// Del centro al canto de dentro de cada caja.
+    medio: f32,
+    /// Grados que se abren las cajas en V.
+    abanico: f32,
+    /// El pisoton: el fuelle se encoge un pelo de alto en cada golpe.
+    aplasta: f32,
+    /// Lo que cuelga el fuelle por el medio, en unidades. Solo al
+    /// desinflarse: un fuelle sin aire no se sostiene recto.
+    comba: f32,
+}
+
+impl Cuerpo {
+    /// Centro y giro de una caja. Cada caja gira sobre su centro; el fuelle
+    /// se engancha a los cantos de dentro, asi que se abre en V solo con que
+    /// las cajas se tuerzan.
+    fn caja(&self, lado: f32) -> (Vec2, f32) {
+        let c = vec2(lado * (self.medio + CAJA.x), CAJA_Y);
+        (c, (lado * self.abanico).to_radians())
+    }
+
+    fn canto(&self, lado: f32, y: f32) -> Vec2 {
+        let (c, ang) = self.caja(lado);
+        c + Vec2::from_angle(ang).rotate(vec2(-lado * CAJA.x, y * self.aplasta))
+    }
+
+    fn hombro(&self, lado: f32) -> Vec2 {
+        let (c, ang) = self.caja(lado);
+        c + Vec2::from_angle(ang).rotate(vec2(lado * CAJA.x, -2.0))
+    }
+}
+
+/// El fuelle y las dos cajas. Devuelve las cuatro esquinas del fuelle
+/// —arriba y abajo de la izquierda, arriba y abajo de la derecha—, que es de
+/// donde cuelgan la cara y el sombrero.
+fn cuerpo(pl: &Pluma, e: &Escena, cu: &Cuerpo, pulso: f32) -> [Vec2; 4] {
+    let quebrada = e.fase >= 2;
+    let (it, ib) = (cu.canto(-1.0, -FUELLE), cu.canto(-1.0, FUELLE));
+    let (dt, db) = (cu.canto(1.0, -FUELLE), cu.canto(1.0, FUELLE));
+
+    // --- El fuelle: pliegues alternos claro y oscuro, que es lo que lo hace
+    // leerse como fuelle y no como una caja roja. Los picos de arriba y abajo
+    // son los dobleces asomando.
+    let oscuro = mezcla(e.tinta, TINTA, 0.2);
+    let borde = |i: usize| {
+        let s = i as f32 / PLIEGUES as f32;
+        let pico = if !i.is_multiple_of(2) { 2.5 } else { 0.0 };
+        let cuelga = vec2(0.0, cu.comba * (s * std::f32::consts::PI).sin());
+        (
+            it.lerp(dt, s) - vec2(0.0, pico) + cuelga,
+            ib.lerp(db, s) + vec2(0.0, pico) + cuelga,
+        )
+    };
+    let g = vec2(0.0, pl.g);
+    for i in 0..PLIEGUES {
+        let ((a, b), (c, d)) = (borde(i), borde(i + 1));
+        pl.cuad([a - g, c - g, d + g, b + g], TINTA);
+    }
+    for i in 0..PLIEGUES {
+        let ((a, b), (c, d)) = (borde(i), borde(i + 1));
+        let col = if i.is_multiple_of(2) { e.tinta } else { oscuro };
+        pl.cuad([a, c, d, b], col);
+    }
+    for i in 1..PLIEGUES {
+        let (a, b) = borde(i);
+        pl.trazo(&[a, b], 0.8, TINTA);
+    }
+
+    // La raja de la quebrada, con el aire saliendo a cada golpe.
+    if quebrada {
+        let (a, b) = borde(2);
+        let (c, d) = borde(3);
+        let centro = a.lerp(b, 0.72).lerp(c.lerp(d, 0.72), 0.5);
+        raja(pl, centro, pulso);
+    }
+
+    // --- Las cajas: marco de la tinta del baile, tapa de la segunda y los
+    // botones en dorado. En la quebrada faltan algunos: son los que saltan.
+    for lado in [-1.0, 1.0] {
+        let (c, ang) = cu.caja(lado);
+        pl.caja(c, CAJA, ang, e.tinta);
+        pl.rect(c, CAJA - vec2(3.0, 3.5), ang, e.ropa);
+        let giro = Vec2::from_angle(ang);
+        for col in 0..2 {
+            for fila in 0..6 {
+                let donde = c + giro.rotate(boton(col, fila));
+                let falta = quebrada && SALTAN.contains(&(lado as i32, col, fila));
+                let (r, color) = if falta { (1.1, TINTA) } else { (1.8, ORO) };
+                pl.disco_con(donde, r, 0.8, color);
+            }
+        }
+    }
+    let cuelga = vec2(0.0, cu.comba);
+    [it + cuelga, ib + cuelga, dt + cuelga, db + cuelga]
+}
+
+/// Cuando se queda sin aire del todo: desde ahi, ojos en X.
+const SIN_AIRE: f32 = 0.8;
+/// El suelo de la caida, en unidades desde el centro: lo mas bajo del dibujo.
+const PISO: f32 = BAJO;
+/// Los petalos que le quedan a la rosa.
+const PETALOS: usize = 4;
+
+/// La caida del tango: **se desinfla**. Coge aire por ultima vez, lo suelta
+/// en un resoplido largo, el fuelle se descuelga hasta el suelo, se le caen
+/// los ultimos petalos a la rosa y el sombrero se va rodando. Curvas de `k`,
+/// puras.
+#[derive(Debug, Clone, Copy)]
+struct Desinfla {
+    /// El fuelle, como en `Paso`: de 0 cerrado a 1 abierto (y algo mas en la
+    /// ultima bocanada).
+    abre: f32,
+    /// De 0 a 1, lo que se ha descolgado: baja entero, comba el fuelle y
+    /// abre las cajas hacia fuera.
+    hunde: f32,
+    /// Lo fuerte que resopla, de 0 a 1. Es lo que echa aire por la boca.
+    resopla: f32,
+    /// Las manos: de arriba del susto a colgando.
+    manos: f32,
+    /// El sombrero: cayendo (0 a 1) y rodando despues (0 a 1).
+    cae: f32,
+    rueda: f32,
+    /// Por donde va cada petalo, de la flor (0) al suelo (1).
+    petalos: [f32; PETALOS],
+    ko: bool,
+}
+
+fn desinfla(k: f32) -> Desinfla {
+    let toma = suave(tramo(k, 0.0, 0.12));
+    let suelta = tramo(k, 0.12, SIN_AIRE);
+    // Suelta el aire deprisa al principio y cada vez mas despacio: el
+    // resoplido se alarga hasta el final, que es lo que lo hace gracioso.
+    let vacio = 1.0 - (1.0 - suelta).powi(2);
+    Desinfla {
+        abre: (0.6 + 0.55 * toma) * (1.0 - vacio),
+        hunde: suave(tramo(k, 0.3, 0.9)),
+        resopla: if (0.12..SIN_AIRE).contains(&k) {
+            1.0 - suelta * 0.7
+        } else {
+            0.0
+        },
+        manos: bote(tramo(k, 0.18, 0.55)),
+        cae: tramo(k, 0.05, 0.35),
+        rueda: 1.0 - (1.0 - tramo(k, 0.35, 0.95)).powi(2),
+        petalos: std::array::from_fn(|i| {
+            let a = 0.2 + 0.13 * i as f32;
+            tramo(k, a, a + 0.35)
+        }),
+        ko: k >= SIN_AIRE,
+    }
+}
+
+/// El bandoneon cayendo, con `k` de 0 a 1.
+pub fn dibujar_muerte(e: &Escena, k: f32) {
+    use std::f32::consts::{PI, TAU};
+
+    let px = e.escala / bailarines::ESCALA;
+    let d = desinfla(k);
+    let mut o = e.centro;
+    if let Some(tablas) = e.tablas {
+        o.y -= (o.y + BAJO * px - tablas).max(0.0);
+    }
+    // Se mece un poco con cada resoplido; lo que baja lo hace el cuerpo.
+    let mece = (e.t * 0.5).sin() * 4.0 * d.resopla;
+    let pl = Pluma::new(o, px, mece.to_radians());
+    let quieta = Pluma::new(o, px, 0.0);
+    let aleteo = (e.t * 1.7).sin() * 0.05 * d.resopla;
+    let cu = Cuerpo {
+        medio: 12.0 + 11.0 * (d.abre + aleteo).max(0.0),
+        abanico: 16.0 * d.hunde,
+        aplasta: 1.0 - 0.25 * d.hunde,
+        comba: 8.0 * d.hunde,
+    };
+    // Todo el cuerpo baja hasta apoyar las cajas en el suelo.
+    let baja = vec2(0.0, (PISO - CAJA_Y - CAJA.y) * d.hunde);
+    let pl = Pluma {
+        o: pl.p(baja),
+        ..pl
+    };
+    let [it, ib, dt, db] = cuerpo(&pl, e, &cu, d.resopla);
+
+    // Los brazos: arriba del susto y luego se desploman a los costados.
+    let arriba = vec2(4.0, -30.0);
+    let colgando = vec2(7.0, 24.0 - 6.0 * d.hunde);
+    let mano = arriba.lerp(colgando, d.manos);
+    for lado in [-1.0, 1.0] {
+        let hombro = cu.hombro(lado);
+        brazo(
+            &pl,
+            hombro,
+            hombro + vec2(lado * mano.x, mano.y),
+            lado,
+            e.tinta,
+        );
+    }
+
+    let cara = (it + dt + ib + db) * 0.25 - vec2(0.0, 3.0);
+    let separa = 2.5 + 0.3 * cu.medio;
+    let boca = cara_desinflada(&pl, e, &d, cara, separa);
+
+    // El aire: bocanadas que salen de la boca mientras resopla, cada una
+    // creciendo y deshaciendose hacia arriba.
+    if d.resopla > 0.0 {
+        for j in 0..3 {
+            let f = fraccion(e.t * 0.03 + j as f32 / 3.0);
+            let p = boca + vec2(6.0 + 14.0 * f, -4.0 - 16.0 * f);
+            let r = (2.5 + 6.0 * f) * d.resopla.sqrt();
+            let s = pl.p(p);
+            let a = (1.0 - f).sqrt();
+            draw_circle(s.x, s.y, (r + pl.g) * px, fade(TINTA, a));
+            draw_circle(s.x, s.y, r * px, fade(CREMA, a));
+        }
+    }
+
+    // La rosa: un tallo mustio colgando de la boca, y los ultimos petalos
+    // cayendo al suelo meciendose. Los que llegan se quedan alli.
+    let flor = boca + vec2(9.0, 7.0 + 5.0 * d.hunde);
+    pl.trazo_tinta(
+        &[boca + vec2(2.0, 0.0), boca + vec2(7.0, 1.0), flor],
+        0.9,
+        HOJA,
+    );
+    let quedan = d.petalos.iter().filter(|&&v| v <= 0.0).count();
+    pl.disco(flor, 1.2 + 0.7 * quedan as f32, PETALO);
+    let desde = pl.p(flor);
+    for (j, &v) in d.petalos.iter().enumerate() {
+        if v <= 0.0 {
+            continue;
+        }
+        // Se sueltan de la flor y caen al suelo en la pluma quieta: el
+        // suelo no se mece.
+        let de = (desde - quieta.o) / px;
+        // Cada uno se va a un lado al caer: dentro del fuelle no se verian.
+        let lado = if j % 2 == 0 { 1.0 } else { -1.0 };
+        let x = de.x
+            + (v * 9.0 + j as f32).sin() * 4.0 * (1.0 - v)
+            + lado * (22.0 + 9.0 * j as f32) * suave(v);
+        let y = de.y + (PISO + 1.5 - de.y) * v;
+        quieta.ovalo(vec2(x, y), vec2(3.0, 1.7), v * 5.0 + j as f32, PETALO);
+    }
+
+    // El sombrero: se cae de la cabeza, bota en el suelo y se va rodando
+    // hacia la derecha como una rueda, hasta quedarse de pie en el suelo.
+    let cabeza = pl.p(it.lerp(dt, 0.5));
+    let cabeza = (cabeza - quieta.o) / px + vec2(0.0, -20.0);
+    const RADIO: f32 = 9.0;
+    let rueda = RADIO * TAU * d.rueda;
+    let suelo_del_ala = PISO - 2.5;
+    let cae = vec2(
+        cabeza.x + 46.0 * suave(d.cae * 1.6),
+        cabeza.y + (suelo_del_ala - cabeza.y) * bote(d.cae),
+    );
+    let (donde, giro) = if d.rueda <= 0.0 {
+        (cae, (1.0 - d.cae) * PI * 1.5 + e.t * 0.12 * (1.0 - d.cae))
+    } else {
+        // Rueda sobre el borde: gira sobre un punto a media copa, que va a
+        // ras de suelo, y el ala va dando la vuelta a su alrededor.
+        let eje = vec2(cae.x + rueda, suelo_del_ala - RADIO);
+        let giro = rueda / RADIO;
+        (eje + Vec2::from_angle(giro).rotate(vec2(0.0, RADIO)), giro)
+    };
+    sombrero(&quieta, donde, giro, e.tinta, e.ropa);
+}
+
+/// La cara desinflandose: los ojos como platos al coger aire, cerrados de
+/// esfuerzo al soltarlo y en X al quedarse vacio. Devuelve donde tiene la
+/// boca, que es de donde salen el aire y la rosa.
+fn cara_desinflada(pl: &Pluma, e: &Escena, d: &Desinfla, c: Vec2, separa: f32) -> Vec2 {
+    let boca = c + vec2(0.0, 11.0) * CARA;
+    let pl = &pl.escalada(c, CARA);
+    let (c, separa) = (Vec2::ZERO, separa / CARA);
+    for lado in [-1.0, 1.0] {
+        let o = c + vec2(lado * separa, -5.0);
+        // Los blancos siempre: sin ellos, una X de tinta sobre el fuelle
+        // rojo oscuro no se ve.
+        if d.ko || d.resopla > 0.0 {
+            pl.ovalo(o, vec2(4.6, 4.6), 0.0, CREMA);
+        }
+        if d.ko {
+            for s in [-1.0, 1.0] {
+                pl.trazo(
+                    &[o + vec2(-3.6, -3.6 * s), o + vec2(3.6, 3.6 * s)],
+                    1.6,
+                    TINTA,
+                );
+            }
+        } else if d.resopla > 0.0 {
+            // Apretados del esfuerzo: dos angulos, > <.
+            pl.trazo(
+                &[
+                    o + vec2(-3.5 * lado, -3.0),
+                    o + vec2(3.0 * lado, 0.0),
+                    o + vec2(-3.5 * lado, 3.0),
+                ],
+                1.5,
+                TINTA,
+            );
+        } else {
+            pl.ovalo(o, vec2(5.2, 6.8), 0.0, CREMA);
+            pl.disco_con(o + vec2(0.0, 0.5), 1.2, 0.0, TINTA);
+        }
+    }
+    nariz_y_bigote(pl, c, e.tinta);
+    let b = vec2(0.0, 11.0);
+    if d.ko {
+        // La lengua fuera, de lado.
+        pl.trazo(&[b + vec2(-5.0, 0.0), b + vec2(5.0, 0.6)], 1.4, TINTA);
+        pl.ovalo(b + vec2(2.5, 2.2), vec2(2.0, 2.6), 0.0, ROSA);
+    } else {
+        // La boca en O, soplando: mas chica cuanto menos aire le queda.
+        let r = 2.0 + 2.0 * d.resopla + if d.resopla > 0.0 { 0.0 } else { 1.5 };
+        pl.ovalo(b, vec2(r * 0.8, r), 0.0, TINTA);
+    }
+    boca
 }
 
 /// Los botones que saltan en la quebrada: (lado, columna, fila).
@@ -658,5 +924,19 @@ mod tests {
     fn el_corte_abre_y_cierra_entero_en_cada_tiempo() {
         let abre: Vec<f32> = (0..4).map(|b| postura(1, b as f32 + 0.5).abre).collect();
         assert_eq!(abre, [1.0, 0.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn la_caida_coge_aire_y_acaba_vacio_en_el_suelo() {
+        let antes = desinfla(0.0);
+        assert!(!antes.ko && antes.hunde == 0.0 && antes.rueda == 0.0);
+        // La ultima bocanada abre el fuelle mas de lo que estaba.
+        assert!(desinfla(0.12).abre > antes.abre + 0.3);
+        let despues = desinfla(1.0);
+        assert_eq!(despues.abre, 0.0);
+        assert_eq!(despues.hunde, 1.0);
+        assert_eq!(despues.rueda, 1.0);
+        assert!(despues.ko && despues.resopla == 0.0);
+        assert!(despues.petalos.iter().all(|&v| v == 1.0));
     }
 }

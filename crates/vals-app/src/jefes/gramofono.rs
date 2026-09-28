@@ -22,8 +22,9 @@ use std::f32::consts::{PI, TAU};
 
 use macroquad::prelude::*;
 
-use super::Escena;
+use super::{Escena, bote, suave, tramo};
 use crate::bailarines;
+use crate::draw::fade;
 use crate::paleta::{ORO, TINTA};
 
 /// El compas del charleston: 100 negras en 4/4, 36 ticks por tiempo.
@@ -99,6 +100,13 @@ struct Pose {
     /// Ojos cerrados de gusto (solo en la primera figura).
     gusto: bool,
     muelles: bool,
+    /// Lo que se ha ido el disco del plato volando, en el marco del cuerpo.
+    /// Solo al caer.
+    fuera: Vec2,
+    /// Del susto de la caida: ojos como platos y pupilas de alfiler.
+    susto: bool,
+    /// Fuera de combate: ojos en X y la lengua fuera.
+    ko: bool,
 }
 
 impl Pose {
@@ -129,6 +137,9 @@ impl Pose {
             pluma: (e.t * 0.09).sin() * 0.15 - e.pulso * 0.2,
             gusto: false,
             muelles: false,
+            fuera: Vec2::ZERO,
+            susto: false,
+            ko: false,
         };
         let pie = if lado > 0.0 { 1 } else { 0 };
         match e.fase {
@@ -336,6 +347,169 @@ pub fn dibujar(e: &Escena) {
     bocina(&cuerpo, &pose, e, sombra);
 }
 
+/// Donde se dobla la bocina al mustiarse: el pie de la flor, sobre el plato.
+const TALLO: Vec2 = vec2(0.0, -10.0);
+/// Cuando cae redondo: desde ahi, ojos en X.
+const REDONDO: f32 = 0.55;
+
+/// La caida del charleston: **el disco se raya**. La aguja rasca, todo
+/// tiembla, las patas se doblan y se sienta de golpe, la bocina se mustia
+/// como una flor sin agua y el disco sale volando dando vueltas. Curvas de
+/// `k`, puras.
+#[derive(Debug, Clone, Copy)]
+struct Rayada {
+    /// Lo fuerte que rasca la aguja, de 1 a 0.
+    rasca: f32,
+    /// De 0 a 1: lo que se ha sentado, con su bote.
+    sienta: f32,
+    /// Lo que se ha doblado la bocina hacia la izquierda, en radianes.
+    mustia: f32,
+    /// Por donde va el vuelo del disco, de 0 (en el plato) a 1 (fuera).
+    vuela: f32,
+    /// Los brazos: de arriba del susto a colgando.
+    cuelgan: f32,
+}
+
+fn rayada(k: f32) -> Rayada {
+    Rayada {
+        rasca: 1.0 - suave(tramo(k, 0.18, 0.4)),
+        sienta: bote(tramo(k, 0.15, 0.45)),
+        mustia: -1.75 * bote(tramo(k, 0.3, 0.72)),
+        vuela: tramo(k, 0.36, 1.0),
+        cuelgan: bote(tramo(k, 0.25, 0.55)),
+    }
+}
+
+/// El gramofono cayendo, con `k` de 0 a 1.
+pub fn dibujar_muerte(e: &Escena, k: f32) {
+    let r = rayada(k);
+    // Se parte de la pose del charleston en reposo, y se va rompiendo.
+    let quieto = Escena {
+        t: 40.0,
+        pulso: 0.0,
+        fuerte: false,
+        vida: 1.0,
+        fase: 0,
+        ..*e
+    };
+    let mut pose = Pose::de(&quieto);
+    let tirita = (e.t * 3.1).sin() * 2.5 * r.rasca;
+    pose.desp = vec2(tirita, 13.0 * r.sienta);
+    pose.giro = (e.t * 2.3).cos() * 0.06 * r.rasca + 0.1 * r.sienta;
+    // Al sentarse se le abren las patas, con las rodillas hacia fuera.
+    let abre = 9.0 * r.sienta;
+    pose.pies = [vec2(-PIE_X - abre, PIE_Y), vec2(PIE_X + abre, PIE_Y)];
+    pose.rodilla = 7.0 * r.sienta;
+    let arriba = [vec2(-36.0, -30.0), vec2(36.0, -30.0)];
+    let colgando = [vec2(-37.0, 30.0), vec2(37.0, 30.0)];
+    pose.manos = [0, 1].map(|i| arriba[i].lerp(colgando[i], r.cuelgan));
+    pose.susto = k < REDONDO;
+    pose.ko = !pose.susto;
+    // Grita mientras rasca; tumbado, la boca floja.
+    pose.boca = if pose.ko { 0.1 } else { 0.6 + 0.4 * r.rasca };
+    pose.bocina = 30.0 - 4.0 * suave(tramo(k, 0.3, 0.8));
+    pose.pluma = 1.1 * r.mustia.abs() / 1.75;
+    // El disco: primero salta en el plato con cada rascada; luego sale
+    // volando hacia arriba y a la derecha, dando vueltas de campana.
+    let v = r.vuela;
+    pose.disco = e.t * 0.1 * r.rasca + v * 40.0;
+    pose.vuelo = if v > 0.0 {
+        1.0
+    } else {
+        ((e.t * 1.3).sin() * 3.0).max(0.0) * r.rasca
+    };
+    pose.fuera = vec2(260.0 * v, -260.0 * v + 140.0 * v * v);
+    pose.ladeo = v * 900.0;
+
+    let px = e.escala / bailarines::ESCALA * TAM;
+    let g = (2.2 * px).max(1.5) / px;
+    let mut o = e.centro;
+    o.y -= alzar(o.y + pose.bajo(g) * px, e.tablas);
+    let cuerpo = Lapiz {
+        o,
+        k: px,
+        g,
+        giro: pose.giro,
+        desp: pose.desp,
+    };
+    let suelo = Lapiz {
+        giro: 0.0,
+        desp: Vec2::ZERO,
+        ..cuerpo
+    };
+    // La bocina gira sobre su tallo: otro lapiz, con el giro de mas y el
+    // desplazamiento que deja el tallo donde estaba.
+    let giro = pose.giro + r.mustia;
+    let gira = |a: f32, v: Vec2| Vec2::from_angle(a).rotate(v);
+    let flor = Lapiz {
+        giro,
+        desp: pose.desp + gira(pose.giro, TALLO - CADERA) - gira(giro, TALLO - CADERA),
+        ..cuerpo
+    };
+    let sombra = Color::new(e.tinta.r * 0.78, e.tinta.g * 0.72, e.tinta.b * 0.70, 1.0);
+
+    // El cuello de la bocina, que ahora baja hasta el tallo doblado.
+    let tubo = [
+        vec2(21.0, -4.0),
+        vec2(24.0, -11.0),
+        vec2(15.0, -18.0),
+        TALLO,
+    ];
+    cuerpo.trazo(&tubo, 6.5, LATON);
+
+    patas(&cuerpo, &suelo, &pose, e.ropa);
+    brazos(&cuerpo, &pose, e.ropa);
+    mueble(&cuerpo, &pose, e.tinta, e.ropa);
+    if v > 0.0 {
+        // El disco ya vuela: por delante de la flor, que se le cruza.
+        bocina(&flor, &pose, e, sombra);
+        plato(&cuerpo, &pose);
+    } else {
+        plato(&cuerpo, &pose);
+        rayon(&cuerpo, e, r.rasca);
+        bocina(&flor, &pose, e, sombra);
+    }
+}
+
+/// La rayada: un aranazo blanco en zigzag sobre el disco y unos rayos de
+/// tinta saltando de la aguja, que parpadean como un disco que salta.
+fn rayon(cuerpo: &Lapiz, e: &Escena, rasca: f32) {
+    if rasca <= 0.05 {
+        return;
+    }
+    let aranazo = [
+        vec2(-18.0, -3.0),
+        vec2(-10.0, 0.5),
+        vec2(-4.0, -4.0),
+        vec2(3.0, 1.0),
+        vec2(9.0, -1.0),
+    ];
+    for par in aranazo.windows(2) {
+        cuerpo.raya(par[0], par[1], 1.3, fade(BLANCO, rasca));
+    }
+    // Cada cuatro ticks cambia de lado: el disco salta.
+    let salto = if (e.t / 4.0) as i32 % 2 == 0 {
+        1.0
+    } else {
+        -1.0
+    };
+    let aguja = vec2(9.0, -1.0);
+    for i in 0..3 {
+        let dir = Vec2::from_angle(-2.3 + i as f32 * 0.8 + salto * 0.15);
+        let n = vec2(-dir.y, dir.x) * 2.2;
+        let a = aguja + dir * 6.0;
+        let rayo = [
+            a,
+            a + dir * 4.0 + n,
+            a + dir * 7.0 - n,
+            a + dir * 11.0 * rasca,
+        ];
+        for par in rayo.windows(2) {
+            cuerpo.raya(par[0], par[1], 1.4, TINTA);
+        }
+    }
+}
+
 /// Las patas: medias verdes de manguera y zapatos de dos tonos. En la ultima
 /// figura, muelles.
 fn patas(cuerpo: &Lapiz, suelo: &Lapiz, pose: &Pose, ropa: Color) {
@@ -416,7 +590,7 @@ fn mueble(cuerpo: &Lapiz, pose: &Pose, tinta: Color, ropa: Color) {
 
 /// El plato: el disco girando, con su brazo y la aguja.
 fn plato(cuerpo: &Lapiz, pose: &Pose) {
-    let c = vec2(0.0, -2.0 - pose.vuelo);
+    let c = vec2(0.0, -2.0 - pose.vuelo) + pose.fuera;
     let (a, b, rot) = (26.0, 7.0, pose.ladeo);
     cuerpo.elipse(c.x, c.y, a, b, rot, DISCO);
     let q = cuerpo.p(c.x, c.y);
@@ -443,7 +617,9 @@ fn plato(cuerpo: &Lapiz, pose: &Pose) {
     // suelto y se agita, porque el disco se le ha ido.
     let pivote = vec2(21.0, -4.0);
     let aguja = if pose.vuelo > 0.0 {
-        pivote + vec2(-9.0, -6.0 + pose.ladeo * 0.3)
+        // Al caer, el disco sale dando vueltas de campana y el brazo no lo
+        // sigue: se queda colgando.
+        pivote + vec2(-9.0, -6.0 + (pose.ladeo * 0.3).clamp(-9.0, 9.0))
     } else {
         vec2(9.0, -1.0)
     };
@@ -522,6 +698,10 @@ fn bocina(cuerpo: &Lapiz, pose: &Pose, e: &Escena, sombra: Color) {
     let lengua = rb * 0.42;
     let y = bc.y + rb - lengua - 0.6;
     cuerpo.elipse_lisa(bc.x, y, ra * 0.55, lengua, 0.0, LENGUA);
+    if pose.ko {
+        // La lengua fuera, colgando por el borde de la boca.
+        cuerpo.elipse(bc.x + 3.0, bc.y + rb + 3.0, 3.2, 4.5, 0.0, LENGUA);
+    }
 }
 
 /// Los ojos y las cejas: lo que mas dice de en que figura va.
@@ -532,15 +712,29 @@ fn ojos(cuerpo: &Lapiz, pose: &Pose, e: &Escena) {
         1 => vec2((e.t * 0.35).sin() * 2.2, 0.6),
         _ => vec2(0.0, 2.4),
     };
-    let pupila = if e.fase == 1 { 1.8 } else { 2.8 };
+    let pupila = if pose.susto {
+        1.2
+    } else if e.fase == 1 {
+        1.8
+    } else {
+        2.8
+    };
     // Las cejas: alegres, disparadas hacia arriba o fruncidas.
     let (ceja_dentro, ceja_fuera) = match e.fase {
+        _ if pose.susto => (-60.0, -62.0),
         0 => (-56.5 - e.pulso * 1.5, -55.0),
         1 => (-61.0, -57.0),
         _ => (-52.5, -58.5),
     };
     for s in [-1.0f32, 1.0] {
         let c = vec2(s * 10.0, -46.0);
+        if pose.ko {
+            for t in [-1.0, 1.0] {
+                let raya = [c + vec2(-4.5, -4.5 * t), c + vec2(4.5, 4.5 * t)];
+                cuerpo.trazo(&raya, 1.8, TINTA);
+            }
+            continue;
+        }
         if pose.gusto {
             // Ojos cerrados de gusto: un arco hacia arriba.
             let arco = manguera(c + vec2(-5.0, 1.5), c + vec2(5.0, 1.5), -6.0);
@@ -606,6 +800,21 @@ mod tests {
         assert!(
             aire < suelo - 10.0,
             "el aereo no despega: {aire} contra {suelo}"
+        );
+    }
+
+    #[test]
+    fn la_caida_raya_el_disco_y_lo_echa_a_volar() {
+        let antes = rayada(0.0);
+        assert_eq!(antes.rasca, 1.0);
+        assert_eq!((antes.sienta, antes.mustia, antes.vuela), (0.0, 0.0, 0.0));
+        let despues = rayada(1.0);
+        assert_eq!(despues.rasca, 0.0);
+        assert_eq!(despues.vuela, 1.0);
+        assert!((despues.sienta - 1.0).abs() < 1e-3);
+        assert!(
+            (despues.mustia + 1.75).abs() < 1e-3,
+            "la bocina no se mustia"
         );
     }
 }
