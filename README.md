@@ -47,6 +47,7 @@ sin instalar nada.
 | Super | `Espacio` | Triangulo / Y |
 | Focus (lento; en los paseos, plantarse y apuntar) | `Shift` | L1 / L2 |
 | Volver al mapa o al menu | `Esc` | Triangulo / Y, fuera del combate |
+| Quitar el temblor de la tinta | `T` | |
 
 ## Como esta hecho
 
@@ -72,7 +73,7 @@ sin instalar nada.
 - **El mismo codigo en nativo y en web.** Compila a `wasm32` sin
   `wasm-bindgen`; el mando (gilrs en nativo, Gamepad API en web) y el guardado
   (`localStorage`) se conectan con plugins de miniquad de unas pocas lineas.
-- **368 tests**, entre ellos bots que recorren cada paseo de punta a punta y
+- **374 tests**, entre ellos bots que recorren cada paseo de punta a punta y
   tests que exigen que cada baile use su verbo del motor y no el de otro. El CI
   pasa `cargo fmt`, `clippy -D warnings`, los tests, el replay dorado y el
   build web en cada push.
