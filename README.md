@@ -12,6 +12,26 @@ sin instalar nada.
 |---|---|
 | ![Combate contra El Vals](docs/media/jefe.gif) | ![El mapa del juego](docs/media/mapa.gif) |
 
+## Cada jefe es un baile
+
+Y no de nombre: cada uno tiene **un verbo del motor que es solo suyo**, cada fase
+es **una figura real** de ese baile y las balas caen **en el compas de su
+musica**. Un test impide que un baile use el verbo de otro.
+
+| Baile | Su verbo | Sus figuras |
+|---|---|---|
+| **El Vals** | `Turn`: la mira gira y sale la espiral | el paso de cambio, el giro natural, el giro inverso, el fleckerl |
+| **El Tango** | `accel` negativa: la bala frena en seco y vuelve, como el corte | la caminata, los ochos, el molinete |
+| **El Charleston** | `spin`: la bala curva, como el pie sobre la planta, en la clave 3-3-2 | el basico, bee's knees, el cambio de lado |
+| **El Cancan** | `ttl` corto: la patada sale y se desvanece | el battement, el port d'armes, la rueda y el grand ecart |
+
+| Los ochos: los anillos frenan y vuelven sobre el 8 que dibuja el jefe | El basico: cada patada es un arco |
+|---|---|
+| <img src="docs/media/partituras/tango-2.svg" width="360" alt="Larga exposicion de Los ochos"> | <img src="docs/media/partituras/charleston-1.svg" width="360" alt="Larga exposicion de El basico"> |
+
+**[Los cuatro bailes, figura a figura](docs/BAILES.md)**: el paso de verdad, como
+lo dibujan las balas y su foto de larga exposicion.
+
 ## Que hay dentro
 
 - **Cuatro jefes que son objetos vivos**: El Vals es una caja de musica, El
@@ -50,6 +70,22 @@ sin instalar nada.
 | Quitar el temblor de la tinta | `T` | |
 
 ## Como esta hecho
+
+```mermaid
+flowchart LR
+    subgraph core["vals-core: la simulacion, a 60 Hz fijos y sin graficos"]
+        direction LR
+        mapa["la pista<br/>(el mapa)"] --> paseo["el paseo<br/>(correr y disparar)"] --> baile["el baile<br/>(el jefe y sus figuras)"] --> mapa
+        ron[("assets/*.ron")] -.-> paseo
+        ron -.-> baile
+    end
+    subgraph app["vals-app: macroquad"]
+        input["teclado y mando"]
+        salida["render, musica y sonido"]
+    end
+    input -- "un InputFrame por tick" --> core
+    core -- "estado y eventos" --> salida
+```
 
 - **Simulacion determinista en un crate puro.** `vals-core` es todo el juego
   —balas, jefes, jugadora, paseos, mapa— y no depende de macroquad ni de
@@ -96,11 +132,12 @@ powershell -File scripts/build-web.ps1
 python -m http.server 8080 --directory web
 ```
 
-Replays y mediciones:
+Replays, mediciones y las imagenes de los bailes:
 
 ```bash
 cargo run -p vals-core --example replay_tool -- verify assets/replays/golden.valsrpl
 cargo run -p vals-app -- --replay replays/<fichero>.valsrpl   # F2 guarda la partida en curso
+cargo run -p vals-core --example partituras   # regenera docs/media/partituras
 cargo bench -p vals-core --bench sim
 cargo run -p vals-app --release -- --bench-scene 20000 --frames 400
 ```

@@ -422,9 +422,16 @@ impl Bullets {
 
     /// Recorre las balas vivas. Solo para el render y los tests.
     pub fn iter_live(&self) -> impl Iterator<Item = BulletView> + '_ {
+        self.iter_live_slots().map(|(_, b)| b)
+    }
+
+    /// Lo mismo, con el hueco de cada bala. Un hueco que sigue vivo de un tick
+    /// al siguiente es la misma bala, asi que esto permite seguirla: es como
+    /// `examples/partituras.rs` dibuja la trayectoria entera de cada una.
+    pub fn iter_live_slots(&self) -> impl Iterator<Item = (u32, BulletView)> + '_ {
         (0..self.high_water)
             .filter(move |&i| self.alive[i])
-            .map(move |i| self.get(i as u32))
+            .map(move |i| (i as u32, self.get(i as u32)))
     }
 }
 
