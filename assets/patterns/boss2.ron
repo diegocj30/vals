@@ -1,6 +1,6 @@
 // EL TANGO. El segundo baile.
 //
-// Un baile es un jefe y cada fase es una figura suya (decision 70). Aqui lo
+// Un baile es un jefe y cada fase es una figura suya. Aqui lo
 // que cambia respecto al vals no es la melodia: es la **gramatica**.
 //
 // El vals no para de girar, y por eso todas sus fases son espirales. El tango

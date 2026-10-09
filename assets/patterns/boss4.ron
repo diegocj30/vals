@@ -12,7 +12,7 @@
 // desaparecen. Una patada dura lo que dura la patada: hay que aguantar el
 // momento, no el compas entero.
 //
-// SE BAILA EN EL SUELO (decision 99), con gravedad y salto, y es el baile que
+// SE BAILA EN EL SUELO, con gravedad y salto, y es el baile que
 // se esquiva SALTANDO; el charleston, corriendo. El cancan es un numero de
 // escenario, una fila de coristas pateando sobre las tablas, asi que la
 // bailarina BAJA AL ESCENARIO: se planta en un lateral (x 40 o 600, y 718) y
