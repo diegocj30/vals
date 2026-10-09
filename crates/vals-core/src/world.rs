@@ -1862,3 +1862,94 @@ mod tests {
         }
     }
 }
+
+/// Donde no pasa nada: la medida de los sitios seguros.
+///
+/// Un danmaku se rompe si hay un punto de la pantalla por el que no pasa
+/// ninguna bala en toda una figura: te quedas quieto ahi y ganas sin jugar.
+/// Se encontraron tres jugando (una esquina de arriba en el charleston, el
+/// fondo del cancan y un punto abajo a la derecha en el tango), y esto los
+/// busca todos: planta a una jugadora quieta e invulnerable en cada punto de
+/// una reja y cuenta cuantas veces le pasa una bala por encima. Las balas
+/// apuntadas apuntan a donde esta, asi que cada punto es una partida aparte.
+#[cfg(test)]
+pub(crate) mod sitios {
+    use super::*;
+    use crate::player::PLAYER_HITBOX_RADIUS;
+
+    /// La reja: cada 60 unidades, dejando 20 de margen con las paredes.
+    pub(crate) fn reja() -> Vec<Vec2> {
+        let mut v = Vec::new();
+        let mut y = 40.0;
+        while y <= ARENA_H - 20.0 {
+            let mut x = 20.0;
+            while x <= ARENA_W - 20.0 {
+                v.push(Vec2::new(x, y));
+                x += 60.0;
+            }
+            y += 60.0;
+        }
+        v
+    }
+
+    /// Cuantas balas le pasan por encima a una jugadora quieta en `pos`
+    /// durante `ticks` de la figura `fase`. Cuenta pasadas, no ticks: una bala
+    /// gorda que tarda seis ticks en cruzar es un golpe, no seis.
+    pub(crate) fn pasadas(baile: usize, fase: usize, pos: Vec2, ticks: u32) -> u32 {
+        let mut w = World::empezar_en(7, Mode::Flight, baile);
+        while w.boss.phase < fase && !w.boss.defeated {
+            let hp = w.boss.hp.max(1);
+            w.boss.damage(hp);
+        }
+        let (mut n, mut antes) = (0, false);
+        for _ in 0..ticks {
+            w.player.pos = pos;
+            w.player.iframes = 10;
+            w.step(InputFrame::default());
+            let ahora = w.bullets.hit_circle(pos, PLAYER_HITBOX_RADIUS).is_some();
+            if ahora && !antes {
+                n += 1;
+            }
+            antes = ahora;
+        }
+        n
+    }
+
+    /// Lo minimo que tiene que recibir cada punto en 20 s de figura: una bala
+    /// cada tres segundos y pico. Por debajo, quedarse quieto ahi es una
+    /// estrategia y no un descanso.
+    pub(crate) const UMBRAL: u32 = 6;
+
+    /// El mapa de cada figura: cuantas pasadas recibe cada punto en 20 s.
+    ///
+    /// `cargo test -p vals-core mapa_de_sitios -- --nocapture --ignored`
+    #[test]
+    #[ignore]
+    fn mapa_de_sitios() {
+        let reja = reja();
+        for (baile, def) in crate::boss::BossDef::default_bosses().iter().enumerate() {
+            for (fase, f) in def.phases.iter().enumerate() {
+                let n: Vec<u32> = reja
+                    .iter()
+                    .map(|p| pasadas(baile, fase, *p, 1200))
+                    .collect();
+                let min = *n.iter().min().unwrap();
+                let flojos: Vec<_> = reja
+                    .iter()
+                    .zip(&n)
+                    .filter(|(_, k)| **k < UMBRAL)
+                    .map(|(p, _)| (p.x as i32, p.y as i32))
+                    .collect();
+                println!(
+                    "{} / {}: minimo {min}, puntos por debajo de {UMBRAL}: {}",
+                    def.name,
+                    f.name,
+                    flojos.len()
+                );
+                if !flojos.is_empty() {
+                    println!("    {flojos:?}");
+                }
+            }
+        }
+    }
+}
