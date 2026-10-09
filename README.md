@@ -109,8 +109,10 @@ flowchart LR
 - **El mismo codigo en nativo y en web.** Compila a `wasm32` sin
   `wasm-bindgen`; el mando (gilrs en nativo, Gamepad API en web) y el guardado
   (`localStorage`) se conectan con plugins de miniquad de unas pocas lineas.
-- **372 tests**, entre ellos bots que recorren cada paseo de punta a punta y
-  tests que exigen que cada baile use su verbo del motor y no el de otro. El CI
+- **377 tests**, entre ellos bots que recorren cada paseo de punta a punta,
+  tests que exigen que cada baile use su verbo del motor y no el de otro, y uno
+  que planta a una jugadora quieta en cada punto de la pantalla para que ninguna
+  figura deje un sitio donde quedarse sin esquivar. El CI
   pasa `cargo fmt`, `clippy -D warnings`, los tests, el replay dorado y el
   build web en cada push.
 - **Las mediciones estan escritas.** [`docs/PERF.md`](docs/PERF.md) es el
