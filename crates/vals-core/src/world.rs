@@ -1920,6 +1920,46 @@ pub(crate) mod sitios {
     /// estrategia y no un descanso.
     pub(crate) const UMBRAL: u32 = 6;
 
+    /// Ninguna figura de `baile` deja un punto por debajo de `UMBRAL`.
+    fn sin_sitios_seguros(baile: usize) {
+        let def = &crate::boss::BossDef::default_bosses()[baile];
+        for (fase, f) in def.phases.iter().enumerate() {
+            let flojos: Vec<_> = reja()
+                .into_iter()
+                .filter(|p| pasadas(baile, fase, *p, 1200) < UMBRAL)
+                .map(|p| (p.x as i32, p.y as i32))
+                .collect();
+            assert!(
+                flojos.is_empty(),
+                "{}, en {}, deja sitios donde quedarse quieto: {flojos:?}",
+                def.name,
+                f.name
+            );
+        }
+    }
+
+    // Uno por baile para que corran en paralelo: los cuatro juntos son medio
+    // minuto de simulacion.
+    #[test]
+    fn el_vals_no_tiene_sitios_seguros() {
+        sin_sitios_seguros(0);
+    }
+
+    #[test]
+    fn el_tango_no_tiene_sitios_seguros() {
+        sin_sitios_seguros(1);
+    }
+
+    #[test]
+    fn el_charleston_no_tiene_sitios_seguros() {
+        sin_sitios_seguros(2);
+    }
+
+    #[test]
+    fn el_cancan_no_tiene_sitios_seguros() {
+        sin_sitios_seguros(3);
+    }
+
     /// El mapa de cada figura: cuantas pasadas recibe cada punto en 20 s.
     ///
     /// `cargo test -p vals-core mapa_de_sitios -- --nocapture --ignored`

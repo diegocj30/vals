@@ -249,6 +249,15 @@ impl Bullets {
                     let f = 1.0 + accel * dt / len;
                     vx *= f;
                     vy *= f;
+                    // Y al invertirse, la aceleracion cambia de signo con
+                    // ella: ahora empuja hacia donde va. Sin esto seguia
+                    // frenando en la direccion nueva, la velocidad oscilaba
+                    // alrededor de cero tick a tick y la bala se quedaba
+                    // temblando donde se paro hasta caducar: frenaba, pero
+                    // no volvia nunca.
+                    if f < 0.0 {
+                        self.accel[i] = -accel;
+                    }
                 }
             }
 
@@ -539,15 +548,21 @@ mod tests {
             accel: -400.0,
             ..Default::default()
         });
-        for _ in 0..60 {
+        // Frena en medio segundo y vuelve acelerando: al segundo y medio va
+        // hacia abajo a unos 400. Se miran dos ticks seguidos porque el fallo
+        // de antes era justo ese, una velocidad que cambiaba de signo en cada
+        // tick y pasaba el test o no segun el tick en que se mirase.
+        for t in 0..92 {
             b.update(DT);
+            if t >= 90 {
+                let v = b.iter_live().next().unwrap();
+                assert!(
+                    v.vel.y > 300.0,
+                    "deberia volver acelerando, va a {}",
+                    v.vel.y
+                );
+            }
         }
-        let v = b.iter_live().next().unwrap();
-        assert!(
-            v.vel.y > 0.0,
-            "deberia haberse dado la vuelta, va a {}",
-            v.vel.y
-        );
     }
 
     #[test]
