@@ -11,17 +11,20 @@
 //! granate y las enaguas blancas asomando— con **cara**: ojos grandes, rimel,
 //! colorete y los labios pintados. Un cartel de 1900 no dibuja caras
 //!, pero un jefe de Cuphead si, y aqui la cara es lo que cambia
-//! entre figuras: coqueta en la primera, pendiente de la ola en la segunda y
-//! desencajada en el infierno.
+//! entre figuras: coqueta en la primera, concentrada en la segunda y
+//! desencajada en la ultima.
 //!
 //! Las tres figuras se leen sin cartela:
 //!
-//! - **La patada**: todas a la vez, patadas educadas a la altura de la cadera.
-//! - **La fila**: la ola. Cada una patea un poco despues que la de su
-//!   izquierda y la patada recorre la fila en un tiempo, como el abanico de
-//!   balas que barre el suelo.
-//! - **El infierno**: patadas a la corchea desde el centro hacia fuera, las de
-//!   las puntas dan la rueda, todas caen al espagat y vuelan plumas.
+//! - **El battement**: todas a la vez, patadas educadas a la altura de la
+//!   cadera.
+//! - **El port d'armes**: cada una con un tobillo cogido y esa pierna casi
+//!   vertical, botando sobre la otra. De frente no se ve girar, se ve la
+//!   pierna cambiar de lado cada compas: media vuelta. Y el cambio corre la
+//!   fila de izquierda a derecha, que es la fila entera girando en ola.
+//! - **La rueda y el grand ecart**: patadas a la corchea desde el centro hacia
+//!   fuera, las de las puntas dan la rueda, todas caen al espagat y vuelan
+//!   plumas.
 //!
 //! Como todo jefe, es **funcion pura** de la `Escena`: ni estado ni azar. Las
 //! plumas sueltas salen de una `Pcg32` con semilla fija y su sitio es funcion
@@ -39,7 +42,7 @@ use crate::skeleton::trazo;
 // --- El compas del galop: 150 negras en 2/4 ---
 const TIEMPO: f32 = 24.0;
 const COMPAS: f32 = 48.0;
-/// La vuelta del infierno: dos compases de patadas, uno de ruedas y uno de
+/// La frase del final: dos compases de patadas, uno de ruedas y uno de
 /// espagat. Cuatro compases es la frase del galop.
 const VUELTA: f32 = COMPAS * 4.0;
 
@@ -167,9 +170,9 @@ impl Corista {
 
 /// Cuantos ticks va retrasada la corista `i` de `n` respecto al compas.
 ///
-/// Es la figura entera en una linea: en la patada van todas a una, en la fila
-/// la patada corre de izquierda a derecha y cruza la fila en un tiempo, y en
-/// el infierno revienta desde la estrella hacia las puntas.
+/// Es la figura entera en una linea: en el battement van todas a una, en el
+/// port d'armes la media vuelta corre de izquierda a derecha y cruza la fila
+/// en un tiempo, y en el final revienta desde la estrella hacia las puntas.
 fn desfase(fase: usize, i: usize, n: usize) -> f32 {
     match fase {
         0 => 0.0,
@@ -268,19 +271,27 @@ fn fila(e: &Escena, cartel: bool, caida: Option<f32>) -> Vec<Corista> {
             let talla = TALLA * if estrella { 1.18 } else { 1.0 };
             let x0 = (i as f32 - (n - 1) as f32 * 0.5) * paso;
 
-            // La patada que toca: a la negra, y en el infierno a la corchea.
-            let periodo = if fase == 2 { TIEMPO * 0.5 } else { TIEMPO };
+            // La patada que toca: a la negra, y en el final a la corchea. En
+            // el port d'armes no hay patada sino media vuelta, una por compas.
+            let periodo = [TIEMPO, COMPAS, TIEMPO * 0.5][fase];
             let tl = e.t - desfase(fase, i, n);
             let golpe = (tl / periodo).floor();
             let lado = golpe.rem_euclid(2.0) as usize;
+            let d = tl - golpe * periodo;
             let mut brio = if caida.is_some() {
                 0.0
+            } else if fase == 1 {
+                // La pierna se queda arriba todo el compas y solo baja un
+                // instante, al cambiar de lado en la media vuelta.
+                suave(d / 4.0) * suave((periodo - d) / 4.0)
             } else {
-                subida(tl - golpe * periodo, periodo)
+                subida(d, periodo)
             };
-            let mut alto = ([1.75, 2.45, 2.85][fase] + apuro * 0.35).min(3.0);
+            // En el port d'armes, casi vertical: es la pierna cogida por el
+            // tobillo.
+            let mut alto = ([1.75, 3.0, 2.85][fase] + apuro * 0.35).min(3.0);
 
-            // El infierno por compases: patadas, ruedas en las puntas y todas
+            // El final por compases: patadas, ruedas en las puntas y todas
             // al espagat menos la estrella, que se queda con la pierna arriba.
             let punta = i == 0 || i == n - 1;
             let rueda = fase == 2 && !cartel && compas == 2 && punta && caida.is_none();
@@ -472,7 +483,9 @@ fn fila(e: &Escena, cartel: bool, caida: Option<f32>) -> Vec<Corista> {
     let manos_juntas: Vec<Option<Vec2>> = (0..n.saturating_sub(1))
         .map(|i| {
             let (a, b) = (&todas[i], &todas[i + 1]);
-            (!a.rueda && !b.rueda).then(|| {
+            // En el port d'armes cada una se agarra su tobillo: no hay manos
+            // que dar.
+            (e.fase.min(2) != 1 && !a.rueda && !b.rueda).then(|| {
                 (a.hombros()[1] + b.hombros()[0]) * 0.5 + vec2(0.0, -(3.4 + e.pulso * 0.8) * TALLA)
             })
         })
@@ -491,7 +504,9 @@ fn fila(e: &Escena, cartel: bool, caida: Option<f32>) -> Vec<Corista> {
                 let ang = fuera * (0.55 + 0.25 * s);
                 hombros[k] + girar(c.arriba, ang) * (BRAZO + ANTEBRAZO) * c.talla * 0.92
             };
-            let mano = junta.unwrap_or_else(libre);
+            // El tobillo de la pierna en alto, en el port d'armes.
+            let tobillo = (e.fase.min(2) == 1 && c.patea == Some(k)).then_some(c.pie[k]);
+            let mano = tobillo.or(junta).unwrap_or_else(libre);
             let afuera = (hombros[k] - c.pecho) + vec2(0.0, 1.5);
             c.mano[k] = mano;
             c.codo[k] = articula(
@@ -506,7 +521,7 @@ fn fila(e: &Escena, cartel: bool, caida: Option<f32>) -> Vec<Corista> {
     todas
 }
 
-/// Las plumas que se le caen a la fila en el infierno: salen de los penachos,
+/// Las plumas que se le caen a la fila en el final: salen de los penachos,
 /// suben y caen dando vueltas. Posicion, giro y opacidad.
 fn plumas_sueltas(e: &Escena, todas: &[Corista]) -> Vec<(Vec2, f32, f32)> {
     if e.fase < 2 && e.vida > 0.25 {
@@ -720,7 +735,7 @@ pub fn dibujar_muerte(e: &Escena, k: f32) {
             plumas.push((vec2(x, y), mece * 0.9 * (1.0 - v) + PI * 0.5 * v, 1.0));
         }
     }
-    // Las del tocado, mas grandes que las sueltas del infierno: son plumas
+    // Las del tocado, mas grandes que las sueltas del final: son plumas
     // enteras.
     pintar(&quieta, &todas, &plumas, 4.2);
 }
@@ -931,26 +946,28 @@ mod tests {
     }
 
     #[test]
-    fn la_patada_va_a_una_y_la_fila_hace_la_ola() {
-        // Es lo que distingue las dos primeras figuras sin leer la cartela, y
-        // lo mismo que hacen sus balas: la patada sale a la vez, la fila barre.
+    fn el_battement_va_a_una_y_el_port_d_armes_se_coge_el_tobillo() {
+        // Es lo que distingue las dos primeras figuras sin leer la cartela: el
+        // battement sale a la vez, y en el port d'armes la pierna no baja.
         let a_una = pies(0, 3.0);
         assert!(
             a_una.iter().all(|y| (y - a_una[0]).abs() < 0.01),
-            "en la patada no van a una: {a_una:?}"
+            "en el battement no van a una: {a_una:?}"
         );
-        // En la fila cada una va un quinto de tiempo detras de la de su
-        // izquierda, asi que la patada cruza la fila entera en un tiempo.
+        // A mitad de compas todas con un pie por encima de la cabeza y la mano
+        // en ese tobillo.
+        let e = escena(1, COMPAS * 0.5 + 10.0, 1.0);
+        for c in fila(&e, false, None) {
+            let k = c.patea.expect("en el port d'armes alguna pierna va arriba");
+            assert!(c.pie[k].y < c.cabeza.y, "la pierna no llega arriba");
+            assert!(c.mano[k].distance(c.pie[k]) < 1e-3, "no se coge el tobillo");
+        }
+        // Y la media vuelta corre la fila: cada una un quinto de tiempo detras
+        // de la de su izquierda.
         for i in 0..4 {
             let paso = desfase(1, i + 1, 5) - desfase(1, i, 5);
             assert!((paso - TIEMPO / 5.0).abs() < 1e-4, "la ola va a saltos");
         }
-        // Y se ve: cuando la del centro esta arriba, las puntas no.
-        let ola = pies(1, desfase(1, 2, 5) + 3.0);
-        assert!(
-            ola[2] > ola[0] + 1.0 && ola[2] > ola[4] + 1.0,
-            "la ola no pasa por el centro: {ola:?}"
-        );
     }
 
     #[test]
