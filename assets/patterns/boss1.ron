@@ -13,8 +13,8 @@
 //
 //   1. El paso de cambio   48 b/s   la espiral va y vuelve sin dar la vuelta.
 //   2. El giro natural     88 b/s   todo a derechas, Turn positivo.
-//   3. El giro inverso    102 b/s   el natural en un espejo, Turn negativo.
-//   4. El fleckerl        152 b/s   girar rapidisimo en el sitio, inverso y
+//   3. El giro inverso    103 b/s   el natural en un espejo, Turn negativo.
+//   4. El fleckerl        151 b/s   girar rapidisimo en el sitio, inverso y
 //                                   natural, con un check entre medias.
 //
 // El fleckerl es el remate porque es lo que es en la pista: la figura de
@@ -239,7 +239,10 @@
     ),
     // --- El giro inverso. El natural visto en un espejo: Turn negativo, a
     // izquierdas, y el jefe recorre la vuelta al reves. Un poco mas rapido y
-    // mas denso, porque se aprende despues.
+    // mas denso, porque se aprende despues. La rafaga apuntada es impar para
+    // que la bala del centro vaya a donde esta la jugadora: con cuatro el hueco
+    // del medio caia justo encima, y quedarse quieta abajo (donde las espirales
+    // ya llegan abiertas) era un sitio seguro casi toda la figura.
     (
       name: "El giro inverso",
       hp: 550,
@@ -313,7 +316,7 @@
             Forever([
               Wait(90),
               Fire((
-                count: 4,
+                count: 5,
                 arc: 0.5,
                 aim: AtPlayer,
                 speed: 240.0,
@@ -337,7 +340,9 @@
     // derechas (el natural). Cada uno dura lo mismo en los dos hilos, 210
     // ticks, para que cambien a la vez. Entre uno y otro, el check: la rafaga
     // apuntada y el anillo gordo caen justo cuando el giro se para y se da la
-    // vuelta.
+    // vuelta. La rafaga es de cinco y no de seis por lo mismo que en el
+    // inverso: impar, con bala en el centro, para que el check no se pueda
+    // esperar quieta en la mitad de abajo.
     (
       name: "El fleckerl",
       hp: 800,
@@ -470,7 +475,7 @@
                 times: 4,
                 body: [
                   Fire((
-                    count: 6,
+                    count: 5,
                     arc: 0.9,
                     aim: AtPlayer,
                     speed: 330.0,
