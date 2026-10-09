@@ -44,7 +44,7 @@
 //   1. El basico          47 b/s  vida 450  un giro del pie por golpe.
 //   2. Bee's knees        70 b/s  vida 580  rodillas que se abren y se
 //                                           cruzan, y las manos con ellas.
-//   3. El cambio de lado  97 b/s  vida 780  cruza el escenario a saltitos.
+//   3. El cambio de lado  98 b/s  vida 780  cruza el escenario a saltitos.
 //
 // Entre el vals (48/88/102/152) y el tango (65/87/127): es el medio. Entre
 // bala y bala de un arco hay de 0.075 a 0.2 radianes, de 35 a 90 pixeles a la
@@ -304,14 +304,22 @@
           [
             // La clave con las dos patadas en cada golpe, y en el "dos" a
             // tres capas. Es el basico entero, por los dos lados.
+            //
+            // La primera patada es la alta: sale hacia arriba y afuera, y la
+            // curva la baja por la esquina de arriba y por la pared. Con las
+            // tres hacia abajo nada subia de la altura de ella, y quedarse
+            // pegada arriba en una esquina era no bailar: ahi solo llegaban
+            // las agujas y las balas gordas. Sale de donde este ella, asi que
+            // cada frase barre una esquina mas que la otra y la vuelta las
+            // cambia. Debajo sobraban balas; no se echan de menos.
             Forever([
               Fire((
-                count: 11, arc: 1.1, aim: Fixed(0.95), speed: 200.0,
+                count: 11, arc: 1.1, aim: Fixed(-0.5), speed: 200.0,
                 rings: 2, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Fire((
-                count: 11, arc: 1.1, aim: Fixed(2.19), speed: 200.0,
+                count: 11, arc: 1.1, aim: Fixed(3.64), speed: 200.0,
                 rings: 2, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
@@ -373,12 +381,15 @@
             ]),
           ],
           [
-            // Cuatro agujas por compas en el tercer tiempo, el que la clave se
-            // salta: es el unico hueco del compas sin nada mas sonando.
+            // Cinco agujas por compas en el tercer tiempo, el que la clave se
+            // salta: es el unico hueco del compas sin nada mas sonando. Impar a
+            // proposito: con cuatro, la del medio no existia y quedarse quieta
+            // era quedarse justo en el hueco entre dos. Con cinco, la que va a
+            // por ti va a por ti, y hay que dar un paso.
             Forever([
               Wait(72),
               Fire((
-                count: 4, arc: 0.24, aim: AtPlayer, speed: 270.0,
+                count: 5, arc: 0.32, aim: AtPlayer, speed: 270.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, ttl: 30.0, kind: 3, flags: 0,
               )),
