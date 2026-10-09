@@ -102,6 +102,9 @@ impl Default for Spawn {
 pub struct BulletView {
     pub pos: Vec2,
     pub vel: Vec2,
+    /// Segundos que le quedan. Solo se lee: el render apaga las que se van a
+    /// morir para que no desaparezcan de golpe.
+    pub ttl: f32,
     pub kind: u8,
     pub flags: u8,
 }
@@ -388,6 +391,7 @@ impl Bullets {
         BulletView {
             pos: Vec2::new(self.pos_x[i], self.pos_y[i]),
             vel: Vec2::new(self.vel_x[i], self.vel_y[i]),
+            ttl: self.ttl[i],
             kind: self.kind[i],
             flags: self.flags[i],
         }

@@ -71,6 +71,33 @@ pub(crate) fn estiramiento(kind: u8, vel_x: f32, vel_y: f32) -> ([f32; 2], [f32;
     (eje, [AGUJA.0, AGUJA.1])
 }
 
+/// Cuanto le queda a una bala por apagarse, en `[0, 1]`: 1 entera, 0 a punto
+/// de morir.
+///
+/// Las balas de vida corta (las patadas del cancan) desaparecian de golpe a
+/// media sala, y eso se leia como un fallo. Ahora en su ultimo `APAGADO` de
+/// segundo se encogen y se aclaran. Solo es pintura: la bala sigue matando
+/// con su radio hasta el ultimo tick, y por eso no se encoge por debajo de el.
+pub(crate) fn apagado(ttl: f32) -> f32 {
+    (ttl / APAGADO).clamp(0.0, 1.0)
+}
+
+/// Segundos que dura el apagado de una bala que muere por `ttl`.
+const APAGADO: f32 = 0.25;
+/// Opacidad con la que llega al ultimo tick: no a cero, que una bala
+/// invisible que aun mata es peor que una que se esfuma.
+pub(crate) const OPACIDAD_FINAL: f32 = 0.35;
+
+/// Radio y opacidad con que se pinta una bala, ya contado su apagado.
+pub(crate) fn pintura(kind: u8, ttl: f32) -> (f32, f32) {
+    let def = &BULLET_KINDS[kind as usize];
+    let f = apagado(ttl);
+    (
+        def.radius + (def.draw_radius - def.radius) * f,
+        OPACIDAD_FINAL + (1.0 - OPACIDAD_FINAL) * f,
+    )
+}
+
 /// El tipo de bala que es una aguja, en `BULLET_KINDS`.
 const KIND_AGUJA: u8 = 3;
 /// A lo largo y a lo ancho de una aguja, respecto a su radio.
@@ -262,11 +289,12 @@ impl BulletRenderer {
             }
             let (c, ring) = color(b.kind, b.flags);
             let (eje, estira) = estiramiento(b.kind, b.vel.x, b.vel.y);
+            let (radius, opacidad) = pintura(b.kind, b.ttl);
             self.instances.push(Instance {
                 pos: [b.pos.x, b.pos.y],
-                radius: r,
+                radius,
                 ring: if ring { 1.0 } else { 0.0 },
-                color: [c.r, c.g, c.b, c.a],
+                color: [c.r, c.g, c.b, c.a * opacidad],
                 eje,
                 estira,
             });
@@ -379,5 +407,21 @@ mod tests {
         // Y una parada no divide entre cero.
         let (eje, _) = estiramiento(KIND_AGUJA, 0.0, 0.0);
         assert!(eje[0].is_finite() && eje[1].is_finite());
+    }
+
+    #[test]
+    fn la_que_se_muere_se_apaga_sin_quedar_mas_pequena_que_lo_que_mata() {
+        for (k, def) in BULLET_KINDS.iter().enumerate() {
+            // Con vida de sobra, se pinta como siempre.
+            assert_eq!(pintura(k as u8, 30.0), (def.draw_radius, 1.0));
+            // En el ultimo tick, al radio de colision y casi transparente.
+            let (r, a) = pintura(k as u8, 0.0);
+            assert_eq!(r, def.radius);
+            assert_eq!(a, OPACIDAD_FINAL);
+        }
+        // Y a medio apagar, a medias.
+        let (r, a) = pintura(0, APAGADO * 0.5);
+        assert!(r < BULLET_KINDS[0].draw_radius && r > BULLET_KINDS[0].radius);
+        assert!(a < 1.0 && a > OPACIDAD_FINAL);
     }
 }

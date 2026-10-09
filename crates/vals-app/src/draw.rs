@@ -3,7 +3,7 @@
 //! miniquad puro o wgpu sin tocar `vals-core`.
 
 use macroquad::prelude::*;
-use vals_core::bullets::{BULLET_KINDS, Bullets, FLAG_PARRYABLE};
+use vals_core::bullets::{Bullets, FLAG_PARRYABLE};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
 use crate::bailarines;
@@ -828,14 +828,16 @@ pub fn draw_bullets_at(bullets: &Bullets, l: &Layout, phase: f32) {
     for b in bullets.iter_live() {
         let s = l.to_screen(b.pos.x, b.pos.y);
         let (color, parryable) = bullet_style(b.kind, b.flags);
-        let r = l.len(BULLET_KINDS[b.kind as usize].draw_radius);
+        let (r, opacidad) = crate::bullet_renderer::pintura(b.kind, b.ttl);
+        let r = l.len(r);
+        let color = fade(color, opacidad);
 
         // Lo mismo que el shader: halo fuera, tinta en el canto, color dentro,
         // y las agujas alargadas hacia donde van.
         let (eje, [largo, ancho]) = crate::bullet_renderer::estiramiento(b.kind, b.vel.x, b.vel.y);
         let giro = eje[1].atan2(eje[0]).to_degrees();
         draw_circle(s.x, s.y, r * 1.9, fade(color, 0.16));
-        draw_ellipse(s.x, s.y, r * largo, r * ancho, giro, TINTA);
+        draw_ellipse(s.x, s.y, r * largo, r * ancho, giro, fade(TINTA, opacidad));
         draw_ellipse(s.x, s.y, r * largo * 0.9, r * ancho * 0.9, giro, color);
 
         if parryable {
