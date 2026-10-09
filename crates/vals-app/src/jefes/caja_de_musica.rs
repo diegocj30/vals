@@ -9,7 +9,7 @@
 //!
 //! Cambia con cada figura, como un jefe de Cuphead entre fases: la tapa se abre
 //! mas, la llave gira mas rapido y la cara pasa de contenta a fuera de si. En
-//! la coda se rompe: grietas, muelles saltando y la caja botando en cada
+//! el fleckerl se rompe: grietas, muelles saltando y la caja botando en cada
 //! tiempo.
 //!
 //! Todo en unidades de la arena, no de la bailarina: el aro de golpeo mide 46
@@ -65,9 +65,9 @@ struct Figura {
     vaiven: f32,
     /// De 0 (contenta) a 1 (fuera de si): cejas, parpados, boca y rubor.
     furia: f32,
-    /// Lo que bota en cada tiempo. Solo en la coda.
+    /// Lo que bota en cada tiempo. Solo en el fleckerl.
     bote: f32,
-    /// Cuantas grietas tiene. Solo en la coda, y mas cuanto menos vida.
+    /// Cuantas grietas tiene. Solo en el fleckerl, y mas cuanto menos vida.
     grietas: usize,
 }
 
@@ -75,14 +75,14 @@ fn figura(fase: usize, vida: f32) -> Figura {
     let f = fase.min(3);
     // Con poca vida todo va con prisa: la cuerda se acaba y lo nota.
     let prisa = 1.0 - vida.clamp(0.0, 1.0);
-    let coda = f == 3;
+    let fleckerl = f == 3;
     Figura {
         tapa: [24.0, 32.0, 40.0, 46.0][f],
         llave: (0.006 + f as f32 * 0.006) * (1.0 + prisa),
         vaiven: (0.06 + f as f32 * 0.02) * (1.0 + 0.5 * prisa),
         furia: (f as f32 / 3.0 + 0.25 * prisa).min(1.0),
-        bote: if coda { 9.0 } else { 0.0 },
-        grietas: if coda {
+        bote: if fleckerl { 9.0 } else { 0.0 },
+        grietas: if fleckerl {
             (2 + (prisa * 3.0) as usize).min(GRIETAS.len())
         } else {
             0
@@ -95,7 +95,7 @@ fn alzar(fondo: f32, tablas: Option<f32>) -> f32 {
     tablas.map_or(0.0, |y| (fondo - y).max(0.0))
 }
 
-/// Las grietas de la coda, en el frente de la caja. Fijas: una grieta que
+/// Las grietas de el fleckerl, en el frente de la caja. Fijas: una grieta que
 /// cambia de sitio cada frame no es una grieta, es ruido.
 const GRIETAS: [&[(f32, f32)]; 5] = [
     &[(-35.0, -18.0), (-28.0, -13.0), (-31.0, -5.0), (-24.0, 0.0)],
@@ -107,7 +107,7 @@ const GRIETAS: [&[(f32, f32)]; 5] = [
 
 pub fn dibujar(e: &Escena) {
     let fig = figura(e.fase, e.vida);
-    let coda = e.fase >= 3;
+    let fleckerl = e.fase >= 3;
     let pulso = e.pulso.clamp(0.0, 1.0);
     // El uno del compas pesa mas: es el "oom" del oom-pah-pah.
     let golpe = pulso * if e.fuerte { 1.0 } else { 0.55 };
@@ -122,7 +122,7 @@ pub fn dibujar(e: &Escena) {
     // Con poca vida tiembla. Determinista: sale del reloj, no de un dado.
     giro += (e.t * 1.9).sin() * 0.03 * (1.0 - e.vida) * fig.furia;
 
-    // En la coda bota: despega entre tiempos y cae justo en el golpe.
+    // En el fleckerl bota: despega entre tiempos y cae justo en el golpe.
     let dentro = 1.0 - pulso.powf(1.0 / 2.2);
     let bote = fig.bote * (dentro * PI).sin();
 
@@ -143,8 +143,8 @@ pub fn dibujar(e: &Escena) {
         pivote: vec2(PATA_X * sx * giro.signum(), SUELO),
     };
 
-    // --- La tapa, detras de todo. En la coda aletea en cada golpe.
-    tapa(&lp, e, fig.tapa + if coda { 10.0 * pulso } else { 0.0 });
+    // --- La tapa, detras de todo. En el fleckerl aletea en cada golpe.
+    tapa(&lp, e, fig.tapa + if fleckerl { 10.0 * pulso } else { 0.0 });
 
     // --- La bailarina, en su peana. No se mece con la caja: gira en su eje,
     // que es lo que hace la de una caja de verdad.
@@ -152,8 +152,8 @@ pub fn dibujar(e: &Escena) {
     let pie = lp.p(0.0, CANTO - 9.0);
     bailarina(e, e.t, pie, 0.0);
 
-    // --- Los muelles de la coda, saltando por las esquinas.
-    if coda {
+    // --- Los muelles de el fleckerl, saltando por las esquinas.
+    if fleckerl {
         for (i, s) in [-1.0f32, 1.0].into_iter().enumerate() {
             // Cada uno a contratiempo del otro, para que no parezca uno solo.
             let estira = if i == 0 { pulso } else { 1.0 - pulso };
@@ -171,7 +171,7 @@ pub fn dibujar(e: &Escena) {
         lp.trazo(grieta, 1.6, TINTA);
     }
 
-    cara(&lp, e, &fig, lado, coda, golpe);
+    cara(&lp, e, &fig, lado, fleckerl, golpe);
 
     llave(&lp, e.t * fig.llave * TAU);
 }
@@ -530,19 +530,28 @@ fn cara_ko(lp: &Lapiz, e: &Escena, d: &Desarme) {
 }
 
 /// Los ojos, las cejas, el rubor y la boca.
-fn cara(lp: &Lapiz, e: &Escena, fig: &Figura, lado: f32, coda: bool, golpe: f32) {
+fn cara(lp: &Lapiz, e: &Escena, fig: &Figura, lado: f32, fleckerl: bool, golpe: f32) {
     let furia = fig.furia;
     let (ey, ew) = (-8.0, 9.5);
-    // En la coda los ojos se abren de par en par y las pupilas se encogen:
+    // En el fleckerl los ojos se abren de par en par y las pupilas se encogen:
     // fuera de si. Antes, cuanta mas furia mas entornados.
-    let eh = if coda { 13.5 } else { 11.5 };
-    let pupila = if coda { 2.8 } else { 4.8 };
+    let eh = if fleckerl { 13.5 } else { 11.5 };
+    let pupila = if fleckerl { 2.8 } else { 4.8 };
     // Parpadea de vez en cuando mientras aun esta tranquila.
     let parpadeo = e.fase < 2 && e.t.rem_euclid(220.0) < 7.0;
-    // Las pupilas miran hacia donde se mece; en la coda, ademas, tiemblan.
+    // Las pupilas miran hacia donde se mece; en el fleckerl, ademas, tiemblan.
     let mira = vec2(
-        3.0 * lado + if coda { (e.t * 2.3).sin() * 1.2 } else { 0.0 },
-        if coda { (e.t * 3.1).cos() * 1.0 } else { 1.0 },
+        3.0 * lado
+            + if fleckerl {
+                (e.t * 2.3).sin() * 1.2
+            } else {
+                0.0
+            },
+        if fleckerl {
+            (e.t * 3.1).cos() * 1.0
+        } else {
+            1.0
+        },
     );
 
     for s in [-1.0f32, 1.0] {
@@ -565,7 +574,7 @@ fn cara(lp: &Lapiz, e: &Escena, fig: &Figura, lado: f32, coda: bool, golpe: f32)
         // gesto.
         let (dentro, fuera) = if parpadeo {
             (1.0, 1.0)
-        } else if coda {
+        } else if fleckerl {
             (0.0, 0.0)
         } else {
             (0.18 + 0.4 * furia, 0.18 - 0.08 * furia)
@@ -617,7 +626,7 @@ fn cara(lp: &Lapiz, e: &Escena, fig: &Figura, lado: f32, coda: bool, golpe: f32)
         let f = (i as f32 + 0.5) / PUAS as f32;
         let x = -ancho * 0.7 + f * ancho * 1.4;
         let y = top + (comisura - top) * (x / ancho).abs();
-        let largo = 4.5 - 2.0 * f + if coda { 1.5 } else { 0.0 };
+        let largo = 4.5 - 2.0 * f + if fleckerl { 1.5 } else { 0.0 };
         lp.caja(x - 1.0, y, 2.0, largo, ORO);
     }
 }

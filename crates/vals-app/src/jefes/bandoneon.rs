@@ -10,9 +10,9 @@
 //!
 //! - **La caminata**: el galan. Sombrero ladeado, ojos a media asta, la rosa
 //!   entre los dientes y el paso lento-lento-rapido-rapido.
-//! - **El corte**: se enfada. Ceja en V, dientes apretados, el sombrero calado
+//! - **Los ochos**: se enfada. Ceja en V, dientes apretados, el sombrero calado
 //!   y el fuelle entero abierto y cerrado en cada tiempo, con estocadas.
-//! - **La quebrada**: se rompe. Las cajas se abren en V, el sombrero sale
+//! - **El molinete**: se rompe. Las cajas se abren en V, el sombrero sale
 //!   volando, el fuelle se raja y echa aire por la raja, saltan botones y la
 //!   rosa se deshace. Con poca vida, en cualquier figura, baila a doble tiempo.
 //!
@@ -72,7 +72,7 @@ struct Paso {
     abre: f32,
     /// Grados que se inclina el cuerpo entero.
     inclina: f32,
-    /// Grados que se abren las cajas en V. Solo en la quebrada.
+    /// Grados que se abren las cajas en V. Solo en el molinete.
     abanico: f32,
     /// Las manos, desde el hombro, con la x hacia fuera.
     mano_i: Vec2,
@@ -100,7 +100,7 @@ const PASOS: [[Paso; 4]; 3] = [
         paso(0.1, 6.0, 0.0, (8.0, 16.0), (10.0, -22.0)),
         paso(0.5, 6.0, 0.0, (6.0, 10.0), (6.0, -26.0)),
     ],
-    // El corte: abierto, cerrado, abierto, cerrado. Se tuerce a un lado, se
+    // Los ochos: abierto, cerrado, abierto, cerrado. Se tuerce a un lado, se
     // recoge soltando los punos, al otro lado, y los brazos arriba en el
     // cuatro: parado.
     [
@@ -109,7 +109,7 @@ const PASOS: [[Paso; 4]; 3] = [
         paso(1.0, 10.0, 0.0, (2.0, 18.0), (3.0, -24.0)),
         paso(0.0, 0.0, 0.0, (9.0, -26.0), (9.0, -26.0)),
     ],
-    // La quebrada: el abrazo roto. Las cajas se tuercen cada una a un lado.
+    // El molinete: el abrazo roto. Las cajas se tuercen cada una a un lado.
     [
         paso(1.0, -10.0, 10.0, (2.0, -28.0), (2.0, 18.0)),
         paso(0.25, 10.0, -8.0, (12.0, 14.0), (12.0, -24.0)),
@@ -276,7 +276,7 @@ pub fn dibujar(e: &Escena) {
     // El uno pisa mas fuerte que los otros tres: el marcato del tango.
     let acento = e.pulso * if e.fuerte { 1.0 } else { 0.5 };
 
-    // Tiembla con los nervios: nada entero, y en la quebrada siempre algo.
+    // Tiembla con los nervios: nada entero, y en el molinete siempre algo.
     let nervio = (1.0 - e.vida).powi(3) * if quebrada { 2.5 } else { 1.2 }
         + if quebrada { 0.6 } else { 0.0 };
     let temblor = vec2((e.t * 1.9).sin(), (e.t * 2.7).cos()) * nervio;
@@ -430,7 +430,7 @@ fn cuerpo(pl: &Pluma, e: &Escena, cu: &Cuerpo, pulso: f32) -> [Vec2; 4] {
         pl.trazo(&[a, b], 0.8, TINTA);
     }
 
-    // La raja de la quebrada, con el aire saliendo a cada golpe.
+    // La raja del molinete, con el aire saliendo a cada golpe.
     if quebrada {
         let (a, b) = borde(2);
         let (c, d) = borde(3);
@@ -439,7 +439,7 @@ fn cuerpo(pl: &Pluma, e: &Escena, cu: &Cuerpo, pulso: f32) -> [Vec2; 4] {
     }
 
     // --- Las cajas: marco de la tinta del baile, tapa de la segunda y los
-    // botones en dorado. En la quebrada faltan algunos: son los que saltan.
+    // botones en dorado. En el molinete faltan algunos: son los que saltan.
     for lado in [-1.0, 1.0] {
         let (c, ang) = cu.caja(lado);
         pl.caja(c, CAJA, ang, e.tinta);
@@ -678,7 +678,7 @@ fn cara_desinflada(pl: &Pluma, e: &Escena, d: &Desinfla, c: Vec2, separa: f32) -
     boca
 }
 
-/// Los botones que saltan en la quebrada: (lado, columna, fila).
+/// Los botones que saltan en el molinete: (lado, columna, fila).
 const SALTAN: [(i32, usize, usize); 4] = [(-1, 0, 1), (1, 1, 3), (-1, 1, 4), (1, 0, 0)];
 
 /// Donde va un boton en su caja, relativo al centro.

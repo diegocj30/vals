@@ -610,7 +610,7 @@ fn recorrido(world: &World) -> f32 {
 ///
 /// La barra es lo mas Cuphead que hay aqui, y no por el dibujo: es que **un
 /// juego duro tiene que decirte si te acercaste**. Si llevas cien intentos en
-/// la coda; cien intentos con esta barra son cien intentos con informacion, y
+/// la ultima figura, cien intentos con esta barra son cien intentos con informacion, y
 /// sin ella son cien intentos a ciegas.
 fn sello_de_derrota(l: &Layout, world: &World) {
     let o = l.to_screen(0.0, 0.0);

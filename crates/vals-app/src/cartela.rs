@@ -340,13 +340,13 @@ mod tests {
         // Una cartela que hay que leer esquivando no se lee; y parar el mundo
         // en mitad de un combate que va bien le quita el ritmo. Son dos cosas
         // distintas a proposito.
-        assert!(Cartela::entrada("El Vals", "El paso base", "x").para_el_mundo());
-        assert!(!Cartela::figura("El espejo", 1).para_el_mundo());
+        assert!(Cartela::entrada("El Vals", "El paso de cambio", "x").para_el_mundo());
+        assert!(!Cartela::figura("El giro natural", 1).para_el_mundo());
     }
 
     #[test]
     fn se_desvanece_por_los_dos_lados_y_se_acaba() {
-        let mut c = Cartela::entrada("El Vals", "El paso base", "x");
+        let mut c = Cartela::entrada("El Vals", "El paso de cambio", "x");
         assert!(c.opacidad() < 0.1, "empieza invisible");
         for _ in 0..24 {
             c.step(1.0 / 60.0);
@@ -362,7 +362,7 @@ mod tests {
         // El bug que esto vigila salio jugando: "casi ni se ve, sale un instante
         // aunque no pulses nada". Se entra a un baile pulsando un boton, y ese
         // boton sigue pulsado cuando aparece la cartela.
-        let mut c = Cartela::entrada("El Vals", "El paso base", "x");
+        let mut c = Cartela::entrada("El Vals", "El paso de cambio", "x");
         assert!(!c.se_puede_saltar(), "recien salida no");
         c.saltar();
         assert!(c.restante > SALE, "y saltarla ahi no hace nada");
@@ -377,18 +377,18 @@ mod tests {
     fn el_grito_sale_tras_la_entrada_y_no_se_encadena() {
         // Tras la de entrada viene el grito; tras el grito, nada. Si el grito
         // contase como entrada, se volveria a lanzar a si mismo para siempre.
-        assert!(Cartela::entrada("El Vals", "El paso base", "x").es_de_entrada());
+        assert!(Cartela::entrada("El Vals", "El paso de cambio", "x").es_de_entrada());
         let grito = Cartela::a_bailar();
         assert!(!grito.es_de_entrada(), "el grito se encadenaria");
         assert!(!grito.para_el_mundo(), "el combate ya ha empezado");
-        assert!(!Cartela::figura("El espejo", 1).es_de_entrada());
+        assert!(!Cartela::figura("El giro natural", 1).es_de_entrada());
     }
 
     #[test]
     fn saltarla_no_la_corta_en_seco() {
         // La segunda vez ya te la sabes, pero quitarla de golpe se ve como un
         // parpadeo. Saltar deja justo la salida.
-        let mut c = Cartela::entrada("El Vals", "El paso base", "x");
+        let mut c = Cartela::entrada("El Vals", "El paso de cambio", "x");
         // Pasada la gracia, que si no no deja.
         for _ in 0..70 {
             c.step(1.0 / 60.0);

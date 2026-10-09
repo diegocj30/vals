@@ -337,7 +337,7 @@ fn vals(fase: usize, t: f32, vida: f32) -> Pose {
 ///
 /// Los angulos no interpolan: saltan de una postura a otra cada medio compas.
 /// Es el mismo verbo que sus balas —salir, frenar, volver— llevado al cuerpo.
-/// En la segunda figura, el corte, la pareja se separa.
+/// En la segunda figura, los ochos, la pareja se separa.
 fn tango(fase: usize, t: f32, vida: f32) -> Vec<Pose> {
     // El tema va a 120 negras en 4/4: 30 ticks por tiempo. Los pasos caen en
     // los tiempos, como las balas.
@@ -347,7 +347,7 @@ fn tango(fase: usize, t: f32, vida: f32) -> Vec<Pose> {
     // como un acento y no como un cambio de postura sin mas.
     let golpe = (1.0 - (t.rem_euclid(60.0)) / 10.0).max(0.0);
 
-    // Se separan en el corte y se vuelven a juntar en la quebrada.
+    // Se separan en los ochos y se vuelven a juntar en el molinete.
     let apertura = match fase {
         0 => 5.0,
         1 => 5.0 + 16.0 * (1.0 - vida),
@@ -657,7 +657,7 @@ mod tests {
         };
         assert!(
             vuelo(0, 3) > vuelo(0, 0) * 1.3,
-            "el vals no se enciende en la coda"
+            "el vals no se enciende en el fleckerl"
         );
         // El que lleva en el tango va sin falda, y crecer no puede ponersela.
         let p = &poses(1, 2, 0.0, 1.0)[0];
