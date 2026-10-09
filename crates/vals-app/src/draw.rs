@@ -971,7 +971,7 @@ fn programa(world: &World, cx: f32, y0: f32, ancho: f32, alto: f32) {
         // Los nombres largos ("La rueda y el grand ecart") se encogen para
         // caber en la orla en vez de salirse del programa.
         let ancho_22 = fuentes::medir(nombre, 22.0, Cara::Titulo).width;
-        let tam = (22.0 * (ancho - 40.0) / ancho_22.max(1.0)).min(22.0);
+        let tam = (22.0 * (ancho - 70.0) / ancho_22.max(1.0)).min(22.0);
         fuentes::centrado(nombre, cx, y + 24.0, tam, Cara::Titulo, color);
         if tachada {
             // Lo ya bailado, tachado a pluma, como en un programa usado.

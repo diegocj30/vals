@@ -66,8 +66,8 @@ pub const TECHO_POR_NIVEL: [f32; 4] = [160.0, 190.0, 215.0, 245.0];
 /// Y no se calcula porque **no se puede**. El tango echa 140 balas por segundo,
 /// menos que el charleston cuando se bailaba en el aire, que echaba 172, y aun
 /// asi es el mas duro con diferencia: las balas que salen, frenan y vuelven son
-/// lo peor de leer del juego. Y el charleston en el suelo echa 55 y sigue
-/// siendo medio: en una dimension, cada bala pesa mas. La densidad es un tope,
+/// lo peor de leer del juego. Cuando el charleston se bailo en el suelo, con
+/// solo 55, era casi imposible: en una dimension cada bala pesa mas. La densidad es un tope,
 /// nunca un objetivo, y el verbo del baile pesa mas que el numero.
 ///
 /// Por defecto `Facil`, que es el techo mas apretado: si a alguien se le olvida

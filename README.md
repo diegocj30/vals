@@ -29,8 +29,8 @@ sin instalar nada.
   progreso guardado entre partidas.
 - **Parry y super**: parriar las balas rosas llena el medidor y el super limpia
   la pantalla. El juego premia meterse entre las balas en vez de huir de todas.
-- Dos formas de jugar el combate: **volando**, como el danmaku clasico, o **en
-  el suelo** con gravedad y salto. La trae cada baile.
+- **Dos formas de moverse**: los jefes se esquivan **volando**, como un danmaku
+  clasico, y los paseos se corren **en el suelo**, con gravedad y salto.
 - Estetica de **cartel de la Belle Epoque**, con grano de pelicula, y musica de
   piezas de dominio publico (Strauss, Juventino Rosas, Joplin, Offenbach)
   transcritas a tablas de notas.
@@ -41,7 +41,7 @@ sin instalar nada.
 |---|---|---|
 | Mover | Flechas / WASD | Stick o cruceta |
 | Disparar | `Z` | R1 / R2 |
-| Saltar (en el suelo y en los paseos) | Arriba / `W` / `K` | Boton de abajo (X en PlayStation, A en Xbox) |
+| Saltar (en los paseos) | Arriba / `W` / `K` | Boton de abajo (X en PlayStation, A en Xbox) |
 | Dash, con invulnerabilidad | `X` | Cuadrado / X |
 | Parry | `C` | Circulo / B |
 | Super | `Espacio` | Triangulo / Y |
@@ -73,7 +73,7 @@ sin instalar nada.
 - **El mismo codigo en nativo y en web.** Compila a `wasm32` sin
   `wasm-bindgen`; el mando (gilrs en nativo, Gamepad API en web) y el guardado
   (`localStorage`) se conectan con plugins de miniquad de unas pocas lineas.
-- **374 tests**, entre ellos bots que recorren cada paseo de punta a punta y
+- **372 tests**, entre ellos bots que recorren cada paseo de punta a punta y
   tests que exigen que cada baile use su verbo del motor y no el de otro. El CI
   pasa `cargo fmt`, `clippy -D warnings`, los tests, el replay dorado y el
   build web en cada push.

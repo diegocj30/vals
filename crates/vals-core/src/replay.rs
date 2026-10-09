@@ -682,24 +682,6 @@ mod tests {
         vuelta.verify().expect("y tras pasar por bytes tambien");
     }
 
-    /// Un baile de suelo se graba y se verifica en el suelo, aunque se pida
-    /// vuelo: el modo lo decide el baile dentro de `empezar_en`, y `verify`
-    /// pasa por el mismo sitio.
-    #[test]
-    fn un_replay_de_un_baile_de_suelo_se_verifica() {
-        let defs = crate::boss::BossDef::default_bosses();
-        let baile = defs
-            .iter()
-            .position(|d| d.suelo)
-            .expect("deberia haber algun baile de suelo");
-        let inputs = inputs_de_prueba(6, 600);
-        let r = record_scripted(8, Mode::Flight, baile, &inputs, 30);
-        assert_eq!(r.mode, Mode::Platform, "el fichero dice el modo de verdad");
-        r.verify().expect("deberia verificar");
-        let vuelta = Replay::from_bytes(&r.to_bytes()).unwrap();
-        vuelta.verify().expect("y tras pasar por bytes tambien");
-    }
-
     #[test]
     fn los_dos_modos_no_producen_la_misma_partida() {
         let inputs = inputs_de_prueba(9, 200);
