@@ -3,7 +3,6 @@ name = "vals-core"
 description = "Simulacion determinista de VALS. Sin dependencias graficas, a proposito."
 version.workspace = true
 edition.workspace = true
-license.workspace = true
 
 # Sin esto, `cargo bench` intenta lanzar tambien el harness de libtest del lib
 # y se atraganta con los argumentos de criterion.

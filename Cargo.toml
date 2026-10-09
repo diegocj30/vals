@@ -8,7 +8,6 @@ members = ["crates/vals-core", "crates/vals-app"]
 # empieza a mantenerse aqui.
 version = "2.0.0-dev"
 edition = "2024"
-license = "MIT"
 
 # Perfiles ajustados desde el dia 1: este proyecto se optimiza a lo largo del
 # tiempo, asi que las mediciones tienen que ser siempre comparables.
