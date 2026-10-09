@@ -7,13 +7,14 @@
 //!
 //! Cambia con cada figura, como un jefe de Cuphead entre fases:
 //!
-//! - **El charleston**: contento. Rodillas adentro y afuera, patada en la
+//! - **El basico**: contento. Rodillas adentro y afuera, patada en la
 //!   clave 3-3-2 y los ojos que se cierran de gusto al patear.
-//! - **El swing-out**: desatado. Se mece de lado a lado, patea alto, agita las
-//!   manos arriba y el disco va al doble.
-//! - **El aereo**: dramatico. Las patas son muelles y salta en cada golpe de la
-//!   clave; el disco se despega del plato y cabecea en el aire, y el brazo
-//!   del fonografo va suelto.
+//! - **Bee's knees**: agachado, con las manos en las rodillas, que se cambian
+//!   de rodilla cada vez que se juntan; los ojos van de un lado a otro y el
+//!   disco va al doble.
+//! - **El cambio de lado**: dramatico. Las patas son muelles y salta en cada
+//!   golpe de la clave; el disco se despega del plato y cabecea en el aire,
+//!   y el brazo del fonografo va suelto.
 //!
 //! Con poca vida todo tiembla y va mas deprisa. Todo sale de `Escena`: es una
 //! funcion pura del reloj, sin estado ni azar.
@@ -49,8 +50,8 @@ const LENGUA: Color = color_u8!(214, 92, 96, 255);
 const LATON: Color = color_u8!(196, 146, 72, 255);
 
 /// Cuanto se encoge el dibujo entero. El cartel del panel lateral solo deja
-/// unas 48 unidades a cada lado del centro, y con los brazos abiertos del
-/// swing-out el gramofono a tamano 1 se salia.
+/// unas 48 unidades a cada lado del centro, y con los brazos abiertos el
+/// gramofono a tamano 1 se salia.
 const TAM: f32 = 0.85;
 
 /// Pivote del cuerpo: las caderas, bajo el mueble. Al inclinarse gira todo lo
@@ -155,17 +156,29 @@ impl Pose {
                 p.gusto = patada > 0.55;
             }
             1 => {
-                p.desp += vec2(mece * 5.0 + lado * patada * 3.0, -patada * 8.0);
-                p.giro = mece * 0.18 - lado * patada * 0.08;
+                // Bee's knees: agachado, sin patada, con las manos en las
+                // rodillas. Cada vez que las rodillas se juntan (vaiven al
+                // minimo) las manos se cambian a la rodilla contraria, una
+                // encima de otra, y al abrirse parece que se han atravesado.
+                p.desp += vec2(mece * 3.0, 4.0 - e.pulso * 2.0);
+                p.giro = mece * 0.06;
                 p.rodilla = vaiven * 9.0;
-                p.pies[pie] += vec2(lado * 13.0, -18.0) * patada;
-                p.pies[1 - pie].y -= patada * 3.0;
-                // Manos de jazz, arriba y temblando.
-                let agita = (e.t * 0.45).sin() * 3.0;
-                p.manos = [
-                    vec2(-38.0 + agita, -16.0 + 10.0 * vaiven),
-                    vec2(38.0 - agita, -16.0 - 10.0 * vaiven),
-                ];
+                let cruzadas = ((e.t / TIEMPO - 1.5) / 2.0).floor().rem_euclid(2.0) == 1.0;
+                // La rodilla cae a media manguera, combada la mitad de
+                // `rodilla`; se pasa al marco del cuerpo restando el desp.
+                let (desp, comba) = (p.desp, p.rodilla);
+                let rodilla = |s: f32| {
+                    let x = s * (PIE_X + 14.0 + comba) * 0.5;
+                    vec2(x, (CADERA.y + PIE_Y) * 0.5) - desp * 0.5
+                };
+                p.manos = if cruzadas {
+                    [
+                        rodilla(1.0) + vec2(0.0, -2.0),
+                        rodilla(-1.0) + vec2(0.0, 2.0),
+                    ]
+                } else {
+                    [rodilla(-1.0), rodilla(1.0)]
+                };
                 p.boca = 0.45 + 0.55 * e.pulso;
                 p.bocina = 31.0 * (1.0 + 0.09 * abre);
                 p.disco *= 2.0;
@@ -613,7 +626,7 @@ fn plato(cuerpo: &Lapiz, pose: &Pose) {
     let marca = en(0.18);
     cuerpo.elipse_lisa(marca.x, marca.y, 1.6, 0.9, rot, BLANCO);
 
-    // El brazo del fonografo: sobre el disco en el suelo; en el aereo va
+    // El brazo del fonografo: sobre el disco en el suelo; en los saltos va
     // suelto y se agita, porque el disco se le ha ido.
     let pivote = vec2(21.0, -4.0);
     let aguja = if pose.vuelo > 0.0 {
@@ -706,7 +719,7 @@ fn bocina(cuerpo: &Lapiz, pose: &Pose, e: &Escena, sombra: Color) {
 
 /// Los ojos y las cejas: lo que mas dice de en que figura va.
 fn ojos(cuerpo: &Lapiz, pose: &Pose, e: &Escena) {
-    // Miran abajo, a la jugadora; en el swing-out bailan de un lado a otro.
+    // Miran abajo, a la jugadora; en bee's knees bailan de un lado a otro.
     let mira = match e.fase {
         0 => vec2(0.0, 1.8),
         1 => vec2((e.t * 0.35).sin() * 2.2, 0.6),
@@ -780,7 +793,7 @@ mod tests {
     }
 
     #[test]
-    fn en_el_aereo_despega_de_verdad() {
+    fn en_el_cambio_de_lado_despega_de_verdad() {
         // A mitad de un salto los pies tienen que quedar por encima de donde
         // se apoyan en las otras figuras: si no, los muelles no dicen nada.
         let escena = |fase, t| Escena {
@@ -799,7 +812,7 @@ mod tests {
         let aire = Pose::de(&escena(2, 27.0)).bajo(0.0);
         assert!(
             aire < suelo - 10.0,
-            "el aereo no despega: {aire} contra {suelo}"
+            "el cambio de lado no despega: {aire} contra {suelo}"
         );
     }
 

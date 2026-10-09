@@ -449,7 +449,7 @@ mod tests {
     ///   continuo, y eso es lo que hace un vals.
     /// - **El tango va recto**: ni un `Turn`. Linea recta y cambio de golpe.
     /// - **El charleston curva**: `spin` en todas sus figuras, y es el unico
-    ///   que lo usa. Un swing-out no es una linea ni una parada: es un arco.
+    ///   que lo usa. El giro del pie no es una linea ni una parada: es un arco.
     /// - **El cancan se desvanece**: `ttl` corto, asi que sus balas salen,
     ///   cruzan un trozo de pantalla y se van solas. Una patada dura lo que
     ///   dura la patada. Es lo que deja que sus rasantes crucen el escenario

@@ -11,13 +11,14 @@
 //      cuatro tiempos, y este se salta el tercero.
 //
 //   2. EL SPIN. Las balas van curvas. Es el unico baile que usa `spin`, igual
-//      que el vals es el unico que usa `Turn`. Un swing-out no es una linea ni
-//      una parada: es un arco, tu pareja sale girando y vuelve girando.
+//      que el vals es el unico que usa `Turn`. El charleston es un giro sobre
+//      la planta del pie: la punta sale hacia un lado y vuelve, y eso es un
+//      arco, no una linea ni una parada.
 //
-// EN EL SUELO, EL ARCO ES UN SWING-OUT DE VERDAD. Cada tanda sale hacia un
-// lado y abajo y la curva la trae de vuelta, asi que aterriza al OTRO lado de
-// la bailarina, y cuanto mas abierta sale mas rasante llega. Por eso el spin
-// aqui es suave (0.45-0.55): con la curva del vuelo (1.35) la bala da la vuelta
+// EN EL SUELO, EL ARCO ES EL GIRO DEL PIE. Cada tanda sale hacia un lado y
+// abajo y la curva la trae de vuelta, asi que aterriza al OTRO lado de la
+// bailarina, y cuanto mas abierta sale mas rasante llega. Por eso el spin aqui
+// es suave (0.45-0.55): con la curva del vuelo (1.35) la bala da la vuelta
 // antes de bajar las 430 que hay hasta el suelo, y no lo toca nunca.
 //
 // POR QUE LA BAILARINA ESTA A MEDIA ALTURA Y SE MUEVE DE LADO. El jugador
@@ -35,16 +36,20 @@
 // Y el movimiento va con ease Out —arranca de golpe y frena—, que es lo que
 // hace un salto. El vals usa InOut y el tango Linear.
 //
-// Las tres figuras (balas/s disparadas; presion = balas en la franja del suelo
-// por tick, medida en world.rs):
+// Las tres figuras son del charleston de los anos veinte, en el orden en que
+// se aprende: el paso, el adorno de las rodillas, y el cambio de sitio que
+// cierra la frase. El swing-out y los aereos eran del lindy de los treinta, y
+// aqui no pintaban nada. Balas/s disparadas; presion = balas en la franja del
+// suelo por tick, medida en world.rs:
 //
-//   1. El charleston    19 b/s  presion  6.5  un swing por golpe de clave.
-//   2. El swing-out     30 b/s  presion 11.5  los dos swings en cada golpe.
-//   3. El aereo         55 b/s  presion 20.2  mas bajo, a dos capas. Techo: 190.
+//   1. El basico          17 b/s  presion  5.8  un giro del pie por golpe.
+//   2. Bee's knees        20 b/s  presion  7.7  rodillas que se abren y se
+//                                               cruzan, y las manos con ellas.
+//   3. El cambio de lado  32 b/s  presion 11.6  cruza el escenario a saltitos.
 //
-// Las balas por segundo son la mitad o menos que en el aire (61/102/172), y a
-// proposito: en el suelo solo te mueves de lado, y el mismo numero de balas
-// pesa mucho mas en una dimension que en dos.
+// Las balas por segundo son la mitad o menos que en el aire, y a proposito: en
+// el suelo solo te mueves de lado, y el mismo numero de balas pesa mucho mas
+// en una dimension que en dos.
 //
 // Guia rapida de pasos:
 //   Wait(n)               espera n ticks (60 ticks = 1 segundo)
@@ -68,10 +73,12 @@
   pos: (320.0, 300.0),
   radius: 46.0,
   phases: [
-    // --- El charleston. Un swing por golpe de clave: sale a un lado, vuelve
-    //     por el otro. En el "dos" salen los dos a la vez.
+    // --- El basico. El paso de 1923: sobre la planta, las puntas giran
+    //     afuera y adentro y el pie libre patea adelante y atras. Cada patada
+    //     es un arco: sale por un lado y el giro lo trae por el otro. En el
+    //     "dos" patean los dos pies a la vez.
     (
-      name: "El charleston",
+      name: "El basico",
       hp: 480,
       steps: [
         Parallel([
@@ -141,10 +148,17 @@
         ]),
       ],
     ),
-    // --- El swing-out. Los dos arcos en cada golpe, cruzandose por debajo de
-    //     ella, y la pareja contestando a contratiempo.
+    // --- Bee's knees. Las manos en las rodillas; las rodillas se juntan, las
+    //     manos se cambian a la rodilla contraria, y al abrirse parece que las
+    //     rodillas se han atravesado. El paso de las tijeras de la guia de
+    //     1925, el que todo el mundo reconoce del charleston.
+    //
+    //     Lo dibujan dos abanicos, uno por rodilla. Abiertas: salen casi a
+    //     plomo y el giro las separa, ( ). Juntas: salen hacia fuera y el giro
+    //     las trae hacia dentro hasta que se cruzan debajo de ella, X. El
+    //     cruce cae justo donde tienes que estar para darle.
     (
-      name: "El swing-out",
+      name: "Bee's knees",
       hp: 540,
       steps: [
         Parallel([
@@ -157,28 +171,38 @@
             ]),
           ],
           [
-            // El swing-out: en los dos primeros golpes de la clave sale por un
-            // lado y luego por el otro; en el "dos" salen los dos y se cruzan.
+            // Abre en el primer golpe y cruza en los otros dos: el "dos" es
+            // el cambio de manos de vuelta.
             Forever([
               Fire((
-                count: 7, arc: 0.8, aim: Fixed(0.95), speed: 225.0,
+                count: 4, arc: 0.5, aim: Fixed(1.25), speed: 225.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Fire((
+                count: 4, arc: 0.5, aim: Fixed(1.89), speed: 225.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 7, arc: 0.8, aim: Fixed(2.19), speed: 225.0,
+                count: 5, arc: 0.6, aim: Fixed(0.95), speed: 225.0,
+                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Fire((
+                count: 5, arc: 0.6, aim: Fixed(2.19), speed: 225.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 7, arc: 0.8, aim: Fixed(0.95), speed: 225.0,
+                count: 5, arc: 0.6, aim: Fixed(0.95), speed: 225.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Fire((
-                count: 7, arc: 0.8, aim: Fixed(2.19), speed: 225.0,
+                count: 5, arc: 0.6, aim: Fixed(2.19), speed: 225.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
@@ -186,9 +210,9 @@
             ]),
           ],
           [
-            // Y la pareja, en la corchea de swing (24 y 60): un arco mas
-            // cerrado que aterriza cerca de ella, justo donde tienes que
-            // ponerte para darle.
+            // Las manos, en la corchea de swing (24 y 60): primero una y luego
+            // la otra, cada una cruzando hacia la rodilla contraria. Son las
+            // balas medianas, los guantes blancos.
             Forever([
               Wait(24),
               Fire((
@@ -232,23 +256,43 @@
         ]),
       ],
     ),
-    // --- El aereo. El salto: la pareja despega y cae. Baila mas bajo, asi que
-    //     los arcos llegan antes y mas cerca, y a dos capas.
+    // --- El cambio de lado. La voz de "switching sides" del charleston en
+    //     grupo: en los tiempos 5 a 8 se cruza al otro lado a saltitos sobre
+    //     un pie, dando media vuelta. Aqui la frase son dos compases: el
+    //     primero baila en su sitio y el segundo cruza el escenario en cuatro
+    //     saltos, uno por tiempo, y cada tanda de arcos sale de donde cayo.
+    //     Es la que mas aprieta porque el cruce te obliga a cambiar de lado
+    //     con ella mientras llueven los arcos de los dos lados a la vez.
     (
-      name: "El aereo",
+      name: "El cambio de lado",
       hp: 720,
       steps: [
         Parallel([
           [
             Forever([
-              MoveTo(pos: (170.0, 250.0), dur: 36, ease: Out),
-              Wait(72),
-              MoveTo(pos: (470.0, 380.0), dur: 36, ease: Out),
-              Wait(72),
+              Wait(144),
+              MoveTo(pos: (240.0, 330.0), dur: 24, ease: Out),
+              Wait(12),
+              MoveTo(pos: (310.0, 330.0), dur: 24, ease: Out),
+              Wait(12),
+              MoveTo(pos: (380.0, 330.0), dur: 24, ease: Out),
+              Wait(12),
+              MoveTo(pos: (450.0, 330.0), dur: 24, ease: Out),
+              Wait(12),
+              Wait(144),
+              MoveTo(pos: (380.0, 330.0), dur: 24, ease: Out),
+              Wait(12),
+              MoveTo(pos: (310.0, 330.0), dur: 24, ease: Out),
+              Wait(12),
+              MoveTo(pos: (240.0, 330.0), dur: 24, ease: Out),
+              Wait(12),
+              MoveTo(pos: (170.0, 330.0), dur: 24, ease: Out),
+              Wait(12),
             ]),
           ],
           [
-            // La clave con los dos swings en cada golpe, y en el "dos" a dos capas.
+            // La clave con las dos patadas en cada golpe, y en el "dos" a
+            // dos capas.
             Forever([
               Fire((
                 count: 6, arc: 0.9, aim: Fixed(0.95), speed: 225.0,
@@ -286,6 +330,8 @@
             ]),
           ],
           [
+            // La media vuelta: un abanico mediano que gira hacia un lado y
+            // el siguiente hacia el otro, cada uno media vuelta de la curva.
             Forever([
               Wait(54),
               Fire((
