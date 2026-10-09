@@ -1097,9 +1097,14 @@ mod tests {
         }
         assert_eq!(
             vistas,
-            vec!["El paso base", "El espejo", "El molinete", "La coda"]
+            vec![
+                "El paso de cambio",
+                "El giro natural",
+                "El giro inverso",
+                "El fleckerl"
+            ]
         );
-        assert!(!w.victory, "aun queda bailar la coda");
+        assert!(!w.victory, "aun queda bailar el fleckerl");
         assert_eq!(w.boss_index, 0, "no hay a donde pasar: el vals es uno");
     }
 
@@ -1907,9 +1912,9 @@ mod medida_suelo {
     /// ella son del orden de una docena de balas por segundo llegando al
     /// suelo: algo que esquivar en cada corchea. Sale de medir:
     /// las figuras de suelo van de 5,6 a 20,2, y lo mas flojo de los bailes de
-    /// vuelo puesto en tierra, el molinete del vals, se queda en 3,1. Por
-    /// debajo de 4, una figura de suelo seria un paseo con alguna bala
-    /// suelta, que es justo lo que se temia.
+    /// vuelo puesto en tierra, una figura del vals que frenaba sus balas, se
+    /// quedaba en 3,1. Por debajo de 4, una figura de suelo seria un paseo
+    /// con alguna bala suelta, que es justo lo que se temia.
     ///
     /// Y que no baje: dentro de un baile la curva sube, igual que la densidad
     /// en `cada_baile_cabe_en_su_presupuesto`. Un suelo que aprieta menos en la

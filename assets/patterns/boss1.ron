@@ -5,12 +5,20 @@
 // —El Vals, El Espejo y La Coda— y los tres eran valses; sus nombres ya decian
 // que eran partes de una pieza y no monstruos. Ahora lo son de verdad.
 //
-// Las cuatro figuras, en orden, con las balas por segundo que echa cada una:
+// Es el vals vienes (la musica es el Danubio y Sobre las olas), y sus figuras
+// son las de verdad, en el orden en que se aprenden. Un vals vienes es girar:
+// a derechas (natural) o a izquierdas (inverso), y el paso de cambio es lo que
+// pasa de un sentido al otro. El signo de `Turn` es ese sentido: positivo es a
+// derechas en pantalla, porque la y crece hacia abajo.
 //
-//   1. El paso base   48 b/s   una espiral y un abanico apuntado. Ensena el 3/4.
-//   2. El espejo      88 b/s   Turn(0.31) y Turn(-0.31): el mismo giro del reves.
-//   3. El molinete   115 b/s   una vuelta lenta y otra rapidisima, a la vez.
-//   4. La coda       156 b/s   el final.
+//   1. El paso de cambio   48 b/s   la espiral va y vuelve sin dar la vuelta.
+//   2. El giro natural     88 b/s   todo a derechas, Turn positivo.
+//   3. El giro inverso    102 b/s   el natural en un espejo, Turn negativo.
+//   4. El fleckerl        152 b/s   girar rapidisimo en el sitio, inverso y
+//                                   natural, con un check entre medias.
+//
+// El fleckerl es el remate porque es lo que es en la pista: la figura de
+// lucimiento, la que no se ensena a los principiantes.
 //
 // Las densidades bajaron un 15% cuando entro el presupuesto de dificultad
 // (`TECHO_POR_BAILE`): el vals es el primer baile de siete u ocho, y su final
@@ -44,9 +52,12 @@
   pos: (480.0, 150.0),
   radius: 46.0,
   phases: [
-    // --- El paso base. era la fase 1 de El Vals, intacta.
+    // --- El paso de cambio. Tres pasos sin girar que cambian el sentido del
+    // giro: la espiral avanza un compas a un lado y otro al otro, y no llega a
+    // dar la vuelta. Los huecos se quedan casi quietos, que es lo que se ensena
+    // primero. El abanico cae en el uno, cada cuatro compases.
     (
-      name: "El paso base",
+      name: "El paso de cambio",
       hp: 240,
       steps: [
         Parallel([
@@ -66,27 +77,53 @@
           ],
           [
             Forever([
-              Fire((
-                count: 6,
-                arc: 6.2831855,
-                aim: Fixed(0.0),
-                speed: 130.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 3,
-                flags: 0,
-              )),
-              Turn(0.41),
-              Wait(8),
+              Repeat(
+                times: 3,
+                body: [
+                  Fire((
+                    count: 6,
+                    arc: 6.2831855,
+                    aim: Fixed(0.0),
+                    speed: 130.0,
+                    rings: 1,
+                    speed_step: 40.0,
+                    ring_offset: 0.0,
+                    accel: 0.0,
+                    spin: 0.0,
+                    ttl: 30.0,
+                    kind: 3,
+                    flags: 0,
+                  )),
+                  Turn(0.2),
+                  Wait(8),
+                ],
+              ),
+              Repeat(
+                times: 3,
+                body: [
+                  Fire((
+                    count: 6,
+                    arc: 6.2831855,
+                    aim: Fixed(0.0),
+                    speed: 130.0,
+                    rings: 1,
+                    speed_step: 40.0,
+                    ring_offset: 0.0,
+                    accel: 0.0,
+                    spin: 0.0,
+                    ttl: 30.0,
+                    kind: 3,
+                    flags: 0,
+                  )),
+                  Turn(-0.2),
+                  Wait(8),
+                ],
+              ),
             ]),
           ],
           [
             Forever([
-              Wait(100),
+              Wait(96),
               Fire((
                 count: 5,
                 arc: 0.55,
@@ -106,9 +143,11 @@
         ]),
       ],
     ),
-    // --- El espejo. era la fase 1 de El Espejo; vida 600 -> 450.
+    // --- El giro natural. Hacia la derecha: los dos brazos con Turn positivo,
+    // que en pantalla (y hacia abajo) es el sentido de las agujas del reloj.
+    // El jefe tambien da la vuelta a derechas mientras avanza.
     (
-      name: "El espejo",
+      name: "El giro natural",
       hp: 450,
       steps: [
         Parallel([
@@ -116,13 +155,23 @@
             Forever([
               MoveTo(
                 pos: (190.0, 150.0),
-                dur: 100,
-                ease: InOut,
+                dur: 50,
+                ease: Linear,
+              ),
+              MoveTo(
+                pos: (320.0, 115.0),
+                dur: 50,
+                ease: Linear,
               ),
               MoveTo(
                 pos: (450.0, 150.0),
-                dur: 100,
-                ease: InOut,
+                dur: 50,
+                ease: Linear,
+              ),
+              MoveTo(
+                pos: (320.0, 185.0),
+                dur: 50,
+                ease: Linear,
               ),
             ]),
           ],
@@ -162,7 +211,7 @@
                 kind: 3,
                 flags: 0,
               )),
-              Turn(-0.31),
+              Turn(0.31),
               Wait(7),
             ]),
           ],
@@ -188,53 +237,45 @@
         ]),
       ],
     ),
-    // --- El molinete. era la fase 2 de El Espejo; vida 700 -> 550.
+    // --- El giro inverso. El natural visto en un espejo: Turn negativo, a
+    // izquierdas, y el jefe recorre la vuelta al reves. Un poco mas rapido y
+    // mas denso, porque se aprende despues.
     (
-      name: "El molinete",
+      name: "El giro inverso",
       hp: 550,
       steps: [
         Parallel([
           [
             Forever([
               MoveTo(
-                pos: (250.0, 130.0),
-                dur: 70,
-                ease: InOut,
+                pos: (190.0, 150.0),
+                dur: 45,
+                ease: Linear,
               ),
               MoveTo(
-                pos: (390.0, 190.0),
-                dur: 70,
-                ease: InOut,
+                pos: (320.0, 185.0),
+                dur: 45,
+                ease: Linear,
+              ),
+              MoveTo(
+                pos: (450.0, 150.0),
+                dur: 45,
+                ease: Linear,
+              ),
+              MoveTo(
+                pos: (320.0, 115.0),
+                dur: 45,
+                ease: Linear,
               ),
             ]),
           ],
           [
             Forever([
               Fire((
-                count: 14,
+                count: 5,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
-                speed: 210.0,
-                rings: 2,
-                speed_step: 40.0,
-                ring_offset: 0.14,
-                accel: -150.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Turn(0.19),
-              Wait(26),
-            ]),
-          ],
-          [
-            Forever([
-              Fire((
-                count: 6,
-                arc: 6.2831855,
-                aim: Fixed(1.0),
-                speed: 260.0,
+                speed: 180.0,
                 rings: 1,
                 speed_step: 40.0,
                 ring_offset: 0.0,
@@ -244,8 +285,28 @@
                 kind: 3,
                 flags: 0,
               )),
-              Turn(0.83),
-              Wait(8),
+              Turn(-0.31),
+              Wait(6),
+            ]),
+          ],
+          [
+            Forever([
+              Fire((
+                count: 5,
+                arc: 6.2831855,
+                aim: Fixed(3.14159),
+                speed: 180.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              Turn(-0.31),
+              Wait(6),
             ]),
           ],
           [
@@ -270,74 +331,141 @@
         ]),
       ],
     ),
-    // --- La coda. era la fase 3 de La Coda, intacta.
+    // --- El fleckerl. Girar muy rapido sin moverse del sitio, en el centro de
+    // la pista: el jefe se planta en medio y los dos brazos giran juntos,
+    // primero a izquierdas (el inverso, el que mas se baila) y luego a
+    // derechas (el natural). Cada uno dura lo mismo en los dos hilos, 210
+    // ticks, para que cambien a la vez. Entre uno y otro, el check: la rafaga
+    // apuntada y el anillo gordo caen justo cuando el giro se para y se da la
+    // vuelta.
     (
-      name: "La coda",
+      name: "El fleckerl",
       hp: 800,
       steps: [
         Parallel([
           [
             Forever([
               MoveTo(
-                pos: (210.0, 130.0),
-                dur: 35,
-                ease: Out,
+                pos: (300.0, 170.0),
+                dur: 40,
+                ease: InOut,
               ),
               MoveTo(
-                pos: (430.0, 130.0),
-                dur: 35,
-                ease: Out,
-              ),
-              MoveTo(
-                pos: (320.0, 210.0),
-                dur: 35,
-                ease: Out,
+                pos: (340.0, 170.0),
+                dur: 40,
+                ease: InOut,
               ),
             ]),
           ],
           [
             Forever([
+              Repeat(
+                times: 21,
+                body: [
+                  Fire((
+                    count: 7,
+                    arc: 6.2831855,
+                    aim: Fixed(0.0),
+                    speed: 200.0,
+                    rings: 2,
+                    speed_step: 40.0,
+                    ring_offset: 0.16,
+                    accel: 0.0,
+                    spin: 0.0,
+                    ttl: 30.0,
+                    kind: 0,
+                    flags: 0,
+                  )),
+                  Turn(-0.41),
+                  Wait(10),
+                ],
+              ),
+              Repeat(
+                times: 21,
+                body: [
+                  Fire((
+                    count: 7,
+                    arc: 6.2831855,
+                    aim: Fixed(0.0),
+                    speed: 200.0,
+                    rings: 2,
+                    speed_step: 40.0,
+                    ring_offset: 0.16,
+                    accel: 0.0,
+                    spin: 0.0,
+                    ttl: 30.0,
+                    kind: 0,
+                    flags: 0,
+                  )),
+                  Turn(0.41),
+                  Wait(10),
+                ],
+              ),
+            ]),
+          ],
+          [
+            Forever([
+              Repeat(
+                times: 30,
+                body: [
+                  Fire((
+                    count: 7,
+                    arc: 6.2831855,
+                    aim: Fixed(1.7),
+                    speed: 150.0,
+                    rings: 1,
+                    speed_step: 40.0,
+                    ring_offset: 0.0,
+                    accel: 0.0,
+                    spin: 0.0,
+                    ttl: 30.0,
+                    kind: 3,
+                    flags: 0,
+                  )),
+                  Turn(-0.53),
+                  Wait(7),
+                ],
+              ),
+              Repeat(
+                times: 30,
+                body: [
+                  Fire((
+                    count: 7,
+                    arc: 6.2831855,
+                    aim: Fixed(1.7),
+                    speed: 150.0,
+                    rings: 1,
+                    speed_step: 40.0,
+                    ring_offset: 0.0,
+                    accel: 0.0,
+                    spin: 0.0,
+                    ttl: 30.0,
+                    kind: 3,
+                    flags: 0,
+                  )),
+                  Turn(0.53),
+                  Wait(7),
+                ],
+              ),
+            ]),
+          ],
+          [
+            Forever([
+              Wait(174),
               Fire((
                 count: 7,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
-                speed: 200.0,
-                rings: 2,
-                speed_step: 40.0,
-                ring_offset: 0.16,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Turn(0.41),
-              Wait(10),
-            ]),
-          ],
-          [
-            Forever([
-              Fire((
-                count: 7,
-                arc: 6.2831855,
-                aim: Fixed(1.7),
-                speed: 150.0,
+                speed: 90.0,
                 rings: 1,
                 speed_step: 40.0,
                 ring_offset: 0.0,
                 accel: 0.0,
                 spin: 0.0,
                 ttl: 30.0,
-                kind: 3,
-                flags: 0,
+                kind: 2,
+                flags: 1,
               )),
-              Turn(-0.53),
-              Wait(7),
-            ]),
-          ],
-          [
-            Forever([
-              Wait(100),
               Repeat(
                 times: 4,
                 body: [
@@ -358,25 +486,6 @@
                   Wait(9),
                 ],
               ),
-            ]),
-          ],
-          [
-            Forever([
-              Wait(180),
-              Fire((
-                count: 7,
-                arc: 6.2831855,
-                aim: Fixed(0.0),
-                speed: 90.0,
-                rings: 1,
-                speed_step: 40.0,
-                ring_offset: 0.0,
-                accel: -60.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 2,
-                flags: 1,
-              )),
             ]),
           ],
         ]),

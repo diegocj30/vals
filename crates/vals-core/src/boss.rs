@@ -600,7 +600,12 @@ mod tests {
         let nombres: Vec<&str> = def.phases.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(
             nombres,
-            vec!["El paso base", "El espejo", "El molinete", "La coda"]
+            vec![
+                "El paso de cambio",
+                "El giro natural",
+                "El giro inverso",
+                "El fleckerl"
+            ]
         );
     }
 
