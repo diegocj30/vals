@@ -968,10 +968,14 @@ fn programa(world: &World, cx: f32, y0: f32, ancho: f32, alto: f32) {
         };
         fuentes::centrado(&cartela::ordinal(i), cx, y, 12.0, Cara::Cuerpo, color);
         let nombre = b.figura(i);
-        fuentes::centrado(nombre, cx, y + 24.0, 22.0, Cara::Titulo, color);
+        // Los nombres largos ("La rueda y el grand ecart") se encogen para
+        // caber en la orla en vez de salirse del programa.
+        let ancho_22 = fuentes::medir(nombre, 22.0, Cara::Titulo).width;
+        let tam = (22.0 * (ancho - 40.0) / ancho_22.max(1.0)).min(22.0);
+        fuentes::centrado(nombre, cx, y + 24.0, tam, Cara::Titulo, color);
         if tachada {
             // Lo ya bailado, tachado a pluma, como en un programa usado.
-            let mitad = fuentes::medir(nombre, 22.0, Cara::Titulo).width * 0.5 + 6.0;
+            let mitad = fuentes::medir(nombre, tam, Cara::Titulo).width * 0.5 + 6.0;
             draw_line(cx - mitad, y + 17.0, cx + mitad, y + 17.0, 2.0, color);
         }
         if i == b.phase {
