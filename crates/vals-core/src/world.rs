@@ -1939,8 +1939,24 @@ mod medida_suelo {
                 "la presion en el suelo de {} baja de una figura a otra: {presiones:?}",
                 def.name
             );
+            let techo = TECHO_SUELO[def.nivel as usize];
+            for (f, p) in def.phases.iter().zip(&presiones) {
+                assert!(
+                    *p <= techo,
+                    "{}, en {}, aprieta {p:.1} en el suelo y su nivel ({}) admite {techo}",
+                    def.name,
+                    f.name,
+                    def.nivel.nombre()
+                );
+            }
         }
     }
+
+    /// El techo de presion en el suelo por nivel, como `TECHO_POR_NIVEL` para
+    /// las balas por segundo. Hacia falta: el charleston, que es un baile
+    /// medio, apretaba 20,2 en su ultima figura, lo mismo que el final, y no
+    /// se pasaba de la segunda. Con un techo por nivel eso no compila en verde.
+    const TECHO_SUELO: [f32; 4] = [8.0, 13.0, 15.0, 17.0];
 
     /// Cuanta presion llega al suelo en cada figura de cada baile.
     ///

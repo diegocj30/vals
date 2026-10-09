@@ -426,6 +426,33 @@ impl Audio {
 }
 
 /// Sintetiza las voces y las empaqueta como WAV.
+/// Escribe cada tema como un `.wav` en `dir`, para escucharlos fuera del
+/// juego. La musica no existe como fichero: se sintetiza al arrancar desde
+/// las partituras de `music.rs`, y esto es la misma sintesis puesta en disco.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn exportar_musica(dir: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
+    std::fs::create_dir_all(dir)?;
+    let mut hechos = Vec::with_capacity(TEMAS.len());
+    for (i, b) in TEMAS.into_iter().enumerate() {
+        let limpio: String = b
+            .titulo()
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c == ' ' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        let ruta = dir.join(format!("{i:02} {limpio}.wav"));
+        let muestras = render_len_a(&music::tema(b), music::duracion(b), SAMPLE_RATE_MUSICA);
+        std::fs::write(&ruta, wav_a(&muestras, SAMPLE_RATE_MUSICA))?;
+        hechos.push(ruta);
+    }
+    Ok(hechos)
+}
+
 fn render_wav(voces: &[Voz]) -> Vec<u8> {
     wav(&render(voces))
 }

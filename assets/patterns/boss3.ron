@@ -117,9 +117,9 @@
             // Con 36 ticks por tiempo, el tresillo son 12 y la corchea swingada
             // cae en el 24. Esto es, literalmente, lo que hace que un ritmo
             // suene a jazz. Va a tus pies: es lo que te obliga a moverte
-            // aunque no caiga ningun arco cerca.
+            // aunque no caiga ningun arco cerca. Una vez cada dos tiempos.
             Forever([
-              Wait(24),
+              Wait(60),
               Fire((
                 count: 3, arc: 0.2, aim: AtPlayer, speed: 250.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
@@ -145,7 +145,7 @@
     //     ella, y la pareja contestando a contratiempo.
     (
       name: "El swing-out",
-      hp: 640,
+      hp: 540,
       steps: [
         Parallel([
           [
@@ -157,24 +157,15 @@
             ]),
           ],
           [
-            // El swing-out: salen por los dos lados y se cruzan al volver.
+            // El swing-out: en los dos primeros golpes de la clave sale por un
+            // lado y luego por el otro; en el "dos" salen los dos y se cruzan.
             Forever([
               Fire((
                 count: 7, arc: 0.8, aim: Fixed(0.95), speed: 225.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Fire((
-                count: 7, arc: 0.8, aim: Fixed(2.19), speed: 225.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
-                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
-              )),
               Wait(54),
-              Fire((
-                count: 7, arc: 0.8, aim: Fixed(0.95), speed: 225.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
-                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
-              )),
               Fire((
                 count: 7, arc: 0.8, aim: Fixed(2.19), speed: 225.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
@@ -215,8 +206,11 @@
             ]),
           ],
           [
+            // Las agujas a los pies, en la corchea de swing del ultimo tiempo:
+            // una vez por compas, no en cada tiempo. Sobre el suelo, una rafaga
+            // apuntada en cada tiempo no dejaba leer los arcos.
             Forever([
-              Wait(24),
+              Wait(132),
               Fire((
                 count: 3, arc: 0.2, aim: AtPlayer, speed: 270.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
@@ -242,39 +236,39 @@
     //     los arcos llegan antes y mas cerca, y a dos capas.
     (
       name: "El aereo",
-      hp: 900,
+      hp: 720,
       steps: [
         Parallel([
           [
             Forever([
               MoveTo(pos: (170.0, 250.0), dur: 36, ease: Out),
-              Wait(36),
+              Wait(72),
               MoveTo(pos: (470.0, 380.0), dur: 36, ease: Out),
-              Wait(36),
+              Wait(72),
             ]),
           ],
           [
-            // La clave, ahora con dos capas y los dos swings en cada golpe.
+            // La clave con los dos swings en cada golpe, y en el "dos" a dos capas.
             Forever([
               Fire((
                 count: 6, arc: 0.9, aim: Fixed(0.95), speed: 225.0,
-                rings: 2, speed_step: 35.0, ring_offset: 0.06,
+                rings: 1, speed_step: 35.0, ring_offset: 0.06,
                 accel: 0.0, spin: 0.55, ttl: 30.0, kind: 0, flags: 0,
               )),
               Fire((
                 count: 6, arc: 0.9, aim: Fixed(2.19), speed: 225.0,
-                rings: 2, speed_step: 35.0, ring_offset: -0.06,
+                rings: 1, speed_step: 35.0, ring_offset: -0.06,
                 accel: 0.0, spin: -0.55, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
                 count: 6, arc: 0.9, aim: Fixed(0.95), speed: 225.0,
-                rings: 2, speed_step: 35.0, ring_offset: 0.06,
+                rings: 1, speed_step: 35.0, ring_offset: 0.06,
                 accel: 0.0, spin: 0.55, ttl: 30.0, kind: 0, flags: 0,
               )),
               Fire((
                 count: 6, arc: 0.9, aim: Fixed(2.19), speed: 225.0,
-                rings: 2, speed_step: 35.0, ring_offset: -0.06,
+                rings: 1, speed_step: 35.0, ring_offset: -0.06,
                 accel: 0.0, spin: -0.55, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
@@ -293,13 +287,13 @@
           ],
           [
             Forever([
-              Wait(18),
+              Wait(54),
               Fire((
                 count: 4, arc: 0.6, aim: Fixed(1.25), speed: 210.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(18),
+              Wait(54),
               Fire((
                 count: 4, arc: 0.6, aim: Fixed(1.89), speed: 210.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
@@ -309,7 +303,7 @@
           ],
           [
             Forever([
-              Wait(24),
+              Wait(60),
               Fire((
                 count: 4, arc: 0.24, aim: AtPlayer, speed: 285.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,

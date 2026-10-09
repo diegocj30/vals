@@ -159,6 +159,19 @@ fn parse_mode() -> Arranque {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    // `--exportar-musica <carpeta>`: escribe los temas como .wav y sale.
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let args: Vec<String> = std::env::args().collect();
+        if let Some(i) = args.iter().position(|a| a == "--exportar-musica") {
+            let dir = args.get(i + 1).map_or("musica", String::as_str);
+            match audio::exportar_musica(std::path::Path::new(dir)) {
+                Ok(hechos) => hechos.iter().for_each(|r| println!("{}", r.display())),
+                Err(e) => eprintln!("no se pudo exportar la musica: {e}"),
+            }
+            return;
+        }
+    }
     // Antes de dibujar nada: las tres formas de arrancar escriben texto.
     fuentes::cargar();
     match parse_mode() {

@@ -296,7 +296,7 @@
     //     de un lateral y del otro, y entre medias la lluvia cruzada.
     (
       name: "El infierno",
-      hp: 900,
+      hp: 780,
       steps: [
         Parallel([
           [
@@ -342,17 +342,18 @@
             ]),
           ],
           [
-            // El galop por debajo: una patada en cada corchea, a un lado y al otro.
+            // El galop por debajo: una patada en cada tiempo, a un lado y al
+            // otro. En cada corchea era una pared continua.
             Forever([
-              Wait(12),
+              Wait(24),
               Fire((
-                count: 5, arc: 0.14, aim: Fixed(1.35), speed: 330.0,
+                count: 4, arc: 0.14, aim: Fixed(1.35), speed: 330.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, ttl: 1.8, kind: 3, flags: 0,
               )),
-              Wait(12),
+              Wait(24),
               Fire((
-                count: 5, arc: 0.14, aim: Fixed(1.79), speed: 330.0,
+                count: 4, arc: 0.14, aim: Fixed(1.79), speed: 330.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, ttl: 1.8, kind: 3, flags: 0,
               )),
@@ -360,9 +361,9 @@
           ],
           [
             Forever([
-              Wait(24),
+              Wait(48),
               Fire((
-                count: 3, arc: 0.16, aim: AtPlayer, speed: 360.0,
+                count: 2, arc: 0.12, aim: AtPlayer, speed: 360.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, ttl: 1.8, kind: 3, flags: 0,
               )),
