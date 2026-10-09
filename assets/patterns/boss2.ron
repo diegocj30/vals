@@ -4,27 +4,34 @@
 // que cambia respecto al vals no es la melodia: es la **gramatica**.
 //
 // El vals no para de girar, y por eso todas sus fases son espirales. El tango
-// es lo contrario: silencio, arranque seco y parada en seco. De ahi salen las
-// tres figuras:
+// es lo contrario: silencio, arranque seco y parada en seco. Las tres figuras
+// son las tres que se ensenan primero en cualquier milonga, y en ese orden:
+// caminar, los ochos y el giro.
 //
-//   1. La caminata    66 b/s   el paso del tango: recto y marcado.
-//   2. El corte       95 b/s   balas que salen, frenan y VUELVEN.
-//   3. La quebrada   140 b/s   el abrazo roto: fuego cruzado desde dos lados.
+//   1. La caminata    el paso del tango: recto, marcado y con pausa.
+//   2. Los ochos      ella cruza y pivota, y los pies dibujan un 8 tumbado.
+//   3. El molinete    ella da la vuelta al hombre en cuatro pasos: adelante,
+//                     al lado, atras, al lado. Un molino a golpes.
 //
 // La primera version salio a 66/131/201 y no habia por donde cogerla: se
-// atascaba en la segunda figura. El problema no era el numero —131 es menos
-// que el molinete del vals— sino que habia DOS cortes solapados, y un corte
-// encima de otro no se lee. Ahora es uno solo, de una capa, y se ve la bala
-// pararse. Lo demas bajo con el presupuesto (`TECHO_POR_BAILE`).
+// atascaba en la segunda figura. El problema no era el numero, sino que habia
+// DOS cortes solapados, y un corte encima de otro no se lee. Ahora hay uno
+// solo por figura, de una capa donde se puede, y se ve la bala pararse.
 //
-// NO HAY UN SOLO `Turn` EN TODO EL FICHERO, y es la regla que define el baile.
+// EL VERBO ES LA FRENADA. Toda la gramatica del tango cabe en una `accel`
+// negativa: la bala sale, se queda sin velocidad y vuelve por donde vino. Es
+// la parada en seco del baile, y sale en las tres figuras. Y vuelve justo al
+// sitio donde nacio, asi que si el jefe va dibujando la figura, las balas que
+// regresan la vuelven a dibujar encima.
+//
+// NO HAY UN SOLO `Turn` EN TODO EL FICHERO, y es la otra regla del baile.
 // Una espiral es un giro continuo, que es lo que hace un vals; el tango va en
-// linea recta y cambia de golpe. Hay un test que lo vigila.
+// linea recta y cambia de golpe. Hasta el molinete gira asi: a saltos de
+// angulo fijo, un paso cada vez. Hay un test que lo vigila.
 //
 // EL COMPAS ES DE VERDAD. El tema va a 120 negras por minuto en 4/4: 30 ticks
 // por tiempo, 120 por compas. Todas las esperas de aqui son multiplos de 30,
-// asi que **las balas caen con la musica**. Es lo mas lejos que llega hasta
-// ahora la idea de que cada jefe sea un baile.
+// asi que **las balas caen con la musica**.
 //
 // Los movimientos van con ease Linear a proposito. El vals usa InOut, que
 // arranca y frena suave y hace que el jefe parezca que pesa; el tango no
@@ -45,28 +52,61 @@
 // flags: 1 = parryable (rosa). Solo lo gordo y lento deberia serlo.
 (
   name: "El Tango",
-  // el corte es lo peor de leer del juego, aunque dispare menos que nadie.
+  // la frenada es lo peor de leer del juego, aunque dispare menos que nadie.
   nivel: Dificil,
   pos: (320.0, 150.0),
   radius: 46.0,
   phases: [
-    // --- La caminata. El paso del tango: recto y marcado, ni una espiral.
+    // --- La caminata. El paso del tango: recto, marcado, y la pausa.
     (
       name: "La caminata",
       hp: 450,
       steps: [
         Parallel([
           [
-            // Anda un compas, se para uno. Sin suavizar.
+            // Anda un compas y se para otro: la pausa, que en el tango es un
+            // paso mas. Al clavarse, la sala se clava con el: un anillo que
+            // frena flojo y vuelve. Es la frenada en pequeno, para aprenderla
+            // aqui antes de que en los ochos venga en serio.
             Forever([
               MoveTo(pos: (170.0, 150.0), dur: 120, ease: Linear),
+              Fire((
+                count: 11,
+                arc: 6.2831855,
+                aim: Fixed(0.17),
+                speed: 150.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: -70.0,
+                spin: 0.0,
+                ttl: 9.0,
+                kind: 1,
+                flags: 0,
+              )),
               Wait(120),
               MoveTo(pos: (470.0, 150.0), dur: 120, ease: Linear),
+              Fire((
+                count: 11,
+                arc: 6.2831855,
+                aim: Fixed(0.17),
+                speed: 150.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: -70.0,
+                spin: 0.0,
+                ttl: 9.0,
+                kind: 1,
+                flags: 0,
+              )),
               Wait(120),
             ]),
           ],
           [
             // El marcato: un golpe en cada tiempo, siempre recto al jugador.
+            // Como sale de donde esta el jefe, mientras anda las tandas quedan
+            // escalonadas por la linea: son las pisadas.
             Forever([
               Fire((
                 count: 7,
@@ -89,7 +129,7 @@
             // Y cada tres tiempos, la sala entera.
             Forever([
               Fire((
-                count: 23,
+                count: 21,
                 arc: 6.2831855,
                 aim: Fixed(0.0),
                 speed: 135.0,
@@ -169,24 +209,35 @@
         ]),
       ],
     ),
-    // --- El corte. Salen, frenan, se paran y vuelven.
+    // --- Los ochos. Ella cruza por delante, pivota sobre un pie y cruza al
+    // otro lado: los pies dejan un 8 tumbado en el suelo.
     (
-      name: "El corte",
+      name: "Los ochos",
       hp: 600,
       steps: [
         Parallel([
           [
+            // El jefe dibuja el 8 con rectas, como un lazo: cruza en
+            // diagonal, sube por el borde y cruza en la otra diagonal. El
+            // cruce cae en el centro. Cada cruce es un compas; cada pivote,
+            // un tiempo de recorrido y tres clavado, que es donde el ocho se
+            // para antes de volver.
             Forever([
-              MoveTo(pos: (430.0, 130.0), dur: 60, ease: Linear),
-              Wait(180),
-              MoveTo(pos: (210.0, 190.0), dur: 60, ease: Linear),
-              Wait(180),
+              MoveTo(pos: (440.0, 190.0), dur: 90, ease: Linear),
+              Wait(30),
+              MoveTo(pos: (440.0, 110.0), dur: 30, ease: Linear),
+              Wait(90),
+              MoveTo(pos: (200.0, 190.0), dur: 90, ease: Linear),
+              Wait(30),
+              MoveTo(pos: (200.0, 110.0), dur: 30, ease: Linear),
+              Wait(90),
             ]),
           ],
           [
-            // LA figura. Con `accel` negativa la bala sale, se queda sin
-            // velocidad y se da la vuelta: avanza, se para y vuelve. Es un
-            // corte de tango, y no hizo falta tocar el motor para tenerlo.
+            // LA frenada. Con `accel` negativa la bala sale, se queda sin
+            // velocidad y se da la vuelta. Y vuelve al punto donde nacio: como
+            // el jefe va por el 8, los anillos se cierran uno detras de otro
+            // sobre el dibujo. El pivote del ocho, hecho bala.
             Forever([
               Fire((
                 count: 32,
@@ -206,8 +257,8 @@
             ]),
           ],
           [
-            // Agujas rectas: si te quedas quieto esperando a que vuelva el
-            // corte, te cosen.
+            // Agujas rectas: si te quedas quieto esperando a que vuelva la
+            // frenada, te cosen.
             Forever([
               Wait(30),
               Fire((
@@ -228,11 +279,28 @@
             ]),
           ],
           [
+            // Las dos mitades del 8: un abanico a cada lado, alternando en
+            // cada tiempo, como la cadera que pivota de un lado al otro.
             Forever([
               Fire((
-                count: 20,
-                arc: 6.2831855,
-                aim: Fixed(1.1),
+                count: 16,
+                arc: 1.4,
+                aim: Fixed(0.55),
+                speed: 175.0,
+                rings: 1,
+                speed_step: 40.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 0,
+                flags: 0,
+              )),
+              Wait(30),
+              Fire((
+                count: 16,
+                arc: 1.4,
+                aim: Fixed(2.59),
                 speed: 175.0,
                 rings: 1,
                 speed_step: 40.0,
@@ -288,59 +356,23 @@
         ]),
       ],
     ),
-    // --- La quebrada. El abrazo roto: fuego cruzado desde dos lados.
+    // --- El molinete. Ella gira alrededor del hombre en cuatro pasos
+    // (adelante, al lado, atras, al lado) y el hace de eje.
     (
-      name: "La quebrada",
+      name: "El molinete",
       hp: 850,
       steps: [
         Parallel([
           [
+            // El jefe da la vuelta en un rombo: cuatro pasos de dos tiempos,
+            // una vuelta cada dos compases. En cada esquina, el paso cae y
+            // pasan dos cosas a la vez:
+            //  - la frenada, de dos capas: es la figura final y se la gana;
+            //  - las aspas del molino, una cruz de agujas. Cada esquina la
+            //    tuerce un octavo de vuelta mas. El molino gira, pero a
+            //    golpes y sin `Turn`: cuatro angulos fijos, uno por paso.
             Forever([
-              MoveTo(pos: (150.0, 120.0), dur: 60, ease: Linear),
-              Wait(60),
-              MoveTo(pos: (490.0, 200.0), dur: 60, ease: Linear),
-              Wait(60),
-            ]),
-          ],
-          [
-            // Los dos de la pareja, disparando el uno contra el otro y tu en
-            // medio. Se alternan en cada tiempo.
-            Forever([
-              Fire((
-                count: 11,
-                arc: 1.5,
-                aim: Fixed(0.6),
-                speed: 265.0,
-                rings: 1,
-                speed_step: 45.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Wait(30),
-              Fire((
-                count: 11,
-                arc: 1.5,
-                aim: Fixed(3.74),
-                speed: 265.0,
-                rings: 1,
-                speed_step: 45.0,
-                ring_offset: 0.0,
-                accel: 0.0,
-                spin: 0.0,
-                ttl: 30.0,
-                kind: 0,
-                flags: 0,
-              )),
-              Wait(30),
-            ]),
-          ],
-          [
-            // El corte vuelve, y ahora en cada tiempo fuerte.
-            Forever([
+              MoveTo(pos: (320.0, 95.0), dur: 60, ease: Linear),
               Fire((
                 count: 24,
                 arc: 6.2831855,
@@ -355,10 +387,112 @@
                 kind: 2,
                 flags: 0,
               )),
-              Wait(60),
+              Fire((
+                count: 4,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 200.0,
+                rings: 4,
+                speed_step: 45.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              MoveTo(pos: (450.0, 165.0), dur: 60, ease: Linear),
+              Fire((
+                count: 24,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 355.0,
+                rings: 2,
+                speed_step: 70.0,
+                ring_offset: 0.09,
+                accel: -215.0,
+                spin: 0.0,
+                ttl: 9.0,
+                kind: 2,
+                flags: 0,
+              )),
+              Fire((
+                count: 4,
+                arc: 6.2831855,
+                aim: Fixed(0.3926991),
+                speed: 200.0,
+                rings: 4,
+                speed_step: 45.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              MoveTo(pos: (320.0, 235.0), dur: 60, ease: Linear),
+              Fire((
+                count: 24,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 355.0,
+                rings: 2,
+                speed_step: 70.0,
+                ring_offset: 0.09,
+                accel: -215.0,
+                spin: 0.0,
+                ttl: 9.0,
+                kind: 2,
+                flags: 0,
+              )),
+              Fire((
+                count: 4,
+                arc: 6.2831855,
+                aim: Fixed(0.7853982),
+                speed: 200.0,
+                rings: 4,
+                speed_step: 45.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
+              MoveTo(pos: (190.0, 165.0), dur: 60, ease: Linear),
+              Fire((
+                count: 24,
+                arc: 6.2831855,
+                aim: Fixed(0.0),
+                speed: 355.0,
+                rings: 2,
+                speed_step: 70.0,
+                ring_offset: 0.09,
+                accel: -215.0,
+                spin: 0.0,
+                ttl: 9.0,
+                kind: 2,
+                flags: 0,
+              )),
+              Fire((
+                count: 4,
+                arc: 6.2831855,
+                aim: Fixed(1.1780972),
+                speed: 200.0,
+                rings: 4,
+                speed_step: 45.0,
+                ring_offset: 0.0,
+                accel: 0.0,
+                spin: 0.0,
+                ttl: 30.0,
+                kind: 3,
+                flags: 0,
+              )),
             ]),
           ],
           [
+            // El eje: el hombre no se mueve, pero marca. Agujas al jugador en
+            // cada contratiempo.
             Forever([
               Wait(30),
               Fire((
