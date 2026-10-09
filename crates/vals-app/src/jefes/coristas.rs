@@ -196,10 +196,9 @@ fn subida(d: f32, periodo: f32) -> f32 {
 
 /// Cuanto hay que subir la fila para que ningun zapato atraviese las tablas.
 ///
-/// El cancan baja al borde del escenario (y 718) a patear a ras de suelo, y
-/// su aro queda a un palmo de las tablas (741): colgada del aro, la fila se
-/// hundiria bajo las candilejas. Se sube lo justo y solo cuando hace falta;
-/// arriba, en el aire, no se toca.
+/// En vuelo no hay tablas y no se toca nada. Si se juega con salto y el aro
+/// baja a un palmo del proscenio (741), colgada del aro la fila se hundiria
+/// bajo las candilejas: se sube lo justo y solo cuando hace falta.
 ///
 /// Se mide contra el `PISO` fijo y no contra la pose de este instante: si se
 /// midiera el pie mas bajo, cada salto se comeria su propia subida y la fila

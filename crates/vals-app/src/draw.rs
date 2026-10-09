@@ -719,8 +719,8 @@ fn draw_boss(world: &World, alpha: f32, l: &Layout, caida: f32) {
         (tinta_cuerpo, tinta_tela)
     };
     // El cuerpo lo pone cada jefe (`jefes/`). En el suelo no puede atravesar
-    // el proscenio: el cancan baja al borde del escenario para patear a ras de
-    // tablas, y colgado de su hitbox se hundia bajo las candilejas.
+    // el proscenio: un jefe que baja al borde del escenario, colgado de su
+    // hitbox, se hundia bajo las candilejas.
     let (pulso, fuerte) = salon::latido(Tema::de(world.baile, b.phase), t);
     let tablas = (world.mode == Mode::Platform).then(|| {
         l.to_screen(0.0, player::GROUND_Y + player::PLAYER_SPRITE_RADIUS)

@@ -452,8 +452,8 @@ mod tests {
     ///   que lo usa. El giro del pie no es una linea ni una parada: es un arco.
     /// - **El cancan se desvanece**: `ttl` corto, asi que sus balas salen,
     ///   cruzan un trozo de pantalla y se van solas. Una patada dura lo que
-    ///   dura la patada. Es lo que deja que sus rasantes crucen el escenario
-    ///   justo de punta a punta y no se queden rodando por el suelo.
+    ///   dura la patada. Es lo que vacia la pantalla en un compas y deja leer
+    ///   donde cae la siguiente, en vez de esquivar una pared.
     #[test]
     fn cada_baile_tiene_su_verbo_y_no_el_del_vecino() {
         let defs = BossDef::default_bosses();
