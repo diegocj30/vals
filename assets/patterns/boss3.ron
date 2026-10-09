@@ -1,5 +1,4 @@
-// EL CHARLESTON. El tercer baile, el jazz, y el primero que se baila EN EL
-// SUELO: con gravedad y salto, a lo Cuphead.
+// EL CHARLESTON. El tercer baile, el jazz. Se baila en el aire, como todos.
 //
 // Un baile es un jefe y cada fase es una figura suya. Lo que
 // separa a este de los demas son dos cosas, y ninguna es la melodia:
@@ -15,41 +14,43 @@
 //      la planta del pie: la punta sale hacia un lado y vuelve, y eso es un
 //      arco, no una linea ni una parada.
 //
-// EN EL SUELO, EL ARCO ES EL GIRO DEL PIE. Cada tanda sale hacia un lado y
-// abajo y la curva la trae de vuelta, asi que aterriza al OTRO lado de la
-// bailarina, y cuanto mas abierta sale mas rasante llega. Por eso el spin aqui
-// es suave (0.45-0.55): con la curva del vuelo (1.35) la bala da la vuelta
-// antes de bajar las 430 que hay hasta el suelo, y no lo toca nunca.
+// SE BAILO EN EL SUELO, Y NO SE PODIA. Con gravedad solo te mueves de lado, y
+// en una dimension un patron de danmaku es una pared: el cambio de lado era
+// casi una linea continua por mucho que bajasen las balas. En el aire el
+// mismo arco tiene huecos por los que pasar, y por eso vuelve a volar.
 //
-// POR QUE LA BAILARINA ESTA A MEDIA ALTURA Y SE MUEVE DE LADO. El jugador
-// dispara SIEMPRE hacia arriba, tambien en plataformas (world.rs,
-// `player_shoot`): para darle hay que ponerse debajo. Asi que ella salta de un
-// lado a otro y tu la persigues por el suelo, y sus arcos aterrizan justo
-// alrededor de donde tienes que estar. Esa es la tension de la pelea. A media
-// altura (y 300, no 150 como en el aire) para que los arcos lleguen al suelo
-// en dos segundos y no en tres, y por encima del techo del salto (575).
+// EL ARCO ES EL GIRO DEL PIE. Cada tanda sale hacia un lado y abajo y la curva
+// la trae de vuelta por debajo de ella hacia el otro lado. Un abanico cuyas
+// balas curvan todas igual SIGUE SIENDO UN ABANICO: solo gira la mitad de lo
+// que gira cada bala. Asi que la curva no cierra los huecos, los barre de un
+// lado a otro, y lo que hay que leer es hacia donde va el barrido.
 //
-// ESTE SE ESQUIVA CORRIENDO; el cancan, saltando. Aqui lo que cae son sitios
-// donde no estar, no lineas que saltar: los arcos rasantes se pueden saltar,
-// pero lo normal es leer donde van a caer y apartarse.
+// SPIN 0.5 A 200 DE VELOCIDAD, y no mas cerrado. Una bala con spin da vueltas
+// en un circulo de radio velocidad/spin, aqui 400: un circulo de 800 no cabe en
+// la arena (640 mas los margenes), asi que toda bala acaba saliendo. Con una
+// curva mas cerrada caben, y hay balas que se quedan dando vueltas por la
+// pantalla hasta que caduca su ttl de 30 segundos. Medido: las vivas se quedan
+// planas en cuarenta segundos de cada figura.
 //
-// Y el movimiento va con ease Out —arranca de golpe y frena—, que es lo que
-// hace un salto. El vals usa InOut y el tango Linear.
+// Ella va arriba, a la altura del vals y del tango, y salta de un lado a otro
+// con ease Out —arranca de golpe y frena—, que es lo que hace un salto. El vals
+// usa InOut y el tango Linear.
 //
 // Las tres figuras son del charleston de los anos veinte, en el orden en que
 // se aprende: el paso, el adorno de las rodillas, y el cambio de sitio que
 // cierra la frase. El swing-out y los aereos eran del lindy de los treinta, y
-// aqui no pintaban nada. Balas/s disparadas; presion = balas en la franja del
-// suelo por tick, medida en world.rs:
+// aqui no pintaban nada.
 //
-//   1. El basico          17 b/s  presion  5.8  un giro del pie por golpe.
-//   2. Bee's knees        20 b/s  presion  7.7  rodillas que se abren y se
-//                                               cruzan, y las manos con ellas.
-//   3. El cambio de lado  32 b/s  presion 11.6  cruza el escenario a saltitos.
+//   1. El basico          47 b/s  vida 450  un giro del pie por golpe.
+//   2. Bee's knees        70 b/s  vida 580  rodillas que se abren y se
+//                                           cruzan, y las manos con ellas.
+//   3. El cambio de lado  97 b/s  vida 780  cruza el escenario a saltitos.
 //
-// Las balas por segundo son la mitad o menos que en el aire, y a proposito: en
-// el suelo solo te mueves de lado, y el mismo numero de balas pesa mucho mas
-// en una dimension que en dos.
+// Entre el vals (48/88/102/152) y el tango (65/87/127): es el medio. Entre
+// bala y bala de un arco hay de 0.075 a 0.2 radianes, de 35 a 90 pixeles a la
+// altura de la jugadora, y las capas de un mismo golpe se separan 40 pixeles
+// por segundo. La vida suma 1810, cerca de los 2040 del vals y los 1900 del
+// tango.
 //
 // Guia rapida de pasos:
 //   Wait(n)               espera n ticks (60 ticks = 1 segundo)
@@ -69,52 +70,55 @@
   name: "El Charleston",
   // los arcos se leen, pero hay que aprenderse la clave 3-3-2.
   nivel: Media,
-  suelo: true,
-  pos: (320.0, 300.0),
+  suelo: false,
+  pos: (320.0, 150.0),
   radius: 46.0,
   phases: [
     // --- El basico. El paso de 1923: sobre la planta, las puntas giran
     //     afuera y adentro y el pie libre patea adelante y atras. Cada patada
-    //     es un arco: sale por un lado y el giro lo trae por el otro. En el
-    //     "dos" patean los dos pies a la vez.
+    //     es un abanico que sale por un lado y barre hacia el otro por debajo
+    //     de ella. En el "dos" patean los dos pies a la vez, y los dos
+    //     barridos se cruzan.
     (
       name: "El basico",
-      hp: 480,
+      hp: 450,
       steps: [
         Parallel([
           [
-            // Salta de un lado a otro: sale de golpe y frena.
+            // Salta de un lado a otro una vez por compas: sale de golpe y frena.
             Forever([
-              MoveTo(pos: (200.0, 300.0), dur: 54, ease: Out),
+              MoveTo(pos: (200.0, 150.0), dur: 54, ease: Out),
               Wait(90),
-              MoveTo(pos: (440.0, 300.0), dur: 54, ease: Out),
+              MoveTo(pos: (440.0, 150.0), dur: 54, ease: Out),
               Wait(90),
             ]),
           ],
           [
-            // LA CLAVE. Tres, tres, dos. Es toda la figura.
+            // LA CLAVE. Tres, tres, dos. Es toda la figura. Dos capas por
+            // patada, 200 y 240: la de delante va mas deprisa y curva menos,
+            // y el pasillo entre las dos es por donde se cruza.
             Forever([
               Fire((
-                count: 8, arc: 1.0, aim: Fixed(0.95), speed: 210.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
-                accel: 0.0, spin: 0.45, ttl: 30.0, kind: 0, flags: 0,
+                count: 13, arc: 1.1, aim: Fixed(0.6), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 8, arc: 1.0, aim: Fixed(2.19), speed: 210.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
-                accel: 0.0, spin: -0.45, ttl: 30.0, kind: 0, flags: 0,
+                count: 13, arc: 1.1, aim: Fixed(2.54), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 8, arc: 1.0, aim: Fixed(0.95), speed: 210.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
-                accel: 0.0, spin: 0.45, ttl: 30.0, kind: 0, flags: 0,
+                count: 13, arc: 1.1, aim: Fixed(0.6), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Fire((
-                count: 8, arc: 1.0, aim: Fixed(2.19), speed: 210.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
-                accel: 0.0, spin: -0.45, ttl: 30.0, kind: 0, flags: 0,
+                count: 13, arc: 1.1, aim: Fixed(2.54), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(36),
             ]),
@@ -123,8 +127,8 @@
             // La corchea de swing: no cae en la mitad del tiempo, cae tarde.
             // Con 36 ticks por tiempo, el tresillo son 12 y la corchea swingada
             // cae en el 24. Esto es, literalmente, lo que hace que un ritmo
-            // suene a jazz. Va a tus pies: es lo que te obliga a moverte
-            // aunque no caiga ningun arco cerca. Una vez cada dos tiempos.
+            // suene a jazz. Tres agujas a por ti, para que no te quedes quieta
+            // en un hueco entre barrido y barrido. Una vez cada dos tiempos.
             Forever([
               Wait(60),
               Fire((
@@ -154,56 +158,58 @@
     //     1925, el que todo el mundo reconoce del charleston.
     //
     //     Lo dibujan dos abanicos, uno por rodilla. Abiertas: salen casi a
-    //     plomo y el giro las separa, ( ). Juntas: salen hacia fuera y el giro
-    //     las trae hacia dentro hasta que se cruzan debajo de ella, X. El
-    //     cruce cae justo donde tienes que estar para darle.
+    //     plomo y el giro las separa, ( ), y el hueco del medio es el sitio
+    //     seguro. Juntas: salen hacia fuera y el giro las trae hacia dentro
+    //     hasta que se cruzan a la altura de la jugadora, X. El cruce cae justo
+    //     donde tienes que estar para darle, y hay que pasar por un rombo.
     (
       name: "Bee's knees",
-      hp: 540,
+      hp: 580,
       steps: [
         Parallel([
           [
+            // De lado a lado, una vez por compas.
             Forever([
-              MoveTo(pos: (450.0, 290.0), dur: 54, ease: Out),
+              MoveTo(pos: (450.0, 145.0), dur: 54, ease: Out),
               Wait(90),
-              MoveTo(pos: (190.0, 310.0), dur: 54, ease: Out),
+              MoveTo(pos: (190.0, 155.0), dur: 54, ease: Out),
               Wait(90),
             ]),
           ],
           [
             // Abre en el primer golpe y cruza en los otros dos: el "dos" es
-            // el cambio de manos de vuelta.
+            // el cambio de manos de vuelta, y por eso lleva una capa mas.
             Forever([
               Fire((
-                count: 4, arc: 0.5, aim: Fixed(1.25), speed: 225.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
-                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
-              )),
-              Fire((
-                count: 4, arc: 0.5, aim: Fixed(1.89), speed: 225.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
-                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
-              )),
-              Wait(54),
-              Fire((
-                count: 5, arc: 0.6, aim: Fixed(0.95), speed: 225.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                count: 9, arc: 0.6, aim: Fixed(1.75), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Fire((
-                count: 5, arc: 0.6, aim: Fixed(2.19), speed: 225.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                count: 9, arc: 0.6, aim: Fixed(1.39), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 5, arc: 0.6, aim: Fixed(0.95), speed: 225.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                count: 10, arc: 0.7, aim: Fixed(0.95), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Fire((
-                count: 5, arc: 0.6, aim: Fixed(2.19), speed: 225.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
+                count: 10, arc: 0.7, aim: Fixed(2.19), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(54),
+              Fire((
+                count: 10, arc: 0.7, aim: Fixed(0.95), speed: 200.0,
+                rings: 3, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Fire((
+                count: 10, arc: 0.7, aim: Fixed(2.19), speed: 200.0,
+                rings: 3, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(36),
@@ -212,17 +218,18 @@
           [
             // Las manos, en la corchea de swing (24 y 60): primero una y luego
             // la otra, cada una cruzando hacia la rodilla contraria. Son las
-            // balas medianas, los guantes blancos.
+            // balas medianas, los guantes blancos. Una sola capa: van entre los
+            // golpes de la clave, y con dos tapaban las rodillas.
             Forever([
               Wait(24),
               Fire((
-                count: 4, arc: 0.5, aim: Fixed(1.1), speed: 200.0,
+                count: 6, arc: 0.7, aim: Fixed(1.1), speed: 180.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.55, ttl: 30.0, kind: 1, flags: 0,
               )),
               Wait(36),
               Fire((
-                count: 4, arc: 0.5, aim: Fixed(2.04), speed: 200.0,
+                count: 6, arc: 0.7, aim: Fixed(2.04), speed: 180.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: -0.55, ttl: 30.0, kind: 1, flags: 0,
               )),
@@ -230,9 +237,8 @@
             ]),
           ],
           [
-            // Las agujas a los pies, en la corchea de swing del ultimo tiempo:
-            // una vez por compas, no en cada tiempo. Sobre el suelo, una rafaga
-            // apuntada en cada tiempo no dejaba leer los arcos.
+            // Las agujas, en la corchea de swing del ultimo tiempo, una vez por
+            // compas.
             Forever([
               Wait(132),
               Fire((
@@ -260,102 +266,123 @@
     //     grupo: en los tiempos 5 a 8 se cruza al otro lado a saltitos sobre
     //     un pie, dando media vuelta. Aqui la frase son dos compases: el
     //     primero baila en su sitio y el segundo cruza el escenario en cuatro
-    //     saltos, uno por tiempo, y cada tanda de arcos sale de donde cayo.
-    //     Es la que mas aprieta porque el cruce te obliga a cambiar de lado
-    //     con ella mientras llueven los arcos de los dos lados a la vez.
+    //     saltos, uno por tiempo, y cada tanda sale de donde cayo.
+    //
+    //     En el suelo era casi una linea continua. Aqui son tres familias que
+    //     no se pisan: las patadas en la clave, la media vuelta en la corchea
+    //     de swing, y las agujas en el tercer tiempo. Cada una tiene sus huecos,
+    //     y nunca salen dos a la vez.
     (
       name: "El cambio de lado",
-      hp: 720,
+      hp: 780,
       steps: [
         Parallel([
           [
+            // Un compas quieta y otro cruzando: cuatro saltos de 70, uno por
+            // tiempo, y vuelta por el mismo camino.
             Forever([
               Wait(144),
-              MoveTo(pos: (240.0, 330.0), dur: 24, ease: Out),
+              MoveTo(pos: (250.0, 150.0), dur: 24, ease: Out),
               Wait(12),
-              MoveTo(pos: (310.0, 330.0), dur: 24, ease: Out),
+              MoveTo(pos: (320.0, 150.0), dur: 24, ease: Out),
               Wait(12),
-              MoveTo(pos: (380.0, 330.0), dur: 24, ease: Out),
+              MoveTo(pos: (390.0, 150.0), dur: 24, ease: Out),
               Wait(12),
-              MoveTo(pos: (450.0, 330.0), dur: 24, ease: Out),
+              MoveTo(pos: (460.0, 150.0), dur: 24, ease: Out),
               Wait(12),
               Wait(144),
-              MoveTo(pos: (380.0, 330.0), dur: 24, ease: Out),
+              MoveTo(pos: (390.0, 150.0), dur: 24, ease: Out),
               Wait(12),
-              MoveTo(pos: (310.0, 330.0), dur: 24, ease: Out),
+              MoveTo(pos: (320.0, 150.0), dur: 24, ease: Out),
               Wait(12),
-              MoveTo(pos: (240.0, 330.0), dur: 24, ease: Out),
+              MoveTo(pos: (250.0, 150.0), dur: 24, ease: Out),
               Wait(12),
-              MoveTo(pos: (170.0, 330.0), dur: 24, ease: Out),
+              MoveTo(pos: (180.0, 150.0), dur: 24, ease: Out),
               Wait(12),
             ]),
           ],
           [
             // La clave con las dos patadas en cada golpe, y en el "dos" a
-            // dos capas.
+            // tres capas. Es el basico entero, por los dos lados.
             Forever([
               Fire((
-                count: 6, arc: 0.9, aim: Fixed(0.95), speed: 225.0,
-                rings: 1, speed_step: 35.0, ring_offset: 0.06,
-                accel: 0.0, spin: 0.55, ttl: 30.0, kind: 0, flags: 0,
+                count: 11, arc: 1.1, aim: Fixed(0.95), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Fire((
-                count: 6, arc: 0.9, aim: Fixed(2.19), speed: 225.0,
-                rings: 1, speed_step: 35.0, ring_offset: -0.06,
-                accel: 0.0, spin: -0.55, ttl: 30.0, kind: 0, flags: 0,
-              )),
-              Wait(54),
-              Fire((
-                count: 6, arc: 0.9, aim: Fixed(0.95), speed: 225.0,
-                rings: 1, speed_step: 35.0, ring_offset: 0.06,
-                accel: 0.0, spin: 0.55, ttl: 30.0, kind: 0, flags: 0,
-              )),
-              Fire((
-                count: 6, arc: 0.9, aim: Fixed(2.19), speed: 225.0,
-                rings: 1, speed_step: 35.0, ring_offset: -0.06,
-                accel: 0.0, spin: -0.55, ttl: 30.0, kind: 0, flags: 0,
+                count: 11, arc: 1.1, aim: Fixed(2.19), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(54),
               Fire((
-                count: 8, arc: 1.1, aim: Fixed(0.95), speed: 225.0,
-                rings: 2, speed_step: 35.0, ring_offset: 0.06,
-                accel: 0.0, spin: 0.55, ttl: 30.0, kind: 0, flags: 0,
+                count: 11, arc: 1.1, aim: Fixed(0.95), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Fire((
-                count: 8, arc: 1.1, aim: Fixed(2.19), speed: 225.0,
-                rings: 2, speed_step: 35.0, ring_offset: -0.06,
-                accel: 0.0, spin: -0.55, ttl: 30.0, kind: 0, flags: 0,
+                count: 11, arc: 1.1, aim: Fixed(2.19), speed: 200.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(54),
+              Fire((
+                count: 11, arc: 1.1, aim: Fixed(0.95), speed: 200.0,
+                rings: 3, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Fire((
+                count: 11, arc: 1.1, aim: Fixed(2.19), speed: 200.0,
+                rings: 3, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(36),
             ]),
           ],
           [
-            // La media vuelta: un abanico mediano que gira hacia un lado y
-            // el siguiente hacia el otro, cada uno media vuelta de la curva.
+            // La media vuelta: un abanico mediano a plomo que se tuerce hacia un
+            // lado y el siguiente hacia el otro, en cada corchea de swing. Cae
+            // siempre entre dos golpes de la clave, nunca encima.
             Forever([
-              Wait(54),
+              Wait(24),
               Fire((
-                count: 4, arc: 0.6, aim: Fixed(1.25), speed: 210.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
-                accel: 0.0, spin: 0.6, ttl: 30.0, kind: 1, flags: 0,
+                count: 9, arc: 1.6, aim: Fixed(1.5708), speed: 170.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(54),
+              Wait(36),
               Fire((
-                count: 4, arc: 0.6, aim: Fixed(1.89), speed: 210.0,
-                rings: 1, speed_step: 40.0, ring_offset: 0.0,
-                accel: 0.0, spin: -0.6, ttl: 30.0, kind: 1, flags: 0,
+                count: 9, arc: 1.6, aim: Fixed(1.5708), speed: 170.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 1, flags: 0,
               )),
+              Wait(36),
+              Fire((
+                count: 9, arc: 1.6, aim: Fixed(1.5708), speed: 170.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.5, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(36),
+              Fire((
+                count: 9, arc: 1.6, aim: Fixed(1.5708), speed: 170.0,
+                rings: 2, speed_step: 40.0, ring_offset: 0.0,
+                accel: 0.0, spin: -0.5, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(12),
             ]),
           ],
           [
+            // Cuatro agujas por compas en el tercer tiempo, el que la clave se
+            // salta: es el unico hueco del compas sin nada mas sonando.
             Forever([
-              Wait(60),
+              Wait(72),
               Fire((
-                count: 4, arc: 0.24, aim: AtPlayer, speed: 285.0,
+                count: 4, arc: 0.24, aim: AtPlayer, speed: 270.0,
                 rings: 1, speed_step: 40.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, ttl: 30.0, kind: 3, flags: 0,
               )),
-              Wait(12),
+              Wait(72),
             ]),
           ],
           [
