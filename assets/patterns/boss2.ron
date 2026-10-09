@@ -238,6 +238,10 @@
             // velocidad y se da la vuelta. Y vuelve al punto donde nacio: como
             // el jefe va por el 8, los anillos se cierran uno detras de otro
             // sobre el dibujo. El pivote del ocho, hecho bala.
+            // Vida corta, 4.5 s: al final de la frenada la bala se queda casi
+            // quieta, y con 9 s se quedaban colgadas encima del mismo punto
+            // hasta el compas siguiente. Tapaban el sitio, y un sitio tapado
+            // por una bala quieta es un sitio donde no pasa nada mas.
             Forever([
               Fire((
                 count: 32,
@@ -249,7 +253,7 @@
                 ring_offset: 0.1,
                 accel: -190.0,
                 spin: 0.0,
-                ttl: 9.0,
+                ttl: 4.5,
                 kind: 2,
                 flags: 0,
               )),
@@ -258,11 +262,16 @@
           ],
           [
             // Agujas rectas: si te quedas quieto esperando a que vuelva la
-            // frenada, te cosen.
+            // frenada, te cosen. Por eso son NUEVE y no diez: con un numero
+            // par la del medio no existe, las dos centrales pasan una a cada
+            // lado de quien apunta y quedarse quieto abajo era el sitio mas
+            // seguro de la figura. Impar, la del centro va a por ti en cada
+            // tiempo. El abanico de doce, par, sigue dejando el hueco justo
+            // donde estas: entre los dos, el paso tiene que ser corto.
             Forever([
               Wait(30),
               Fire((
-                count: 10,
+                count: 9,
                 arc: 0.5,
                 aim: AtPlayer,
                 speed: 330.0,
@@ -367,7 +376,9 @@
             // El jefe da la vuelta en un rombo: cuatro pasos de dos tiempos,
             // una vuelta cada dos compases. En cada esquina, el paso cae y
             // pasan dos cosas a la vez:
-            //  - la frenada, de dos capas: es la figura final y se la gana;
+            //  - la frenada, de dos capas: es la figura final y se la gana.
+            //    Vida corta como en los ochos, para que no se quede clavada
+            //    encima de un sitio y lo tape;
             //  - las aspas del molino, una cruz de agujas. Cada esquina la
             //    tuerce un octavo de vuelta mas. El molino gira, pero a
             //    golpes y sin `Turn`: cuatro angulos fijos, uno por paso.
@@ -383,7 +394,7 @@
                 ring_offset: 0.09,
                 accel: -215.0,
                 spin: 0.0,
-                ttl: 9.0,
+                ttl: 4.5,
                 kind: 2,
                 flags: 0,
               )),
@@ -412,7 +423,7 @@
                 ring_offset: 0.09,
                 accel: -215.0,
                 spin: 0.0,
-                ttl: 9.0,
+                ttl: 4.5,
                 kind: 2,
                 flags: 0,
               )),
@@ -441,7 +452,7 @@
                 ring_offset: 0.09,
                 accel: -215.0,
                 spin: 0.0,
-                ttl: 9.0,
+                ttl: 4.5,
                 kind: 2,
                 flags: 0,
               )),
@@ -470,7 +481,7 @@
                 ring_offset: 0.09,
                 accel: -215.0,
                 spin: 0.0,
-                ttl: 9.0,
+                ttl: 4.5,
                 kind: 2,
                 flags: 0,
               )),
@@ -492,11 +503,12 @@
           ],
           [
             // El eje: el hombre no se mueve, pero marca. Agujas al jugador en
-            // cada contratiempo.
+            // cada contratiempo, y cinco, impar, por lo mismo que en los ochos:
+            // la del centro es la que no deja quedarse quieto en ningun sitio.
             Forever([
               Wait(30),
               Fire((
-                count: 6,
+                count: 5,
                 arc: 0.55,
                 aim: AtPlayer,
                 speed: 320.0,
