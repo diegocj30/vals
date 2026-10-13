@@ -428,10 +428,16 @@ impl World {
         // arriesgado acercandote, asi que tiene que notarse.
         self.events.super_fired = true;
         self.bullets.clear();
+        // Lo mismo que un disparo normal que cambia de fase o tumba al jefe:
+        // antes el super ponia `victory` a pelo y no avisaba de nada, asi que
+        // rematar con el super no sonaba, no sacudia y no pasaba de jefe, y
+        // pasar de figura con el super tampoco sonaba a cambio de figura.
         if !self.boss.defeated && self.boss.damage(SUPER_DAMAGE) {
             self.bullets.clear();
             if self.boss.defeated {
-                self.victory = true;
+                self.advance_boss();
+            } else {
+                self.events.phase_changed = true;
             }
         }
     }
@@ -1406,6 +1412,22 @@ mod tests {
         w.step(SUPER);
         assert_eq!(w.boss.hp, vida, "sin medidor lleno no sale");
         assert!(w.player.meter > 0.0, "y no se gasta");
+    }
+
+    #[test]
+    fn rematar_con_el_super_avisa_como_un_disparo() {
+        // Un baile de la pista, con un solo jefe: su ultima figura con un pelo
+        // de vida, y el super la tumba.
+        let mut w = World::empezar_en(7, Mode::Flight, 0);
+        while w.boss.phase + 1 < w.boss.phase_count() {
+            let hp = w.boss.hp.max(1);
+            w.boss.damage(hp);
+        }
+        w.boss.hp = 1;
+        w.player.meter = METER_MAX;
+        w.step(SUPER);
+        assert!(w.events.boss_down, "la caida del jefe tiene que sonar");
+        assert!(w.victory && w.events.victory);
     }
 
     #[test]
