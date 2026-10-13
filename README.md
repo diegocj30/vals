@@ -1,3 +1,5 @@
+**Espanol** | [English](README.en.md)
+
 # VALS
 
 **Un boss-rush danmaku con niveles de correr y disparar, escrito en Rust. Cada

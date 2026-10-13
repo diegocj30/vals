@@ -1,3 +1,5 @@
+**Espanol** | [English](BAILES.en.md)
+
 # Los cuatro bailes
 
 En VALS cada jefe es un baile de verdad, y sus balas siguen las reglas de ese
