@@ -25,6 +25,7 @@ use vals_core::nota::{self, Marcador, Nota};
 use vals_core::paseo::{PaseoDef, VISTA_W};
 use vals_core::{ARENA_H, ARENA_W, TICK_HZ};
 
+use crate::acciones::Nombres;
 use crate::draw::{Layout, fade, paspartu};
 use crate::fuentes::{self, Cara};
 use crate::guardado::Guardado;
@@ -433,7 +434,7 @@ fn tarjeta(l: &Layout, r: Rect, titulo: &str, sub: &str, filas: &[(&str, String)
 /// La tarjeta de un baile ganado, encima del sello de victoria. Espera a que
 /// el sello este puesto, y la nota se estampa un momento despues: primero se
 /// leen las cuentas y luego cae el veredicto, como en Cuphead.
-pub fn tarjeta_de_baile(t: &Tarjeta, l: &Layout, mando: Option<[&str; 5]>) {
+pub fn tarjeta_de_baile(t: &Tarjeta, l: &Layout, teclas: &Nombres) {
     let edad = t.edad() - jefes::CAIDA;
     let a = jefes::suave(jefes::tramo(edad, 0.3, 0.7));
     if a <= 0.0 {
@@ -468,10 +469,7 @@ pub fn tarjeta_de_baile(t: &Tarjeta, l: &Layout, mando: Option<[&str; 5]>) {
         );
     }
     if t.lista() {
-        let (ok, otra) = match mando {
-            Some(b) => (b[4], b[2]),
-            None => ("Z", "R"),
-        };
+        let (ok, otra) = (teclas.aceptar, teclas.reintentar);
         let s = l.to_screen(r.x + r.w * 0.5, r.y + r.h - 22.0);
         let ayuda = textos::volver(ok, otra);
         fuentes::centrado(&ayuda, s.x, s.y, l.len(15.0), Cara::Cuerpo, TINTA_TENUE);
@@ -479,7 +477,7 @@ pub fn tarjeta_de_baile(t: &Tarjeta, l: &Layout, mando: Option<[&str; 5]>) {
 }
 
 /// La tarjeta de la puerta de un paseo: menos cosas, y sin nota.
-pub fn tarjeta_de_paseo(t: &Tarjeta, nombre: &str, l: &Layout, mando: Option<[&str; 5]>) {
+pub fn tarjeta_de_paseo(t: &Tarjeta, nombre: &str, l: &Layout, teclas: &Nombres) {
     let edad = t.edad();
     let a = jefes::suave(jefes::tramo(edad, 0.2, 0.6));
     if a <= 0.0 {
@@ -500,7 +498,7 @@ pub fn tarjeta_de_paseo(t: &Tarjeta, nombre: &str, l: &Layout, mando: Option<[&s
     ];
     let y = tarjeta(l, r, nombre, textos::HASTA_LA_PUERTA, &filas, a);
     if edad > LEER as f32 / TICK_HZ as f32 {
-        let ok = mando.map_or("Z", |b| b[4]);
+        let ok = teclas.aceptar;
         let s = l.to_screen(r.x + w * 0.5, y + 2.0);
         let ayuda = textos::seguir(ok);
         fuentes::centrado(&ayuda, s.x, s.y, l.len(15.0), Cara::Cuerpo, TINTA_TENUE);
@@ -510,9 +508,10 @@ pub fn tarjeta_de_paseo(t: &Tarjeta, nombre: &str, l: &Layout, mando: Option<[&s
 /// Lo que dice el menu para abrir el libro: arriba a la izquierda, que es lo
 /// unico que el modo atractor deja libre (el centro es del titulo y de ella, y
 /// arriba a la derecha va el nombre de la figura).
-pub fn aviso_en_el_menu(l: &Layout, mando: Option<[&str; 5]>) {
-    // Se abre con el gatillo de focus: "L1" en PlayStation, "LB" en Xbox.
-    let tecla = mando.map_or("L", |b| if b[0] == "R1" { "L1" } else { "LB" });
+pub fn aviso_en_el_menu(l: &Layout, teclas: &Nombres) {
+    // Se abre con la L, o con el gatillo de focus: "L1" en PlayStation, "LB"
+    // en Xbox.
+    let tecla = teclas.libro;
     let s = l.to_screen(24.0, 40.0);
     let texto = textos::abrir(tecla);
     fuentes::texto(
@@ -527,13 +526,7 @@ pub fn aviso_en_el_menu(l: &Layout, mando: Option<[&str; 5]>) {
 
 /// La pagina del libro: cada baile con su sello, su mejor tiempo, sus
 /// intentos y donde se cae; cada paseo con lo suyo; y el tiempo jugado.
-pub fn pagina(
-    l: &Layout,
-    g: &Guardado,
-    bailes: &[BossDef],
-    paseos: &[PaseoDef],
-    mando: Option<[&str; 5]>,
-) {
+pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef], teclas: &Nombres) {
     clear_background(PAPEL);
     let p = |x: f32, y: f32| l.to_screen(x, y);
     let o = p(0.0, 0.0);
@@ -645,7 +638,7 @@ pub fn pagina(
     let s = p(48.0, 756.0);
     let jugado = textos::jugado(&horas(g.marcas.jugado));
     fuentes::texto(&jugado, s.x, s.y, l.len(15.0), Cara::Cuerpo, TINTA);
-    let atras = mando.map_or("ESC", |b| b[2]);
+    let atras = teclas.atras;
     let s = p(592.0, 756.0);
     let ayuda = textos::cerrar(atras);
     fuentes::derecha(&ayuda, s.x, s.y, l.len(15.0), Cara::Cuerpo, TINTA_TENUE);

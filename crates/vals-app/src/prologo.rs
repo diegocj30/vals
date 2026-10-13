@@ -23,6 +23,7 @@ use vals_core::paseo::{VISTA_H, VISTA_W};
 use vals_core::player::PLAYER_SPEED;
 use vals_core::{Player, World};
 
+use crate::acciones::Nombres;
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{circulo, linea, rect, tri};
 use crate::fuentes::{self, Cara};
@@ -162,9 +163,9 @@ impl Prologo {
         self.t = 0.0;
     }
 
-    /// La lamina en curso, en la lamina apaisada del paseo. `mando` son los
-    /// nombres de los botones si hay uno enchufado.
-    pub fn dibujar(&self, l: &Layout, mando: Option<[&str; 5]>) {
+    /// La lamina en curso, en la lamina apaisada del paseo. `teclas` son los
+    /// nombres de lo que se este usando (ver `acciones::Nombres`).
+    pub fn dibujar(&self, l: &Layout, teclas: &Nombres) {
         clear_background(PAPEL);
         let Some(textos) = LAMINAS.get(self.lamina) else {
             return;
@@ -187,15 +188,12 @@ impl Prologo {
         let negro = 1.0 - (s / FUNDE).min((DURA - s) / FUNDE).clamp(0.0, 1.0);
         rect(l, 0.0, 0.0, VISTA_W, VISTA_H, fade(TINTA, negro));
         draw::paspartu_de(l, vec2(VISTA_W, VISTA_H));
-        self.ayuda(l, mando);
+        self.ayuda(l, teclas);
     }
 
     /// Debajo de la lamina, en el papel: por donde vamos y como se pasa.
-    fn ayuda(&self, l: &Layout, mando: Option<[&str; 5]>) {
-        let (ok, esc) = match mando {
-            Some(b) => (b[4], b[3]),
-            None => ("Z", "ESC"),
-        };
+    fn ayuda(&self, l: &Layout, teclas: &Nombres) {
+        let (ok, esc) = (teclas.aceptar, teclas.atras);
         let o = l.to_screen(0.0, 0.0);
         let y = o.y + l.len(VISTA_H) + 26.0;
         let c = paleta::TINTA_TENUE;
@@ -208,8 +206,8 @@ impl Prologo {
 
 /// La invitacion del menu a volver a verlo, arriba a la izquierda de la
 /// arena: discreta, que lo que se viene a hacer al menu es jugar.
-pub fn en_el_menu(l: &Layout, mando: Option<[&str; 5]>) {
-    let tecla = mando.map_or("X", |b| b[1]);
+pub fn en_el_menu(l: &Layout, teclas: &Nombres) {
+    let tecla = teclas.historia;
     let o = l.to_screen(0.0, 0.0);
     let u = l.scale().clamp(0.55, 1.2);
     let texto = format!("{tecla}   {EN_EL_MENU}");

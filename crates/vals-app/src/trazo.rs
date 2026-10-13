@@ -51,20 +51,17 @@ const POR_RADIO: f32 = 0.012;
 const SEPARA_TINTA: f32 = 0.5;
 
 thread_local! {
-    /// Si hierve. Se apaga con la T: a quien le marea el movimiento no le
-    /// sirve de nada que sea bonito.
+    /// Si hierve. Se apaga en las opciones o con la T: a quien le marea el
+    /// movimiento no le sirve de nada que sea bonito.
     static ACTIVO: Cell<bool> = const { Cell::new(true) };
     /// La figura que se esta dibujando: su semilla, su amplitud y cuantas
     /// pasadas de tinta lleva, para que cada pieza se mueva a su aire.
     static FIGURA: Cell<Option<(u64, f32, u64)>> = const { Cell::new(None) };
 }
 
-/// Enciende o apaga el hervor. Devuelve como queda.
-pub fn alternar() -> bool {
-    ACTIVO.with(|a| {
-        a.set(!a.get());
-        a.get()
-    })
+/// Enciende o apaga el hervor. Lo dicen las opciones, cada frame.
+pub fn poner(vivo: bool) {
+    ACTIVO.with(|a| a.set(vivo));
 }
 
 /// El dibujo en curso: cuenta a 12 por segundo desde el arranque.

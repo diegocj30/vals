@@ -13,14 +13,13 @@
 //! reproducirse.
 
 use macroquad::prelude::*;
-use vals_core::InputFrame;
 use vals_core::equipo::{Amuleto, Tiro};
 
+use crate::acciones::{Accion, Entrada, Nombres};
 use crate::audio::Sfx;
 use crate::draw::{Layout, fade, paspartu};
 use crate::fuentes::{self, Cara};
 use crate::guardado::Guardado;
-use crate::mando::Mando;
 use crate::paleta::{LUZ, ORO, PAPEL, TINTA, TINTA_TENUE};
 use crate::protagonista;
 use vals_core::{ARENA_H, ARENA_W};
@@ -185,27 +184,26 @@ impl Modista {
     /// Una pulsacion. Si se ha comprado o puesto algo lo guarda, y devuelve
     /// el sonido que toca.
     ///
-    /// Teclado y mando por separado, como el menu: aqui se reacciona a la
-    /// pulsacion, no a tenerla apretada, y el teclado ya da el flanco hecho.
-    pub fn entrada(&mut self, g: &mut Guardado, mando: &Mando) -> Option<Sfx> {
-        let tecla = |ks: &[KeyCode]| ks.iter().any(|k| is_key_pressed(*k));
+    /// Con las acciones de menu, que reaccionan a la pulsacion y no a tenerla
+    /// apretada.
+    pub fn entrada(&mut self, g: &mut Guardado, e: &Entrada) -> Option<Sfx> {
         let (fila, col) = (self.fila, self.col);
-        if tecla(&[KeyCode::Up, KeyCode::W]) || mando.pulsado(InputFrame::UP) {
+        if e.pulsado(Accion::Arriba) {
             self.fila = self.fila.saturating_sub(1);
         }
-        if tecla(&[KeyCode::Down, KeyCode::S]) || mando.pulsado(InputFrame::DOWN) {
+        if e.pulsado(Accion::Abajo) {
             self.fila = (self.fila + 1).min(3);
         }
-        if tecla(&[KeyCode::Left, KeyCode::A]) || mando.pulsado(InputFrame::LEFT) {
+        if e.pulsado(Accion::Izquierda) {
             self.col = 0;
         }
-        if tecla(&[KeyCode::Right, KeyCode::D]) || mando.pulsado(InputFrame::RIGHT) {
+        if e.pulsado(Accion::Derecha) {
             self.col = 1;
         }
         if (fila, col) != (self.fila, self.col) {
             return Some(Sfx::Graze);
         }
-        if !(tecla(&[KeyCode::Z]) || mando.pulsado(InputFrame::JUMP)) {
+        if !e.pulsado(Accion::Aceptar) {
             return None;
         }
         let a = CATALOGO[self.col][self.fila];
@@ -230,7 +228,7 @@ impl Modista {
     }
 
     /// La tienda entera, en la lamina de la arena.
-    pub fn dibujar(&self, g: &Guardado, l: &Layout, mando: Option<[&str; 5]>) {
+    pub fn dibujar(&self, g: &Guardado, l: &Layout, teclas: &Nombres) {
         let t = get_time() as f32;
         clear_background(PAPEL);
         let o = l.to_screen(0.0, 0.0);
@@ -294,10 +292,7 @@ impl Modista {
         let bolsillo = format!("{n} ficha{} en el bolsillo", plural(n));
         let s = p(58.0, y);
         fuentes::texto(&bolsillo, s.x, s.y, l.len(19.0), Cara::Cuerpo, PAPEL);
-        let (ok, atras) = match mando {
-            Some(b) => (b[4], b[2]),
-            None => ("Z", "ESC"),
-        };
+        let (ok, atras) = (teclas.aceptar, teclas.atras);
         let ayuda = format!("{ok} comprar o ponerse    {atras} salir");
         let s = p(616.0, y);
         fuentes::derecha(

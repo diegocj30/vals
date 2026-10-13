@@ -28,13 +28,18 @@
     // mismo que usa el audio. Sin wasm-bindgen, que es justo lo que no se
     // quiso arrastrar al elegir macroquad.
     //
-    // Los numeros de abajo son los bits de `InputFrame` y estan repetidos a
-    // mano: en `crates/vals-app/src/mando.rs` hay un test que se pone rojo si
-    // alguien los mueve, porque si no el fallo seria silencioso y solo aqui.
+    // Se pasan los botones **crudos**, en el orden del "standard gamepad"
+    // (el bit i es `buttons[i]`), y el stick sumado a la cruceta. Que hace
+    // cada boton se decide en Rust, que es donde se pueden cambiar: asi
+    // rebindear el mando funciona igual aqui que en nativo.
+    //
+    // Los numeros estan repetidos a mano: en `crates/vals-app/src/mando.rs`
+    // hay un test que se pone rojo si alguien los mueve, porque si no el fallo
+    // seria silencioso y solo aqui.
     (function () {
-      var UP = 1, DOWN = 2, LEFT = 4, RIGHT = 8, FOCUS = 16;
-      var SHOOT = 32, DASH = 64, PARRY = 128, SUPER = 256, JUMP = 512;
-      var CONECTADO = 32768, PLAYSTATION = 16384;
+      var BOTONES = 17;
+      var ARRIBA = 1 << 12, ABAJO = 1 << 13, IZQUIERDA = 1 << 14, DERECHA = 1 << 15;
+      var CONECTADO = 1 << 20, PLAYSTATION = 1 << 21;
       var ZONA_MUERTA = 0.45;
 
       function pulsado(pad, i) {
@@ -48,27 +53,22 @@
           var p = pads[i];
           if (!p || !p.connected) continue;
 
-          var ax = p.axes[0] || 0, ay = p.axes[1] || 0;
           var bits = CONECTADO;
           // Solo para poner los nombres correctos en pantalla.
           if (/playstation|dualshock|dualsense|sony|wireless controller/i.test(p.id || "")) {
             bits |= PLAYSTATION;
           }
+          for (var b = 0; b < BOTONES; b++) {
+            if (pulsado(p, b)) bits |= 1 << b;
+          }
           // Ojo con el signo: en la Gamepad API el eje Y crece hacia ABAJO,
           // al reves que en gilrs. Es el tipo de detalle que sale de probarlo
           // y no de leerlo.
-          var arriba = ay < -ZONA_MUERTA || pulsado(p, 12);
-          if (arriba) bits |= UP;
-          if (ay > ZONA_MUERTA || pulsado(p, 13)) bits |= DOWN;
-          if (ax < -ZONA_MUERTA || pulsado(p, 14)) bits |= LEFT;
-          if (ax > ZONA_MUERTA || pulsado(p, 15)) bits |= RIGHT;
-          if (pulsado(p, 5) || pulsado(p, 7)) bits |= SHOOT;
-          if (pulsado(p, 2)) bits |= DASH;
-          if (pulsado(p, 1)) bits |= PARRY;
-          if (pulsado(p, 3)) bits |= SUPER;
-          if (pulsado(p, 4) || pulsado(p, 6)) bits |= FOCUS;
-          // Saltar en el boton de abajo y disparar en R1/R2: ver mando.rs.
-          if (pulsado(p, 0)) bits |= JUMP;
+          var ax = p.axes[0] || 0, ay = p.axes[1] || 0;
+          if (ay < -ZONA_MUERTA) bits |= ARRIBA;
+          if (ay > ZONA_MUERTA) bits |= ABAJO;
+          if (ax < -ZONA_MUERTA) bits |= IZQUIERDA;
+          if (ax > ZONA_MUERTA) bits |= DERECHA;
           return bits;
         }
         return 0;

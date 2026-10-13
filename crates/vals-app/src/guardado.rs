@@ -15,8 +15,9 @@
 //! Y con la disciplina del replay: **un guardado ilegible no revienta**, vuelve
 //! al valor por defecto. Perder el progreso es malo; no arrancar es peor.
 //!
-//! Las fichas, las compras y el equipo van en la misma linea,
-//! cada una con su prefijo (`ficha:`, `compra:`, `tiro:`, `amuleto:`). Asi la
+//! Las fichas, las compras, el equipo y las opciones van en la misma linea,
+//! cada una con su prefijo (`ficha:`, `compra:`, `tiro:`, `amuleto:`,
+//! `opcion:`). Asi la
 //! version no sube: un guardado de antes se lee igual —con cero fichas y nada
 //! comprado— y uno de ahora abierto por una version vieja solo le da nombres de
 //! baile que no existen, que ignora.
@@ -29,6 +30,7 @@ use vals_core::Equipo;
 use vals_core::equipo::{Amuleto, Tiro};
 
 use crate::libro::Marcas;
+use crate::opciones::Opciones;
 
 /// Cabecera del formato. Si cambia lo que se guarda **de forma que lo viejo no
 /// se entienda**, sube el numero y los guardados viejos se ignoran solos.
@@ -66,6 +68,8 @@ pub struct Guardado {
     pub prologo_visto: bool,
     /// Records, intentos, caidas y tiempo jugado: el libro de baile.
     pub marcas: Marcas,
+    /// El volumen, el trazo, los controles... Ver `opciones.rs`.
+    pub opciones: Opciones,
 }
 
 impl Guardado {
@@ -143,6 +147,9 @@ impl Guardado {
         if self.prologo_visto {
             poner("", PROLOGO);
         }
+        for o in self.opciones.a_texto() {
+            poner(OPCION, &o);
+        }
         out
     }
 
@@ -172,6 +179,8 @@ impl Guardado {
                 g.marcas.leer(m);
             } else if let Some(j) = n.strip_prefix(JUGADO) {
                 g.marcas.jugado = j.parse().unwrap_or(0);
+            } else if let Some(o) = n.strip_prefix(OPCION) {
+                g.opciones.leer(o);
             } else {
                 g.bailados.push(n.to_owned());
             }
@@ -187,6 +196,7 @@ const AMULETO: &str = "amuleto:";
 const PROLOGO: &str = "visto:prologo";
 const MARCA: &str = "marca:";
 const JUGADO: &str = "jugado:";
+const OPCION: &str = "opcion:";
 
 fn clave_ficha(paseo: &str, i: usize) -> String {
     format!("{paseo}:{i}")
@@ -390,6 +400,22 @@ mod tests {
         let viejo = Guardado::desde_texto("VALS1;El Vals;ficha:El paseo de Viena:2;tiro:Abanico");
         assert!(viejo.tiene("El Vals") && viejo.tiene_ficha("El paseo de Viena", 2));
         assert_eq!(viejo.marcas, crate::libro::Marcas::default());
+    }
+
+    #[test]
+    fn las_opciones_viajan_con_el_progreso() {
+        let mut g = Guardado::default();
+        g.marcar("El Vals");
+        g.opciones.musica = 4;
+        g.opciones.hervor = false;
+        let leido = Guardado::desde_texto(&g.a_texto());
+        assert_eq!(leido, g);
+        assert!(!leido.tiene("opcion:musica=4"), "no es un baile");
+        // Un guardado de antes de las opciones carga con las de serie, y sin
+        // tocarlas se escribe igual que entonces.
+        let viejo = Guardado::desde_texto("VALS1;El Vals;tiro:Abanico");
+        assert_eq!(viejo.opciones, Opciones::default());
+        assert_eq!(viejo.a_texto(), "VALS1;El Vals;tiro:Abanico");
     }
 
     #[test]

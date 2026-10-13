@@ -73,15 +73,33 @@ lo dibujan las balas y su foto de larga exposicion.
 | | Teclado | Mando |
 |---|---|---|
 | Mover | Flechas / WASD | Stick o cruceta |
-| Disparar | `Z` | R1 / R2 |
+| Disparar | `Z` | R1 / R2 (RB / RT) |
 | Saltar (en los paseos) | Arriba / `W` / `K` | Boton de abajo (X en PlayStation, A en Xbox) |
 | Dash, con invulnerabilidad | `X` | Cuadrado / X |
 | Parry | `C` | Circulo / B |
-| Super | `Espacio` | Triangulo / Y |
-| Focus (lento; en los paseos, plantarse y apuntar) | `Shift` | L1 / L2 |
-| Volver al mapa o al menu | `Esc` | Triangulo / Y, fuera del combate |
-| Abrir el libro de baile (en el menu) | `L` | Cuadrado / X |
-| Quitar el temblor de la tinta | `T` | |
+| Super | `Espacio` / `V` | Triangulo / Y |
+| Focus (lento; en los paseos, plantarse y apuntar) | `Shift` | L1 / L2 (LB / LT) |
+| Entreacto (pausa) y, en el titulo, opciones | `Esc` / `P` | Options / Start |
+| Reintentar el baile o el paseo, en cualquier momento | `R` | Share / Back |
+| Aceptar en los menus | `Z` / `Intro` / `Espacio` | Boton de abajo |
+| Atras en los menus, y salir de la pista o la tienda | `Esc` / `Borrar` | Circulo / B |
+| Abrir el libro de baile (en el menu) | `L` | L1 / LB |
+| Volver a ver la historia (en el menu) | `X` | Cuadrado / X |
+| Quitar el temblor de la tinta | `T` (tambien en opciones) | |
+| Quitar el sonido | `M` | |
+
+Disparar, saltar, dash, parry, super y focus **se pueden cambiar**, por
+separado para el teclado y para el mando, en *Opciones > Controles*: se elige
+la accion y se pulsa la tecla o el boton nuevo. Si ya lo tenia otra accion, se
+intercambian, asi que ninguna se queda sin nada. Mover, pausar y reintentar son
+fijos. Las ayudas en pantalla hablan siempre del teclado o del mando segun con
+cual se haya jugado lo ultimo.
+
+En el entreacto el baile se para del todo (no avanza ni un tick, asi que los
+replays no se enteran) y se puede seguir, reintentar, volver a la pista o ir a
+las opciones: volumen de musica y efectos, trazo vivo, sacudida de pantalla,
+pantalla completa (solo en la version de escritorio) y controles. Las opciones
+se guardan con el progreso.
 
 ## Como esta hecho
 

@@ -13,7 +13,9 @@
 //! cabecera mal formada, no devuelve error. Por eso el escritor esta cubierto
 //! por tests.
 
-use macroquad::audio::{PlaySoundParams, Sound, load_sound_from_bytes, play_sound, stop_sound};
+use macroquad::audio::{
+    PlaySoundParams, Sound, load_sound_from_bytes, play_sound, set_sound_volume, stop_sound,
+};
 use vals_core::Events;
 
 use crate::music::{self, TEMAS, Tema};
@@ -277,6 +279,10 @@ pub struct Audio {
     /// Cual esta sonando ahora.
     sonando: Option<usize>,
     pub muted: bool,
+    /// Lo que dicen las opciones, de 0 a 1. La musica ya viene agachada si
+    /// esta abierto el entreacto.
+    volumen_musica: f32,
+    volumen_efectos: f32,
 }
 
 impl Audio {
@@ -327,6 +333,8 @@ impl Audio {
             musica,
             sonando: None,
             muted: false,
+            volumen_musica: 1.0,
+            volumen_efectos: 1.0,
         }
     }
 
@@ -347,7 +355,7 @@ impl Audio {
                 s,
                 PlaySoundParams {
                     looped: true,
-                    volume: MASTER_MUSICA,
+                    volume: MASTER_MUSICA * self.volumen_musica,
                 },
             );
         }
@@ -359,6 +367,23 @@ impl Audio {
             && let Some(Some(s)) = self.musica.get(i)
         {
             stop_sound(s);
+        }
+    }
+
+    /// Los volumenes, de 0 a 1. Se llama cada frame y solo toca el tema que
+    /// suena si ha cambiado: asi el entreacto agacha la musica en el sitio, sin
+    /// cortarla ni volver a empezarla.
+    pub fn volumenes(&mut self, musica: f32, efectos: f32) {
+        self.volumen_efectos = efectos;
+        if musica == self.volumen_musica {
+            return;
+        }
+        self.volumen_musica = musica;
+        if !self.muted
+            && let Some(i) = self.sonando
+            && let Some(Some(s)) = self.musica.get(i)
+        {
+            set_sound_volume(s, MASTER_MUSICA * musica);
         }
     }
 
@@ -384,7 +409,7 @@ impl Audio {
                 s,
                 PlaySoundParams {
                     looped: false,
-                    volume: (vol * MASTER).clamp(0.0, 1.0),
+                    volume: (vol * MASTER * self.volumen_efectos).clamp(0.0, 1.0),
                 },
             );
         }

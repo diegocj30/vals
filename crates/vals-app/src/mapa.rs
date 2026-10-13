@@ -812,8 +812,9 @@ pub struct Fichas {
     pub paseos: Vec<Option<(usize, usize)>>,
 }
 
-/// El mapa entero. `teclas` son los nombres de aceptar y de dash en lo que se
-/// este usando, para que la ayuda diga el boton que hay que pulsar. `notas`
+/// El mapa entero. `teclas` son los nombres de aceptar, pasear, moverse y
+/// volver en lo que se este usando, para que la ayuda diga el boton que hay
+/// que pulsar. `notas`
 /// es la mejor de cada nodo, si se ha ganado.
 pub fn pista(
     p: &Pista,
@@ -821,7 +822,7 @@ pub fn pista(
     l: &Layout,
     fichas: &Fichas,
     notas: &[Option<Nota>],
-    teclas: [&str; 2],
+    teclas: [&str; 4],
 ) {
     clear_background(PAPEL);
     let o = l.to_screen(0.0, 0.0);
@@ -915,7 +916,7 @@ pub fn pista(
     fuentes::derecha(&n, b.x, o.y + 44.0, 22.0, Cara::Cuerpo, METER_FULL);
 
     let pie_y = l.to_screen(0.0, ARENA_H).y - 16.0;
-    let [ok, dash] = teclas;
+    let [ok, dash, mover, atras] = teclas;
     let aviso = match p.nodo_cerca() {
         Some(i) if p.abierto(i) => {
             let donde = if p.nodos[i].suelo {
@@ -939,7 +940,7 @@ pub fn pista(
             p.nodos[i].nombre
         ),
         None if p.en_la_modista() => format!("{ok}    entrar a la modista"),
-        None => "flechas andar    ESC menu".to_string(),
+        None => format!("{mover} andar    {atras} menu"),
     };
     let color = if p.nodo_cerca().is_some_and(|i| p.abierto(i)) || p.en_la_modista() {
         // Late, para que se vea que ahi hay algo que hacer.

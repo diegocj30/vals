@@ -24,6 +24,7 @@ use vals_core::paseo::{
 use vals_core::player::{PARRY_RADIUS, SUPER_TICKS};
 use vals_core::rng::Pcg32;
 
+use crate::acciones::Nombres;
 use crate::calle_arrabal;
 use crate::calle_chicago;
 use crate::calle_montmartre;
@@ -158,7 +159,7 @@ fn fondo_de_viena(p: &Paseo, l: &Layout, capa: &dyn Fn(f32) -> Layout, cam: f32,
 /// Lo que va encima de la calle y dentro de la lamina: el papel de alrededor,
 /// las cartas, el camino a la puerta y el KO. Va aparte de `dibujar` para que
 /// las chispas queden entre la calle y el papel, como en el combate.
-pub fn encima(p: &Paseo, l: &Layout) {
+pub fn encima(p: &Paseo, l: &Layout, n: &Nombres) {
     draw::paspartu_de(l, vec2(VISTA_W, VISTA_H));
     let o = l.to_screen(0.0, 0.0);
     let w = l.len(VISTA_W);
@@ -204,13 +205,23 @@ pub fn encima(p: &Paseo, l: &Layout) {
     // explica no existe. Se dice los primeros segundos.
     let k = 1.0 - ((p.tick as f32 - 420.0) / 60.0).clamp(0.0, 1.0);
     if k > 0.0 {
-        let aviso = "SHIFT te planta  -  plantada, ARRIBA apunta arriba";
+        let aviso = format!(
+            "{} te planta  -  plantada, {} apunta arriba",
+            n.focus, n.arriba
+        );
         let y = l.to_screen(0.0, VISTA_H).y - 16.0;
-        fuentes::derecha(aviso, o.x + w - 12.0, y, 16.0, Cara::Cuerpo, fade(TEXTO, k));
+        fuentes::derecha(
+            &aviso,
+            o.x + w - 12.0,
+            y,
+            16.0,
+            Cara::Cuerpo,
+            fade(TEXTO, k),
+        );
     }
 
     if p.derrota {
-        ko(p, l);
+        ko(p, l, n);
     }
 }
 
@@ -1208,7 +1219,7 @@ fn camino(p: &Paseo, l: &Layout) {
 /// El KO del paseo: el mismo sello del combate, con la barra de la calle en
 /// vez de la del baile. Saber si te quedaste cerca de la puerta es lo que
 /// convierte un reintento en informacion.
-fn ko(p: &Paseo, l: &Layout) {
+fn ko(p: &Paseo, l: &Layout, n: &Nombres) {
     let o = l.to_screen(0.0, 0.0);
     let (w, h) = (l.len(VISTA_W), l.len(VISTA_H));
     draw_rectangle(o.x, o.y, w, h, VELO);
@@ -1244,8 +1255,11 @@ fn ko(p: &Paseo, l: &Layout) {
     let dicho = format!("llegaste al {pct}% del camino a la puerta");
     fuentes::centrado(&dicho, cx, y, 17.0, Cara::Cuerpo, TEXTO_TENUE);
     y += 40.0;
-    for linea in ["R reintentar el paseo", "ESC volver a la pista"] {
-        fuentes::centrado(linea, cx, y, 19.0, Cara::Cuerpo, TEXTO);
+    for linea in [
+        format!("{} o {}  reintentar el paseo", n.aceptar, n.reintentar),
+        format!("{}  volver a la pista", n.atras),
+    ] {
+        fuentes::centrado(&linea, cx, y, 19.0, Cara::Cuerpo, TEXTO);
         y += 25.0;
     }
 }

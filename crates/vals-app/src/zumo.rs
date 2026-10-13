@@ -43,6 +43,9 @@ pub struct Zumo {
     /// Frames que quedan por congelar.
     congelacion: u32,
     rng: Pcg32,
+    /// Si la pantalla se sacude. Lo dicen las opciones: a quien le marea se
+    /// le quita la sacudida y se le deja el hitstop, que no mueve nada.
+    pub sacudir: bool,
 }
 
 impl Zumo {
@@ -51,6 +54,7 @@ impl Zumo {
             amplitud: 0.0,
             congelacion: 0,
             rng: Pcg32::new(0x5641_4C53_5A55_4D4F),
+            sacudir: true,
         }
     }
 
@@ -119,7 +123,7 @@ impl Zumo {
 
     /// Cuanto se desplaza la pantalla este frame, en unidades de arena.
     pub fn desplazamiento(&mut self) -> Vec2 {
-        if self.amplitud <= 0.0 {
+        if self.amplitud <= 0.0 || !self.sacudir {
             return Vec2::ZERO;
         }
         let a = self.amplitud;

@@ -11,6 +11,7 @@ use vals_core::pista::Pista;
 use vals_core::replay::{GOLDEN_REPLAY, Replay};
 use vals_core::{DT, Equipo, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
 
+mod acciones;
 mod audio;
 mod bailarines;
 mod bullet_renderer;
@@ -30,6 +31,7 @@ mod mando;
 mod mapa;
 mod modista;
 mod music;
+mod opciones;
 mod paleta;
 mod particulas;
 mod pelicula;
@@ -42,13 +44,14 @@ mod stats;
 mod trazo;
 mod zumo;
 
+use acciones::{Accion, Controles, Dispositivo, Entrada, Nombres};
 use audio::{Audio, Sfx};
 use bullet_renderer::BulletRenderer;
 use cartela::{Cartela, Fundido};
 use guardado::Guardado;
 use hot::HotReload;
-use mando::Mando;
 use music::Tema;
+use opciones::{Carta, Orden, VOLUMEN_MAX};
 use particulas::Particulas;
 use stats::FrameStats;
 use zumo::Zumo;
@@ -101,6 +104,17 @@ const MAX_STEPS_PER_FRAME: u32 = 5;
 
 /// Techo del delta que aceptamos del sistema, en segundos.
 const MAX_FRAME_DT: f32 = 0.25;
+
+/// Segundos que el KO tiene que estar en pantalla antes de que aceptar o
+/// atras hagan algo. Se muere con el dedo en disparar o en el parry, que son
+/// tambien aceptar y atras: sin esto, el mismo golpe que mata se saltaba el
+/// KO sin dejar verlo. La R, el Select y ESC van sin espera, que no se
+/// pulsan sin querer.
+const GRACIA_FIN: f64 = 0.8;
+
+/// Lo que baja la musica en el entreacto: se oye que sigue ahi, pero no
+/// tapa.
+const MUSICA_EN_PAUSA: f32 = 0.3;
 
 fn window_conf() -> Conf {
     Conf {
@@ -263,7 +277,14 @@ async fn run_game() {
     // que. Se espera a la primera tecla, que ademas es cuando el jugador esta
     // mirando.
     let mut hubo_interaccion = false;
-    let mut mando = Mando::new();
+    // Teclado y mando, con cual se toco lo ultimo. Ver `acciones.rs`.
+    let mut entrada = Entrada::new();
+    // El entreacto, o las opciones desde el titulo.
+    let mut carta: Option<Carta> = None;
+    // Desde cuando esta el KO en pantalla. Ver `GRACIA_FIN`.
+    let mut fin_desde: Option<f64> = None;
+    #[cfg(not(target_arch = "wasm32"))]
+    let mut pantalla_puesta = false;
     let mut chispas = Particulas::new();
     let mut zumo = Zumo::new();
     let mut cartela: Option<Cartela> = None;
@@ -294,7 +315,7 @@ async fn run_game() {
 
     loop {
         frames += 1;
-        mando.actualizar();
+        entrada.actualizar();
         let escena_antes = escena;
         if frames.is_multiple_of(HOT_RELOAD_EVERY)
             && let Some(defs) = hot.poll()
@@ -315,7 +336,7 @@ async fn run_game() {
             p.recargar(def);
         }
 
-        hubo_interaccion |= get_last_key_pressed().is_some() || mando.frame().bits() != 0;
+        hubo_interaccion |= entrada.algo() || entrada.mando.crudo() != 0;
         if hubo_interaccion {
             // La musica se busca por (jefe, figura). La pista tiene la suya
             // propia: dejar sonando el vals en el mapa decia que el vals era
@@ -327,6 +348,21 @@ async fn run_game() {
                 Escena::Paseo => Tema::de(pista.nodos[nodo_actual].jefe, 0),
                 _ => Tema::Sala,
             });
+        }
+        // Las opciones se aplican cada frame: son cuatro asignaciones, y asi
+        // no hay que acordarse de aplicarlas en cada sitio que las cambia.
+        let op = progreso.opciones;
+        let jugando = matches!(escena, Escena::Combate | Escena::Paseo);
+        let parado = jugando && carta.is_some();
+        let agachada = if parado { MUSICA_EN_PAUSA } else { 1.0 };
+        let volumen = |v: u8| f32::from(v) / f32::from(VOLUMEN_MAX);
+        audio.volumenes(volumen(op.musica) * agachada, volumen(op.efectos));
+        trazo::poner(op.hervor);
+        zumo.sacudir = op.sacudida;
+        #[cfg(not(target_arch = "wasm32"))]
+        if op.pantalla_completa != pantalla_puesta {
+            set_fullscreen(op.pantalla_completa);
+            pantalla_puesta = op.pantalla_completa;
         }
 
         let frame_dt = get_frame_time().min(MAX_FRAME_DT);
@@ -343,22 +379,87 @@ async fn run_game() {
         // apretado. Se entra a un baile pulsando un boton y ese boton sigue
         // pulsado despues, asi que mirando el estado la cartela se saltaba sola
         // y no daba tiempo a leerla.
+        //
+        // La pausa no la salta: se puede parar en mitad de una cartela.
         if let Some(c) = cartela.as_mut()
             && c.para_el_mundo()
-            && (get_last_key_pressed().is_some() || mando.algo_pulsado())
+            && carta.is_none()
+            && entrada.algo()
+            && !entrada.pulsado(Accion::Pausa)
         {
             c.saltar();
         }
         let leyendo = cartela.as_ref().is_some_and(Cartela::para_el_mundo);
-        let jugando = matches!(escena, Escena::Combate | Escena::Paseo);
-        let congelado = jugando && (zumo.congelado() || leyendo);
+        // El entreacto va primero a proposito: con `||`, el hitstop no se
+        // consume mientras esta abierto, y al seguir el golpe sigue frenado.
+        let congelado = jugando && (parado || zumo.congelado() || leyendo);
+
+        // --- Las acciones de menu ---
+        // Con la tarjeta abierta, solo ella escucha. `libre` se mira antes de
+        // tocarla: el frame en que se cierra, la tecla que la cerro no puede
+        // hacer ademas otra cosa (ESC cerraria y volveria a abrir).
+        let libre = carta.is_none();
+        let capturando = carta.as_ref().is_some_and(Carta::capturando);
+        let acabado = match escena {
+            Escena::Combate => world.is_over(),
+            Escena::Paseo => paseo.as_ref().is_some_and(|(_, p)| p.derrota),
+            _ => false,
+        };
+        fin_desde = if acabado {
+            fin_desde.or(Some(get_time()))
+        } else {
+            None
+        };
+        // La victoria espera a que se pueda leer su tarjeta (ver `libro`).
+        let ganado = escena == Escena::Combate && world.victory;
+        let listo = if ganado {
+            intento.tarjeta.as_ref().is_some_and(libro::Tarjeta::lista)
+        } else {
+            fin_desde.is_some_and(|t| get_time() - t > GRACIA_FIN)
+        };
+        let mut orden = None;
+        if let Some(c) = carta.as_mut() {
+            let antes = progreso.opciones;
+            orden = c.entrada(&entrada, &mut progreso.opciones);
+            if progreso.opciones != antes {
+                progreso.guardar();
+            }
+            match orden {
+                Some(Orden::Tic) => audio.play(Sfx::Graze, 0.7),
+                Some(_) => carta = None,
+                None => {}
+            }
+        } else if entrada.pulsado(Accion::Pausa) && (escena == Escena::Menu || jugando && !acabado)
+        {
+            // En un baile o un paseo, el entreacto; en el titulo, las
+            // opciones.
+            carta = Some(if jugando {
+                Carta::entreacto()
+            } else {
+                Carta::opciones()
+            });
+            audio.play(Sfx::Graze, 0.7);
+        }
+        let aceptar = libre && entrada.pulsado(Accion::Aceptar);
+        // Reintentar: desde el entreacto, con la R o el Select en cualquier
+        // momento, y con aceptar en el KO.
+        let reintentar = jugando
+            && (orden == Some(Orden::Reintentar)
+                || libre && entrada.pulsado(Accion::Reintentar)
+                || acabado && listo && !ganado && aceptar);
+        // Salir a la pista: desde el entreacto, o al acabar. ESC y Start
+        // tambien al acabar: no hay entreacto que abrir en un KO.
+        let salir = jugando
+            && (orden == Some(Orden::Mapa)
+                || libre
+                    && acabado
+                    && (entrada.pulsado(Accion::Pausa)
+                        || listo && (entrada.pulsado(Accion::Atras) || ganado && aceptar)));
 
         if is_key_pressed(KeyCode::F1) {
             show_debug = !show_debug;
         }
-        if (is_key_pressed(KeyCode::R) || mando.pulsado(InputFrame::PARRY) && world.is_over())
-            && escena == Escena::Combate
-        {
+        if reintentar && escena == Escena::Combate {
             // Tras perder se reintenta **este** jefe con las vidas llenas; en
             // cualquier otro momento, partida nueva desde el principio.
             //
@@ -376,25 +477,25 @@ async fn run_game() {
             intentos += 1;
             intento = progreso.marcas.empezar(&pista.nodos[nodo_actual].nombre);
         }
-        // En el paseo, R (o el parry tras el KO) vuelve a empezar la calle.
-        // Morir en el paseo no te lleva al jefe ni te lo quita: se reintenta
-        // el paseo, igual que morir en el jefe reintenta solo el jefe.
-        if escena == Escena::Paseo
+        // En el paseo, reintentar vuelve a empezar la calle. Morir en el
+        // paseo no te lleva al jefe ni te lo quita: se reintenta el paseo,
+        // igual que morir en el jefe reintenta solo el jefe.
+        if reintentar
+            && escena == Escena::Paseo
             && let Some((i, p)) = paseo.as_mut()
-            && (is_key_pressed(KeyCode::R) || mando.pulsado(InputFrame::PARRY) && p.derrota)
         {
             *p = nuevo_paseo(&paseos[*i], &progreso);
             intento = progreso.marcas.empezar(&paseos[*i].nombre);
             accumulator = 0.0;
         }
-        // Start/Select del mando hacen de ESC: salir un escalon. En la calle
-        // no, que alli el super es el super.
-        // El prologo se salta con lo mismo, pero eso lo mira el.
-        if escena != Escena::Prologo
-            && (is_key_pressed(KeyCode::Escape) || mando.pulsado(InputFrame::SUPER) && !jugando)
-        {
-            // Se sale un escalon cada vez: del baile o del paseo a la pista,
-            // de la pista al menu.
+        // Salir un escalon: del baile o del paseo a la pista (desde el
+        // entreacto o al acabar), de la tienda a la pista y de la pista al
+        // menu. Atras o pausa, que en la pista y la tienda no hay entreacto.
+        // El prologo y el libro miran lo suyo mas abajo.
+        let atras = libre
+            && matches!(escena, Escena::Pista | Escena::Modista)
+            && (entrada.pulsado(Accion::Atras) || entrada.pulsado(Accion::Pausa));
+        if salir || atras {
             escena = match escena {
                 Escena::Combate | Escena::Paseo | Escena::Modista => Escena::Pista,
                 _ => Escena::Menu,
@@ -402,27 +503,32 @@ async fn run_game() {
             cartela = None;
             fundido.empezar(0.24);
         }
-        if is_key_pressed(KeyCode::M) {
+        // Mientras se espera una tecla nueva para un control, ninguna otra
+        // hace nada: la M no deberia quitar el sonido al intentar asignarla.
+        if !capturando && is_key_pressed(KeyCode::M) {
             audio.toggle_mute();
         }
         // La linea que hierve se puede parar: a quien le marea no le sirve
-        // de nada que sea bonita.
-        if is_key_pressed(KeyCode::T) {
-            let vivo = trazo::alternar();
-            let msg = if vivo { "trazo vivo" } else { "trazo quieto" };
+        // de nada que sea bonita. Es la misma opcion que la del menu, y se
+        // guarda igual.
+        if !capturando && is_key_pressed(KeyCode::T) {
+            progreso.opciones.hervor = !progreso.opciones.hervor;
+            progreso.guardar();
+            let msg = if progreso.opciones.hervor {
+                "trazo vivo"
+            } else {
+                "trazo quieto"
+            };
             aviso = Some((msg.to_owned(), false, 120));
         }
         // En la tienda. Va antes que la pista por lo mismo que la pista va
         // antes que el menu: la Z que entra en la modista no puede comprar lo
-        // primero del catalogo en el mismo frame. Con mando, el circulo sale,
-        // como en el KO.
-        if escena == Escena::Modista {
-            if mando.pulsado(InputFrame::PARRY) {
-                escena = Escena::Pista;
-                fundido.empezar(0.24);
-            } else if let Some(sfx) = tienda.entrada(&mut progreso, &mando) {
-                audio.play(sfx, 0.8);
-            }
+        // primero del catalogo en el mismo frame. Se sale con atras, arriba.
+        if libre
+            && escena == Escena::Modista
+            && let Some(sfx) = tienda.entrada(&mut progreso, &entrada)
+        {
+            audio.play(sfx, 0.8);
         }
         // De la pista se entra al baile que se tenga delante.
         //
@@ -431,11 +537,11 @@ async fn run_game() {
         // se leeria otra vez aqui en el mismo frame. Hoy no se notaria porque
         // se entra lejos de todo, pero deja de ser verdad en cuanto un baile
         // este cerca de la entrada.
-        let entrar = is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::JUMP);
-        // Volver a pasear: la X (el dash; cuadrado con mando) delante de un
-        // baile cuyo paseo ya se anduvo. Es un boton aparte y no una pregunta
-        // al entrar porque lo normal al volver a un baile es bailarlo.
-        let pasear = is_key_pressed(KeyCode::X) || mando.pulsado(InputFrame::DASH);
+        let entrar = aceptar;
+        // Volver a pasear: la X (cuadrado con mando) delante de un baile cuyo
+        // paseo ya se anduvo. Es un boton aparte y no una pregunta al entrar
+        // porque lo normal al volver a un baile es bailarlo.
+        let pasear = libre && entrada.pulsado(Accion::Pasear);
         if escena == Escena::Pista && entrar && pista.en_la_modista() {
             audio.play(Sfx::Empezar, 1.0);
             escena = Escena::Modista;
@@ -526,8 +632,8 @@ async fn run_game() {
         // El libro de baile: L, o el gatillo de focus del mando (L1), que en el
         // menu no hace nada; el cuadrado ya cuenta la historia. Se cierra con
         // lo mismo, con ESC o con el circulo.
-        let libro_pulsado = is_key_pressed(KeyCode::L) || mando.pulsado(InputFrame::FOCUS);
-        if escena == Escena::Libro && (libro_pulsado || mando.pulsado(InputFrame::PARRY)) {
+        let libro_pulsado = libre && entrada.pulsado(Accion::Libro);
+        if escena == Escena::Libro && (libro_pulsado || entrada.pulsado(Accion::Atras)) {
             escena = Escena::Menu;
             fundido.empezar(0.24);
         } else if escena == Escena::Menu && libro_pulsado {
@@ -543,8 +649,7 @@ async fn run_game() {
         //
         // La primera vez, antes de la pista, la historia. Y la X (cuadrado)
         // la vuelve a contar, que es el mismo boton secundario que en la pista.
-        if escena == Escena::Menu && (is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::JUMP))
-        {
+        if escena == Escena::Menu && aceptar {
             audio.play(Sfx::Empezar, 1.0);
             escena = if progreso.prologo_visto {
                 Escena::Pista
@@ -555,9 +660,7 @@ async fn run_game() {
             };
             accumulator = 0.0;
             fundido.empezar(0.30);
-        } else if escena == Escena::Menu
-            && (is_key_pressed(KeyCode::X) || mando.pulsado(InputFrame::DASH))
-        {
+        } else if escena == Escena::Menu && libre && entrada.pulsado(Accion::Historia) {
             escena = Escena::Prologo;
             historia = prologo::Prologo::nuevo();
             tras_prologo = Escena::Menu;
@@ -568,13 +671,11 @@ async fn run_game() {
         // que lo acaba no puede entrar a un baile en el mismo frame.
         if escena == Escena::Prologo {
             historia.step(frame_dt);
-            if is_key_pressed(KeyCode::Z)
-                || is_key_pressed(KeyCode::Enter)
-                || mando.pulsado(InputFrame::JUMP)
-            {
+            if entrada.pulsado(Accion::Aceptar) {
                 historia.avanzar();
             }
-            if is_key_pressed(KeyCode::Escape) || mando.pulsado(InputFrame::SUPER) {
+            // Saltarselo entero: atras o pausa, que aqui no hay entreacto.
+            if entrada.pulsado(Accion::Atras) || entrada.pulsado(Accion::Pausa) {
                 historia.saltar();
             }
             if historia.acabado() {
@@ -591,7 +692,8 @@ async fn run_game() {
         // como avanza el juego no deberia costar pasarse el jefe cada vez.
         // Rompe el replay en curso, asi que se vuelve a empezar la grabacion.
         // Y lo mismo con la calle.
-        if is_key_pressed(KeyCode::F3)
+        if libre
+            && is_key_pressed(KeyCode::F3)
             && escena == Escena::Paseo
             && let Some((_, p)) = paseo.as_mut()
             && !p.terminado()
@@ -600,7 +702,7 @@ async fn run_game() {
             intento.trampa = true;
             aviso = Some(("paseo saltado".to_owned(), false, 120));
         }
-        if is_key_pressed(KeyCode::F3) && escena == Escena::Combate && !world.is_over() {
+        if libre && is_key_pressed(KeyCode::F3) && escena == Escena::Combate && !world.is_over() {
             world.saltar_el_baile();
             intento.trampa = true;
             recorder = Recorder::for_world(&world);
@@ -621,22 +723,21 @@ async fn run_game() {
         // --- Simulacion: paso fijo, desacoplada del render ---
         // En el menu se avanza el modo atractor en vez de la partida; el
         // acumulador es el mismo, asi que el replay va al ritmo correcto.
-        // Teclado y mando se suman en vez de elegir uno: no hay que anunciar
-        // con cual se juega, y soltar el mando a media partida no rompe nada.
+        // Teclado y mando se suman en vez de elegir uno, cada uno con sus
+        // controles (ver `acciones.rs`).
         let input = if escena == Escena::Menu {
             InputFrame::NONE
         } else {
-            InputFrame::from_bits(read_input().bits() | mando.frame().bits())
+            entrada.juego(&progreso.opciones.controles)
         };
         let t0 = get_time();
-        if !congelado {
-            accumulator += frame_dt;
-        }
-        let mut steps = 0;
+        // Congelado —hitstop, cartela o entreacto— el acumulador no suma, y
+        // no sale ni un tick: ni ahora ni al seguir.
+        let steps = opciones::pasos(&mut accumulator, frame_dt, congelado, MAX_STEPS_PER_FRAME);
         // Los sucesos de todos los ticks del frame se juntan: puede haber
         // varios, y reaccionar solo al ultimo se comeria sonidos.
         let mut eventos = Events::default();
-        while accumulator >= DT {
+        for _ in 0..steps {
             match escena {
                 Escena::Menu => {
                     if let Some(a) = attract.as_mut() {
@@ -696,20 +797,16 @@ async fn run_game() {
             // por frame, en un monitor de 144 Hz volarian al doble.
             chispas.step(DT);
             zumo.step();
-            accumulator -= DT;
-            steps += 1;
-            if steps >= MAX_STEPS_PER_FRAME {
-                accumulator = 0.0;
-                break;
-            }
         }
         // La cartela y el fundido corren con el reloj de pared, no con los
         // ticks. Es presentacion —tiene que durar igual a 60 que a 144 Hz— y,
         // sobre todo, **tiene que avanzar mientras la cartela para el mundo**,
         // que es justo cuando no hay ticks. Meterlos en el bucle de simulacion
         // dejaba la pantalla en negro para siempre al entrar a un baile.
+        // En el entreacto la cartela se queda donde estaba, como el mundo.
         fundido.step(frame_dt);
-        if let Some(c) = cartela.as_mut()
+        if !parado
+            && let Some(c) = cartela.as_mut()
             && !c.step(frame_dt)
         {
             // Al acabar la presentacion, el grito: el "WALLOP!" de Cuphead. Es
@@ -772,8 +869,8 @@ async fn run_game() {
             marcado = true;
         }
         // Fin de un intento ganado: la nota, las marcas y la tarjeta, una sola
-        // vez. Y tras leerla, aceptar vuelve a la pista: con el mando no hay
-        // ESC en el combate.
+        // vez. Tras leerla, aceptar vuelve a la pista: eso lo mira `salir`,
+        // arriba, con el resto de los finales.
         if intento.tarjeta.is_none() {
             if escena == Escena::Combate && world.victory {
                 intento.cerrar_baile(&mut progreso.marcas);
@@ -784,14 +881,6 @@ async fn run_game() {
             {
                 intento.cerrar_paseo(&mut progreso.marcas, (p.fichas_cogidas(), p.fichas.len()));
             }
-        }
-        if escena == Escena::Combate
-            && world.victory
-            && entrar
-            && intento.tarjeta.as_ref().is_some_and(libro::Tarjeta::lista)
-        {
-            escena = Escena::Pista;
-            fundido.empezar(0.30);
         }
 
         // Fraccion de tick pendiente. Es lo que permite que el render vaya a
@@ -806,6 +895,9 @@ async fn run_game() {
             _ => draw::Layout::compute(),
         };
         let layout = lamina.sacudido(zumo.desplazamiento());
+        // Todos los nombres de teclas y botones de este frame, del aparato que
+        // se toco lo ultimo.
+        let n = entrada.nombres(&progreso.opciones.controles);
         if escena == Escena::Pista {
             // Lo que el mapa dice de las fichas: el bolsillo y, de cada baile
             // cuyo paseo ya se anduvo, cuantas de las suyas son tuyas.
@@ -826,10 +918,7 @@ async fn run_game() {
                     })
                     .collect(),
             };
-            let teclas = match mando.conectado().then(|| mando.botones()) {
-                Some(b) => [b[4], b[1]],
-                None => ["Z", "X"],
-            };
+            let teclas = [n.aceptar, n.pasear, n.mover, n.atras];
             let notas: Vec<_> = pista
                 .nodos
                 .iter()
@@ -837,16 +926,11 @@ async fn run_game() {
                 .collect();
             mapa::pista(&pista, alpha, &layout, &fichas, &notas, teclas);
         } else if escena == Escena::Prologo {
-            historia.dibujar(&layout, mando.conectado().then(|| mando.botones()));
+            historia.dibujar(&layout, &n);
         } else if escena == Escena::Libro {
-            let b = mando.conectado().then(|| mando.botones());
-            libro::pagina(&layout, &progreso, &bailes, &paseos, b);
+            libro::pagina(&layout, &progreso, &bailes, &paseos, &n);
         } else if escena == Escena::Modista {
-            tienda.dibujar(
-                &progreso,
-                &layout,
-                mando.conectado().then(|| mando.botones()),
-            );
+            tienda.dibujar(&progreso, &layout, &n);
         } else if escena == Escena::Paseo
             && let Some((_, p)) = paseo.as_ref()
         {
@@ -855,10 +939,9 @@ async fn run_game() {
             calle::dibujar(p, alpha, &layout, pulso, jefe);
             let camara = layout.sacudido(-vec2(calle::camara(p, alpha), calle::camara_y(p, alpha)));
             draw::particulas(&chispas, &camara);
-            calle::encima(p, &layout);
+            calle::encima(p, &layout, &n);
             if let Some(t) = intento.tarjeta.as_ref() {
-                let b = mando.conectado().then(|| mando.botones());
-                libro::tarjeta_de_paseo(t, &p.def.nombre, &lamina, b);
+                libro::tarjeta_de_paseo(t, &p.def.nombre, &lamina, &n);
             }
         } else {
             let mostrado = match (escena, attract.as_ref()) {
@@ -877,28 +960,21 @@ async fn run_game() {
                 draw::fantasma(&world, donde, (get_time() - cuando) as f32, &layout);
             }
             if escena == Escena::Menu {
-                let b = mando.conectado().then(|| mando.botones());
-                draw::menu(&layout, mostrado, intentos, b);
-                libro::aviso_en_el_menu(&layout, b);
-                prologo::en_el_menu(&layout, b);
+                draw::menu(&layout, mostrado, intentos, &n);
+                libro::aviso_en_el_menu(&layout, &n);
+                prologo::en_el_menu(&layout, &n);
             } else if world.is_over() {
                 draw::fin_de_partida(
                     &layout,
                     &world,
                     jefes::caida(caida.unwrap_or(0.0)),
                     intento.tarjeta.as_ref(),
-                    mando.conectado().then(|| mando.botones()),
+                    &n,
                 );
             }
         }
         if show_debug && escena == Escena::Combate {
-            draw::debug_overlay(
-                &world,
-                &stats,
-                steps,
-                chispas.vivas(),
-                mando.conectado().then(|| mando.botones()),
-            );
+            draw::debug_overlay(&world, &stats, steps, chispas.vivas(), &n);
             draw::recording_badge(recorder.ticks());
         }
         if let Some(c) = cartela.as_ref() {
@@ -906,6 +982,9 @@ async fn run_game() {
                 Escena::Paseo => c.dibujar_en(&layout, vec2(VISTA_W, VISTA_H)),
                 _ => c.dibujar(&layout),
             }
+        }
+        if let Some(c) = carta.as_ref() {
+            c.dibujar(&progreso.opciones, &n, &entrada);
         }
         fundido.dibujar();
         // La pelicula va encima de todo: es la copia la que tiene grano.
@@ -1049,7 +1128,8 @@ async fn run_replay(path: String) {
         let t1 = get_time();
         let layout = draw::Layout::compute();
         draw::frame(&world, alpha, &layout, bullets_gpu.as_mut(), 1.0);
-        draw::debug_overlay(&world, &stats, steps, 0, None);
+        let n = Nombres::de(Dispositivo::Teclado, false, &Controles::default());
+        draw::debug_overlay(&world, &stats, steps, 0, &n);
         draw::replay_badge(cursor, replay.inputs.len(), divergencia);
         stats.push_render((get_time() - t1) as f32);
 
@@ -1139,46 +1219,4 @@ async fn run_bench(target: usize, limite: Option<u32>) {
 
         next_frame().await;
     }
-}
-
-/// Traduce el teclado a un `InputFrame`.
-///
-/// Es el unico sitio donde se mapean teclas: la simulacion solo ve bits, asi
-/// que anadir mando o rebindeo mas adelante no toca nada del juego.
-fn read_input() -> InputFrame {
-    let mut f = InputFrame::NONE;
-    f.set(
-        InputFrame::UP,
-        is_key_down(KeyCode::Up) || is_key_down(KeyCode::W),
-    );
-    f.set(
-        InputFrame::DOWN,
-        is_key_down(KeyCode::Down) || is_key_down(KeyCode::S),
-    );
-    f.set(
-        InputFrame::LEFT,
-        is_key_down(KeyCode::Left) || is_key_down(KeyCode::A),
-    );
-    f.set(
-        InputFrame::RIGHT,
-        is_key_down(KeyCode::Right) || is_key_down(KeyCode::D),
-    );
-    f.set(
-        InputFrame::FOCUS,
-        is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift),
-    );
-    // El salto reutiliza arriba: en el modo con gravedad el eje vertical no
-    // mueve, asi que la tecla queda libre para lo que toca en un plataformas.
-    f.set(
-        InputFrame::JUMP,
-        is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) || is_key_down(KeyCode::K),
-    );
-    f.set(InputFrame::SHOOT, is_key_down(KeyCode::Z));
-    f.set(InputFrame::DASH, is_key_down(KeyCode::X));
-    f.set(InputFrame::PARRY, is_key_down(KeyCode::C));
-    f.set(
-        InputFrame::SUPER,
-        is_key_down(KeyCode::Space) || is_key_down(KeyCode::V),
-    );
-    f
 }

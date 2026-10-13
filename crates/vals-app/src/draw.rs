@@ -6,6 +6,7 @@ use macroquad::prelude::*;
 use vals_core::bullets::{Bullets, FLAG_PARRYABLE};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
+use crate::acciones::Nombres;
 use crate::bailarines;
 use crate::bullet_renderer::BulletRenderer;
 use crate::cartela;
@@ -348,13 +349,14 @@ fn draw_hud(world: &World, l: &Layout) {
 }
 
 /// Menu. De fondo corre el replay dorado, que es el modo atractor.
-/// El menu, con los controles del mando que haya puesto.
+/// El menu, con los controles de lo que se este usando.
 ///
-/// Si hay mando, la lista es **la del mando y solo la del mando**. Enterarse de
+/// La lista es **la del teclado o la del mando, nunca las dos**. Enterarse de
 /// que el super era el triangulo probando los cuatro botones es exactamente lo
 /// que una pantalla de controles existe para evitar, y una lista doble se lee
-/// peor que la que toca.
-pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 5]>) {
+/// peor que la que toca. Cual toca lo dice `acciones::Nombres`: lo ultimo que
+/// se ha tocado.
+pub fn menu(l: &Layout, world: &World, intentos: u32, n: &Nombres) {
     let cola = if intentos == 0 {
         String::new()
     } else {
@@ -365,24 +367,23 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 5]>) 
     // separadas porque no pesan lo mismo: lo primero es una invitacion y lo
     // segundo una chuleta. Antes eran dos (volando o con salto), pero desde la
     // ultima version el modo lo trae cada baile y no se elige aqui.
-    let lineas: Vec<String> = match mando {
-        Some(b) => vec![
-            format!("{}   entrar a la pista{cola}", b[4]),
-            "stick o cruceta   mover".to_owned(),
-            format!("{}  disparar     {}  dash", b[0], b[1]),
-            format!("{}  parry        {}  super", b[2], b[3]),
-            format!("{}  saltar       L2  focus", b[4]),
-            "Parriar las balas ROSAS llena la barra SUPER;".to_owned(),
-            format!("llena, {} limpia la pantalla y hace mucho dano.", b[3]),
-        ],
-        None => vec![
-            format!("Z   entrar a la pista{cola}"),
-            "flechas mover    Z disparar    X dash".to_owned(),
-            "C parry    ARRIBA saltar    SHIFT focus".to_owned(),
-            "Parriar las balas ROSAS llena la barra SUPER.".to_owned(),
-            "Llena, ESPACIO limpia la pantalla y hace mucho dano.".to_owned(),
-        ],
-    };
+    let lineas: Vec<String> = vec![
+        format!("{}   entrar a la pista{cola}", n.aceptar),
+        format!(
+            "{} mover    {} disparar    {} dash",
+            n.mover, n.disparar, n.dash
+        ),
+        format!(
+            "{} parry    {} saltar    {} focus",
+            n.parry, n.saltar, n.focus
+        ),
+        "Parriar las balas ROSAS llena la barra SUPER;".to_owned(),
+        format!("llena, {} limpia la pantalla y hace mucho dano.", n.super_),
+        format!(
+            "{} pausa y opciones    {} reintentar",
+            n.pausa, n.reintentar
+        ),
+    ];
 
     let o = l.to_screen(0.0, 0.0);
     let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
@@ -489,17 +490,17 @@ pub fn fin_de_partida(
     world: &World,
     caida: f32,
     tarjeta: Option<&libro::Tarjeta>,
-    mando: Option<[&str; 5]>,
+    n: &Nombres,
 ) {
     if world.victory {
         if caida >= 1.0 {
-            sello_de_victoria(l, world, tarjeta.is_some());
+            sello_de_victoria(l, world, tarjeta.is_some(), n);
             if let Some(t) = tarjeta {
-                libro::tarjeta_de_baile(t, l, mando);
+                libro::tarjeta_de_baile(t, l, n);
             }
         }
     } else {
-        sello_de_derrota(l, world);
+        sello_de_derrota(l, world, n);
     }
 }
 
@@ -508,7 +509,7 @@ pub fn fin_de_partida(
 /// Antes decia "FIN DEL VALS" hasta cuando se ganaba el tango: era el texto de
 /// cuando el juego tenia un solo baile. Ahora el sello lleva la tinta del baile
 /// ganado y su nombre, y el publico hace lo que se hace al acabar un numero.
-fn sello_de_victoria(l: &Layout, world: &World, con_tarjeta: bool) {
+fn sello_de_victoria(l: &Layout, world: &World, con_tarjeta: bool, n: &Nombres) {
     let o = l.to_screen(0.0, 0.0);
     let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
     draw_rectangle(o.x, o.y, w, h, fade(VEIL, 0.75));
@@ -551,17 +552,12 @@ fn sello_de_victoria(l: &Layout, world: &World, con_tarjeta: bool) {
         return;
     }
     y += 44.0;
+    let ayuda = format!(
+        "{} otra vez    {} volver a la pista",
+        n.reintentar, n.aceptar
+    );
     con_sombra(
-        |dx, c| {
-            fuentes::centrado(
-                "R otra vez    ESC volver a la pista",
-                cx + dx,
-                y + dx,
-                19.0,
-                Cara::Cuerpo,
-                c,
-            )
-        },
+        |dx, c| fuentes::centrado(&ayuda, cx + dx, y + dx, 19.0, Cara::Cuerpo, c),
         TEXT,
     );
 }
@@ -629,7 +625,7 @@ fn recorrido(world: &World) -> f32 {
 /// juego duro tiene que decirte si te acercaste**. Si llevas cien intentos en
 /// la ultima figura, cien intentos con esta barra son cien intentos con informacion, y
 /// sin ella son cien intentos a ciegas.
-fn sello_de_derrota(l: &Layout, world: &World) {
+fn sello_de_derrota(l: &Layout, world: &World, n: &Nombres) {
     let o = l.to_screen(0.0, 0.0);
     let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
     draw_rectangle(o.x, o.y, w, h, VEIL);
@@ -689,8 +685,11 @@ fn sello_de_derrota(l: &Layout, world: &World) {
     );
     y += 40.0;
 
-    for linea in ["R reintentar este baile", "ESC volver a la pista"] {
-        fuentes::centrado(linea, cx, y, 19.0, Cara::Cuerpo, TEXT);
+    for linea in [
+        format!("{} o {}  reintentar este baile", n.aceptar, n.reintentar),
+        format!("{}  volver a la pista", n.atras),
+    ] {
+        fuentes::centrado(&linea, cx, y, 19.0, Cara::Cuerpo, TEXT);
         y += 25.0;
     }
 }
@@ -1632,13 +1631,7 @@ pub fn bench_overlay(
     );
 }
 
-pub fn debug_overlay(
-    world: &World,
-    stats: &FrameStats,
-    steps: u32,
-    chispas: usize,
-    mando: Option<[&str; 5]>,
-) {
+pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32, chispas: usize, n: &Nombres) {
     let mut y = 26.0;
     stats_block(stats, steps, &mut y);
 
@@ -1721,17 +1714,13 @@ pub fn debug_overlay(
         &mut y,
     );
 
-    // Con los nombres del mando si hay mando. Esta es la linea que esta puesta
-    // todo el rato, asi que es la que de verdad se lee: tenerla en teclado
-    // mientras el menu decia otra cosa era peor que no tener ninguna.
-    let help = match mando {
-        Some(b) => format!(
-            "{} disparar  {} saltar  {} dash  {} parry  {} super  L2 focus  M mudo  F1  R  F3 pasar",
-            b[0], b[4], b[1], b[2], b[3]
-        ),
-        None => "Z disparar  X dash  C parry  ESPACIO super  SHIFT focus  M mudo  F1  R  F3 pasar"
-            .to_owned(),
-    };
+    // Con los nombres de lo que se este usando. Esta es la linea que esta
+    // puesta todo el rato, asi que es la que de verdad se lee: tenerla en
+    // teclado mientras el menu decia otra cosa era peor que no tener ninguna.
+    let help = format!(
+        "{} disparar  {} saltar  {} dash  {} parry  {} super  {} focus  {} pausa  {} reintentar  M mudo  F1  F3 pasar",
+        n.disparar, n.saltar, n.dash, n.parry, n.super_, n.focus, n.pausa, n.reintentar
+    );
     fuentes::texto(
         &help,
         X,
