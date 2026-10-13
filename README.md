@@ -56,6 +56,10 @@ lo dibujan las balas y su foto de larga exposicion.
   repite desde el mapa con `X` (cuadrado) a por las que falten.
 - **Un mapa** con un monumento por baile, que se abre segun avanzas, y el
   progreso guardado entre partidas.
+- **Nota y libro de baile**: cada baile ganado se puntua como en Cuphead
+  (tiempo, golpes, parries y supers, de D a A+) en una tarjeta con su sello, y
+  el libro guarda el mejor tiempo y la mejor nota de cada baile y cada paseo,
+  los intentos y en que figura se cae mas.
 - **Parry y super**: parriar las balas rosas llena el medidor y el super limpia
   la pantalla. El juego premia meterse entre las balas en vez de huir de todas.
 - **Dos formas de moverse**: los jefes se esquivan **volando**, como un danmaku
@@ -76,6 +80,7 @@ lo dibujan las balas y su foto de larga exposicion.
 | Super | `Espacio` | Triangulo / Y |
 | Focus (lento; en los paseos, plantarse y apuntar) | `Shift` | L1 / L2 |
 | Volver al mapa o al menu | `Esc` | Triangulo / Y, fuera del combate |
+| Abrir el libro de baile (en el menu) | `L` | Cuadrado / X |
 | Quitar el temblor de la tinta | `T` | |
 
 ## Como esta hecho

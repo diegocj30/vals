@@ -25,6 +25,7 @@ mod fuentes;
 mod guardado;
 mod hot;
 mod jefes;
+mod libro;
 mod mando;
 mod mapa;
 mod modista;
@@ -61,7 +62,8 @@ use zumo::Zumo;
 /// El paseo va entre la pista y el combate: la calle que se anda antes del
 /// jefe, si su baile tiene una y no se ha andado ya. La
 /// modista es la tienda del mapa. El prologo cuenta la historia antes de la
-/// primera visita a la pista, y desde el menu cuando se pida.
+/// primera visita a la pista, y desde el menu cuando se pida. El libro de
+/// baile, las marcas, se abre desde el menu.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Escena {
     Menu,
@@ -70,6 +72,7 @@ enum Escena {
     Paseo,
     Combate,
     Modista,
+    Libro,
 }
 
 /// "VALS" en ASCII. Semilla por defecto.
@@ -285,10 +288,14 @@ async fn run_game() {
     // vez, y de vuelta al menu si se ha pedido desde alli.
     let mut historia = prologo::Prologo::nuevo();
     let mut tras_prologo = Escena::Pista;
+    // El intento en curso, de baile o de paseo: lo que se apunta para la
+    // tarjeta del final y para el libro.
+    let mut intento = libro::Intento::default();
 
     loop {
         frames += 1;
         mando.actualizar();
+        let escena_antes = escena;
         if frames.is_multiple_of(HOT_RELOAD_EVERY)
             && let Some(defs) = hot.poll()
         {
@@ -367,6 +374,7 @@ async fn run_game() {
             recorder = Recorder::for_world(&world);
             accumulator = 0.0;
             intentos += 1;
+            intento = progreso.marcas.empezar(&pista.nodos[nodo_actual].nombre);
         }
         // En el paseo, R (o el parry tras el KO) vuelve a empezar la calle.
         // Morir en el paseo no te lleva al jefe ni te lo quita: se reintenta
@@ -376,6 +384,7 @@ async fn run_game() {
             && (is_key_pressed(KeyCode::R) || mando.pulsado(InputFrame::PARRY) && p.derrota)
         {
             *p = nuevo_paseo(&paseos[*i], &progreso);
+            intento = progreso.marcas.empezar(&paseos[*i].nombre);
             accumulator = 0.0;
         }
         // Start/Select del mando hacen de ESC: salir un escalon. En la calle
@@ -457,6 +466,7 @@ async fn run_game() {
                     let def = &paseos[k];
                     escena = Escena::Paseo;
                     paseo = Some((k, nuevo_paseo(def, &progreso)));
+                    intento = progreso.marcas.empezar(&def.nombre);
                     cartela = Some(
                         Cartela::prologo(&def.nombre, &def.subtitulo, Tema::de(jefe, 0).titulo())
                             .con_lema(prologo::lema_del_paseo(jefe)),
@@ -465,6 +475,7 @@ async fn run_game() {
                     escena = Escena::Combate;
                     (world, recorder, cartela) = empezar_baile(jefe, progreso.equipo);
                     intentos += 1;
+                    intento = progreso.marcas.empezar(&bailes[jefe].name);
                 }
                 accumulator = 0.0;
                 fundido.empezar(0.30);
@@ -477,9 +488,15 @@ async fn run_game() {
         // arriesgarse **y** acabar la calle, y morir despues de cogerla la
         // devuelve a su sitio. Un repaso vuelve a la pista, que el baile ya se
         // puede entrar directo.
+        //
+        // En la puerta sale su tarjeta: se sigue al aceptar, en cuanto se ha
+        // podido leer, o solo al rato.
         if escena == Escena::Paseo
             && let Some((k, p)) = paseo.as_ref()
-            && p.completado.is_some_and(|t| p.tick >= t + EN_LA_PUERTA)
+            && p.completado.is_some_and(|t| {
+                p.tick >= t + EN_LA_PUERTA
+                    && (p.tick >= t + libro::LEER && entrar || p.tick >= t + libro::TARJETA_PASEO)
+            })
         {
             let def = &paseos[*k];
             progreso.marcar(&def.nombre);
@@ -500,11 +517,23 @@ async fn run_game() {
                 (world, recorder, cartela) =
                     empezar_baile(pista.nodos[nodo_actual].jefe, progreso.equipo);
                 intentos += 1;
+                intento = progreso.marcas.empezar(&pista.nodos[nodo_actual].nombre);
             }
             accumulator = 0.0;
             fundido.empezar(0.30);
         }
 
+        // El libro de baile: L, o el gatillo de focus del mando (L1), que en el
+        // menu no hace nada; el cuadrado ya cuenta la historia. Se cierra con
+        // lo mismo, con ESC o con el circulo.
+        let libro_pulsado = is_key_pressed(KeyCode::L) || mando.pulsado(InputFrame::FOCUS);
+        if escena == Escena::Libro && (libro_pulsado || mando.pulsado(InputFrame::PARRY)) {
+            escena = Escena::Menu;
+            fundido.empezar(0.24);
+        } else if escena == Escena::Menu && libro_pulsado {
+            escena = Escena::Libro;
+            fundido.empezar(0.24);
+        }
         // Del menu a la pista, con Z. Antes Z entraba volando y X con salto,
         // y el modo valia para todos los bailes de la visita. Ya no hay nada
         // que elegir en la puerta: cada baile trae su modo, asi
@@ -568,10 +597,12 @@ async fn run_game() {
             && !p.terminado()
         {
             p.saltar();
+            intento.trampa = true;
             aviso = Some(("paseo saltado".to_owned(), false, 120));
         }
         if is_key_pressed(KeyCode::F3) && escena == Escena::Combate && !world.is_over() {
             world.saltar_el_baile();
+            intento.trampa = true;
             recorder = Recorder::for_world(&world);
             // El sonido se pide a mano: los eventos del mundo se recogen
             // dentro del bucle de simulacion, y el proximo tick ya los habra
@@ -616,10 +647,14 @@ async fn run_game() {
                     }
                 }
                 Escena::Pista => pista.step(input),
-                Escena::Modista | Escena::Prologo => {}
+                Escena::Modista | Escena::Prologo | Escena::Libro => {}
                 Escena::Paseo => {
                     if let Some((_, p)) = paseo.as_mut() {
+                        let andando = !p.terminado();
                         p.step(input);
+                        if andando {
+                            intento.apuntar(&mut progreso.marcas, &p.events, 0);
+                        }
                         eventos.merge(&p.events);
                         // Las chispas del paseo salen tick a tick: cada una
                         // tiene que salir de donde paso, y al final del frame
@@ -643,7 +678,13 @@ async fn run_game() {
                 }
                 Escena::Combate => {
                     let antes = (world.player.pos.x, world.player.pos.y);
+                    // Se apunta mientras se baila: el tick que gana cuenta y
+                    // los de la pantalla de victoria no.
+                    let bailando = !world.is_over();
                     world.step(input);
+                    if bailando {
+                        intento.apuntar(&mut progreso.marcas, &world.events, world.boss.phase);
+                    }
                     if world.events.player_died {
                         fantasma = Some((antes, get_time()));
                     }
@@ -730,6 +771,28 @@ async fn run_game() {
             progreso.guardar();
             marcado = true;
         }
+        // Fin de un intento ganado: la nota, las marcas y la tarjeta, una sola
+        // vez. Y tras leerla, aceptar vuelve a la pista: con el mando no hay
+        // ESC en el combate.
+        if intento.tarjeta.is_none() {
+            if escena == Escena::Combate && world.victory {
+                intento.cerrar_baile(&mut progreso.marcas);
+                progreso.guardar();
+            } else if escena == Escena::Paseo
+                && let Some((_, p)) = paseo.as_ref()
+                && p.completado.is_some()
+            {
+                intento.cerrar_paseo(&mut progreso.marcas, (p.fichas_cogidas(), p.fichas.len()));
+            }
+        }
+        if escena == Escena::Combate
+            && world.victory
+            && entrar
+            && intento.tarjeta.as_ref().is_some_and(libro::Tarjeta::lista)
+        {
+            escena = Escena::Pista;
+            fundido.empezar(0.30);
+        }
 
         // Fraccion de tick pendiente. Es lo que permite que el render vaya a
         // 144 Hz con la simulacion a 60 sin que se vea a saltos.
@@ -767,9 +830,17 @@ async fn run_game() {
                 Some(b) => [b[4], b[1]],
                 None => ["Z", "X"],
             };
-            mapa::pista(&pista, alpha, &layout, &fichas, teclas);
+            let notas: Vec<_> = pista
+                .nodos
+                .iter()
+                .map(|n| progreso.marcas.nota(&n.nombre))
+                .collect();
+            mapa::pista(&pista, alpha, &layout, &fichas, &notas, teclas);
         } else if escena == Escena::Prologo {
             historia.dibujar(&layout, mando.conectado().then(|| mando.botones()));
+        } else if escena == Escena::Libro {
+            let b = mando.conectado().then(|| mando.botones());
+            libro::pagina(&layout, &progreso, &bailes, &paseos, b);
         } else if escena == Escena::Modista {
             tienda.dibujar(
                 &progreso,
@@ -785,6 +856,10 @@ async fn run_game() {
             let camara = layout.sacudido(-vec2(calle::camara(p, alpha), calle::camara_y(p, alpha)));
             draw::particulas(&chispas, &camara);
             calle::encima(p, &layout);
+            if let Some(t) = intento.tarjeta.as_ref() {
+                let b = mando.conectado().then(|| mando.botones());
+                libro::tarjeta_de_paseo(t, &p.def.nombre, &lamina, b);
+            }
         } else {
             let mostrado = match (escena, attract.as_ref()) {
                 (Escena::Menu, Some(a)) => &a.world,
@@ -802,15 +877,18 @@ async fn run_game() {
                 draw::fantasma(&world, donde, (get_time() - cuando) as f32, &layout);
             }
             if escena == Escena::Menu {
-                draw::menu(
+                let b = mando.conectado().then(|| mando.botones());
+                draw::menu(&layout, mostrado, intentos, b);
+                libro::aviso_en_el_menu(&layout, b);
+                prologo::en_el_menu(&layout, b);
+            } else if world.is_over() {
+                draw::fin_de_partida(
                     &layout,
-                    mostrado,
-                    intentos,
+                    &world,
+                    jefes::caida(caida.unwrap_or(0.0)),
+                    intento.tarjeta.as_ref(),
                     mando.conectado().then(|| mando.botones()),
                 );
-                prologo::en_el_menu(&layout, mando.conectado().then(|| mando.botones()));
-            } else if world.is_over() {
-                draw::fin_de_partida(&layout, &world, jefes::caida(caida.unwrap_or(0.0)));
             }
         }
         if show_debug && escena == Escena::Combate {
@@ -842,6 +920,11 @@ async fn run_game() {
             }
         }
         stats.push_render((get_time() - t1) as f32);
+        // Al cambiar de escena se guarda: el tiempo jugado y los golpes de un
+        // intento que se deja a medias no tienen otro momento.
+        if escena != escena_antes {
+            progreso.guardar();
+        }
 
         next_frame().await;
     }

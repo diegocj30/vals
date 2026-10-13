@@ -20,9 +20,15 @@
 //! version no sube: un guardado de antes se lee igual —con cero fichas y nada
 //! comprado— y uno de ahora abierto por una version vieja solo le da nombres de
 //! baile que no existen, que ignora.
+//!
+//! Las marcas del libro de baile (`marca:` y `jugado:`) entran igual: una
+//! version vieja las tomaria por bailes que no existen, y al guardar las
+//! devolveria tal cual.
 
 use vals_core::Equipo;
 use vals_core::equipo::{Amuleto, Tiro};
+
+use crate::libro::Marcas;
 
 /// Cabecera del formato. Si cambia lo que se guarda **de forma que lo viejo no
 /// se entienda**, sube el numero y los guardados viejos se ignoran solos.
@@ -58,6 +64,8 @@ pub struct Guardado {
     /// Si ya se vio el prologo, que sale solo la primera vez. Un guardado de
     /// antes no lo lleva y lo vera una vez, que es justo lo que se quiere.
     pub prologo_visto: bool,
+    /// Records, intentos, caidas y tiempo jugado: el libro de baile.
+    pub marcas: Marcas,
 }
 
 impl Guardado {
@@ -125,6 +133,12 @@ impl Guardado {
         if self.equipo.amuleto != Amuleto::default() {
             poner(AMULETO, self.equipo.amuleto.nombre());
         }
+        for m in self.marcas.lineas() {
+            poner(MARCA, &m);
+        }
+        if self.marcas.jugado > 0 {
+            poner(JUGADO, &self.marcas.jugado.to_string());
+        }
         // Una version vieja lo leeria como un baile que no existe, y lo ignora.
         if self.prologo_visto {
             poner("", PROLOGO);
@@ -154,6 +168,10 @@ impl Guardado {
                 g.equipo.amuleto = Amuleto::por_nombre(a).unwrap_or_default();
             } else if n == PROLOGO {
                 g.prologo_visto = true;
+            } else if let Some(m) = n.strip_prefix(MARCA) {
+                g.marcas.leer(m);
+            } else if let Some(j) = n.strip_prefix(JUGADO) {
+                g.marcas.jugado = j.parse().unwrap_or(0);
             } else {
                 g.bailados.push(n.to_owned());
             }
@@ -167,6 +185,8 @@ const COMPRA: &str = "compra:";
 const TIRO: &str = "tiro:";
 const AMULETO: &str = "amuleto:";
 const PROLOGO: &str = "visto:prologo";
+const MARCA: &str = "marca:";
+const JUGADO: &str = "jugado:";
 
 fn clave_ficha(paseo: &str, i: usize) -> String {
     format!("{paseo}:{i}")
@@ -340,6 +360,36 @@ mod tests {
         assert!(leido.prologo_visto);
         assert!(!leido.tiene(PROLOGO), "no es un baile");
         assert_eq!(leido.bailados, ["El Vals"]);
+    }
+
+    #[test]
+    fn las_marcas_se_vuelven_a_leer_y_lo_viejo_carga_sin_ninguna() {
+        let mut g = Guardado::default();
+        g.marcar("El Vals");
+        let mut i = g.marcas.empezar("El Vals");
+        i.apuntar(
+            &mut g.marcas,
+            &vals_core::Events {
+                player_died: true,
+                ..Default::default()
+            },
+            1,
+        );
+        i.cerrar_baile(&mut g.marcas);
+        g.marcas
+            .empezar("El paseo de Viena")
+            .cerrar_paseo(&mut g.marcas, (1, 4));
+        let leido = Guardado::desde_texto(&g.a_texto());
+        assert_eq!(leido, g);
+        assert!(leido.marcas.nota("El Vals").is_some());
+        assert!(!leido.tiene("marca:El Vals"), "no es un baile");
+        assert_eq!(leido.marcas.jugado, 1);
+
+        // Un guardado de antes del libro: todo lo demas igual, y el libro en
+        // blanco.
+        let viejo = Guardado::desde_texto("VALS1;El Vals;ficha:El paseo de Viena:2;tiro:Abanico");
+        assert!(viejo.tiene("El Vals") && viejo.tiene_ficha("El paseo de Viena", 2));
+        assert_eq!(viejo.marcas, crate::libro::Marcas::default());
     }
 
     #[test]

@@ -13,11 +13,13 @@
 //! la perspectiva, los caminos y los monumentos solo existen aqui.
 
 use macroquad::prelude::*;
+use vals_core::nota::Nota;
 use vals_core::pista::{ENTRADA, MODISTA, Nodo, Pista};
 use vals_core::{ARENA_H, ARENA_W};
 
 use crate::draw::{Layout, METER_FULL, TEXT_DIM, TITLE, fade, paspartu};
 use crate::fuentes::{self, Cara};
+use crate::libro;
 use crate::modista;
 use crate::paleta::{self, LUZ, ORO, PAPEL, PARED, TARIMA, TINTA, TINTA_TENUE, VETA};
 use crate::protagonista;
@@ -675,7 +677,14 @@ fn placa(s: Vec2, nombre: &str, cerrado: bool) -> Rect {
 
 /// Un baile plantado en la pista: el foco, su monumento, su placa y lo que
 /// diga su estado.
-fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32, fichas: Option<(usize, usize)>) {
+fn dibujar_nodo(
+    l: &Layout,
+    nodo: &Nodo,
+    abierto: bool,
+    t: f32,
+    fichas: Option<(usize, usize)>,
+    nota: Option<Nota>,
+) {
     let (s, escala) = suelo(l, nodo.pos.x, nodo.pos.y);
     let k = l.len(TAMANO) * escala;
     let cerrado = !abierto;
@@ -731,6 +740,19 @@ fn dibujar_nodo(l: &Layout, nodo: &Nodo, abierto: bool, t: f32, fichas: Option<(
             Cara::Cuerpo,
             fade(LUZ, 0.85),
         );
+        // Y su mejor nota, estampada al lado: lo que dice desde lejos a que
+        // baile volver a por mas. Debajo de la placa y no a su lado, que ahi
+        // la tapaba el monumento de delante.
+        if let Some(n) = nota {
+            let ancho = fuentes::medir("bailado", 14.0, Cara::Cuerpo).width;
+            libro::sello(
+                vec2(s.x + ancho * 0.5 + 16.0, y + h + 11.0),
+                12.0,
+                n,
+                true,
+                1.0,
+            );
+        }
     }
 
     // Las fichas de su paseo, si ya se anduvo: llenas las tuyas y huecas las
@@ -791,8 +813,16 @@ pub struct Fichas {
 }
 
 /// El mapa entero. `teclas` son los nombres de aceptar y de dash en lo que se
-/// este usando, para que la ayuda diga el boton que hay que pulsar.
-pub fn pista(p: &Pista, alpha: f32, l: &Layout, fichas: &Fichas, teclas: [&str; 2]) {
+/// este usando, para que la ayuda diga el boton que hay que pulsar. `notas`
+/// es la mejor de cada nodo, si se ha ganado.
+pub fn pista(
+    p: &Pista,
+    alpha: f32,
+    l: &Layout,
+    fichas: &Fichas,
+    notas: &[Option<Nota>],
+    teclas: [&str; 2],
+) {
     clear_background(PAPEL);
     let o = l.to_screen(0.0, 0.0);
     draw_rectangle(o.x, o.y, l.len(ARENA_W), l.len(ARENA_H), TARIMA);
@@ -849,7 +879,8 @@ pub fn pista(p: &Pista, alpha: f32, l: &Layout, fichas: &Fichas, teclas: [&str; 
     let pinta = |pieza: &Pieza| match *pieza {
         Pieza::Baile(i) => {
             let suyas = fichas.paseos.get(i).copied().flatten();
-            dibujar_nodo(l, &p.nodos[i], p.abierto(i), t, suyas);
+            let nota = notas.get(i).copied().flatten();
+            dibujar_nodo(l, &p.nodos[i], p.abierto(i), t, suyas, nota);
         }
         Pieza::Modista => tienda(l, t, p.en_la_modista()),
         Pieza::Atrezo(k) => {

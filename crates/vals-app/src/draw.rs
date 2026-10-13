@@ -11,6 +11,7 @@ use crate::bullet_renderer::BulletRenderer;
 use crate::cartela;
 use crate::fuentes::{self, Cara};
 use crate::jefes;
+use crate::libro;
 use crate::music::Tema;
 use crate::paleta;
 use crate::particulas::Particulas;
@@ -480,10 +481,22 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, mando: Option<[&str; 5]>) 
 
 /// El sello del final. El de la victoria espera a que el jefe acabe de caer
 /// (`caida` a 1): primero se ve morir, y luego se celebra.
-pub fn fin_de_partida(l: &Layout, world: &World, caida: f32) {
+///
+/// Con `tarjeta`, la victoria lleva debajo la tarjeta de resultado con la nota
+/// (ver `libro`), y el sello sube para dejarle sitio.
+pub fn fin_de_partida(
+    l: &Layout,
+    world: &World,
+    caida: f32,
+    tarjeta: Option<&libro::Tarjeta>,
+    mando: Option<[&str; 5]>,
+) {
     if world.victory {
         if caida >= 1.0 {
-            sello_de_victoria(l, world);
+            sello_de_victoria(l, world, tarjeta.is_some());
+            if let Some(t) = tarjeta {
+                libro::tarjeta_de_baile(t, l, mando);
+            }
         }
     } else {
         sello_de_derrota(l, world);
@@ -495,7 +508,7 @@ pub fn fin_de_partida(l: &Layout, world: &World, caida: f32) {
 /// Antes decia "FIN DEL VALS" hasta cuando se ganaba el tango: era el texto de
 /// cuando el juego tenia un solo baile. Ahora el sello lleva la tinta del baile
 /// ganado y su nombre, y el publico hace lo que se hace al acabar un numero.
-fn sello_de_victoria(l: &Layout, world: &World) {
+fn sello_de_victoria(l: &Layout, world: &World, con_tarjeta: bool) {
     let o = l.to_screen(0.0, 0.0);
     let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
     draw_rectangle(o.x, o.y, w, h, fade(VEIL, 0.75));
@@ -503,7 +516,7 @@ fn sello_de_victoria(l: &Layout, world: &World) {
 
     let (tinta, _) = paleta::del_baile(world.baile);
     let cx = o.x + w * 0.5;
-    let mut y = o.y + h * 0.36;
+    let mut y = o.y + h * if con_tarjeta { 0.17 } else { 0.36 };
     let ancho = fuentes::medir("¡BRAVO!", 72.0, Cara::Titulo).width;
     let (rw, rh) = (ancho * 0.5 + 40.0, 50.0);
     draw_rectangle(
@@ -533,6 +546,10 @@ fn sello_de_victoria(l: &Layout, world: &World) {
         |dx, c| fuentes::centrado(&nombre, cx + dx, y + dx, 24.0, Cara::Cuerpo, c),
         TITLE,
     );
+    // La tarjeta lleva su propia ayuda, con los botones del mando.
+    if con_tarjeta {
+        return;
+    }
     y += 44.0;
     con_sombra(
         |dx, c| {
