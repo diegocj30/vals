@@ -182,9 +182,17 @@ impl Sfx {
             // Casi un susurro: pasa muchas veces seguidas.
             Sfx::Graze => vec![Voz::new(Sine, 2200.0, 2600.0, 0.03, 0.06, 4.0)],
             Sfx::Impacto => vec![Voz::new(Noise, 1.0, 1.0, 0.045, 0.11, 5.0)],
+            // Pasar de figura es una buena noticia y tiene que sonar a eso:
+            // un arpegio de campanillas que SUBE (sol, si, re, sol). Antes era
+            // un barrido de sierra hacia abajo, casi el mismo gesto que el de
+            // perder una vida, y quien lo oia por primera vez preguntaba que
+            // le habia dado. Ahora la muerte es lo unico que baja y raspa.
             Sfx::Fase => vec![
-                Voz::new(Saw, 520.0, 160.0, 0.45, 0.28, 1.6),
-                Voz::new(Square, 260.0, 80.0, 0.40, 0.16, 1.8),
+                Voz::new(Sine, 784.0, 784.0, 0.16, 0.22, 2.4),
+                Voz::new(Sine, 988.0, 988.0, 0.16, 0.22, 2.4).tras(0.07),
+                Voz::new(Sine, 1175.0, 1175.0, 0.16, 0.22, 2.4).tras(0.14),
+                Voz::new(Sine, 1568.0, 1568.0, 0.45, 0.26, 1.6).tras(0.21),
+                Voz::new(Sine, 3136.0, 3136.0, 0.35, 0.06, 2.0).tras(0.21),
             ],
             Sfx::Muerte => vec![
                 Voz::new(Noise, 1.0, 1.0, 0.45, 0.28, 2.0),

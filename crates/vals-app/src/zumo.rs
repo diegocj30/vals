@@ -23,14 +23,16 @@ const MINIMO: f32 = 0.15;
 /// Amplitud de la sacudida, en unidades de arena, para cada suceso.
 const SACUDIDA_IMPACTO: f32 = 1.4;
 const SACUDIDA_PARRY: f32 = 4.0;
-const SACUDIDA_FASE: f32 = 9.0;
+// Poca y sin frenazo: un cambio de figura con la misma sacudida y el mismo
+// paron que un golpe se confundia con que te habian dado.
+const SACUDIDA_FASE: f32 = 3.0;
 const SACUDIDA_SUPER: f32 = 12.0;
 const SACUDIDA_MUERTE: f32 = 14.0;
 const SACUDIDA_JEFE: f32 = 16.0;
 
 /// Frames congelados para cada suceso.
 const FRENO_PARRY: u32 = 3;
-const FRENO_FASE: u32 = 5;
+const FRENO_FASE: u32 = 0;
 const FRENO_SUPER: u32 = 6;
 const FRENO_MUERTE: u32 = 9;
 const FRENO_JEFE: u32 = 10;

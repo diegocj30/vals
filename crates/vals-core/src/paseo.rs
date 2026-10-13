@@ -652,6 +652,12 @@ pub struct Paseo {
     siguiente: usize,
     /// El ultimo sitio de acera pisado, de donde se vuelve tras caer a un foso.
     seguro: Vec2,
+    /// Tras caer a un foso, el lado no cuenta hasta que se suelta. Quien se
+    /// cae suele seguir con el stick a la derecha sin darse cuenta de que ha
+    /// vuelto a la acera, y se tiraba otra vez al mismo foso: tres caidas
+    /// seguidas y fuera, sin haber podido reaccionar. Es lo que hacen los
+    /// juegos de plataformas: despues de reaparecer hay que volver a pulsar.
+    soltar: bool,
     prev_input: InputFrame,
     rng: Pcg32,
 }
@@ -692,6 +698,7 @@ impl Paseo {
             impacto: salida,
             siguiente: 0,
             seguro: salida,
+            soltar: false,
             prev_input: InputFrame::NONE,
             rng: Pcg32::new(seed),
         }
@@ -759,6 +766,7 @@ impl Paseo {
             return;
         }
 
+        let input = self.sin_lado_hasta_soltar(input);
         self.mover(input);
         self.caida();
         self.recoger();
@@ -991,6 +999,20 @@ impl Paseo {
         }
     }
 
+    /// Tras reaparecer, quita izquierda, derecha y dash hasta que se suelte el
+    /// lado. Saltar, disparar y lo demas siguen valiendo.
+    fn sin_lado_hasta_soltar(&mut self, input: InputFrame) -> InputFrame {
+        const LADO: u16 = InputFrame::LEFT | InputFrame::RIGHT;
+        if !self.soltar {
+            return input;
+        }
+        if input.bits() & LADO == 0 {
+            self.soltar = false;
+            return input;
+        }
+        InputFrame::from_bits(input.bits() & !(LADO | InputFrame::DASH))
+    }
+
     /// Caer a un foso cuesta un golpe y te devuelve a la ultima acera pisada.
     fn caida(&mut self) {
         let p = &self.jugadora;
@@ -1002,6 +1024,7 @@ impl Paseo {
         p.prev_pos = self.seguro;
         p.vel = Vec2::ZERO;
         p.on_ground = true;
+        self.soltar = true;
         self.golpe();
     }
 
@@ -1720,6 +1743,7 @@ impl Paseo {
         h.write_u64(u64::from(self.vidas));
         h.write_vec2(self.apunta);
         h.write_vec2(self.seguro);
+        h.write_u64(u64::from(self.soltar));
         h.write_u64(self.siguiente as u64);
         for e in &self.enemigos {
             h.write_u64(u64::from(e.tipo.como_u8()));
@@ -1986,6 +2010,29 @@ mod tests {
         assert!(p.def.hay_suelo(p.jugadora.pos.x), "vuelve a la acera");
         assert!(p.jugadora.pos.x < 400.0, "a la de antes del foso");
         assert!(p.jugadora.is_invulnerable(), "y con margen para respirar");
+    }
+
+    #[test]
+    fn tras_caer_hay_que_soltar_el_lado_para_volver_a_andar() {
+        let mut def = calle();
+        def.suelo = vec![(0.0, 400.0), (700.0, 3200.0)];
+        let mut p = Paseo::new(def, 1);
+        while !p.events.player_died {
+            p.step(pulsar(DERECHA));
+        }
+        // Sigue con el stick a la derecha: no se mueve, no se vuelve a tirar.
+        let x = p.jugadora.pos.x;
+        for _ in 0..120 {
+            p.step(pulsar(DERECHA));
+        }
+        assert_eq!(p.vidas, VIDAS - 1, "no se cae otra vez en bucle");
+        assert!((p.jugadora.pos.x - x).abs() < 1.0, "sin soltar no anda");
+        // Suelta un tick y vuelve a pulsar: ahora si.
+        p.step(InputFrame::NONE);
+        for _ in 0..30 {
+            p.step(pulsar(DERECHA));
+        }
+        assert!(p.jugadora.pos.x > x + 20.0, "tras soltar, anda");
     }
 
     #[test]
