@@ -78,6 +78,9 @@ pub struct Cartela {
     orden: String,
     figura: String,
     pieza: String,
+    /// Una linea de la historia debajo de todo (ver `prologo`). Vacia en las
+    /// que no la llevan.
+    lema: String,
     restante: f32,
     total: f32,
     /// Si para el mundo mientras se lee.
@@ -92,6 +95,7 @@ impl Cartela {
             orden: ordinal(0),
             figura: figura.to_owned(),
             pieza: pieza.to_owned(),
+            lema: String::new(),
             restante: ENTRADA,
             total: ENTRADA,
             para: true,
@@ -109,6 +113,7 @@ impl Cartela {
             orden: ordinal(numero),
             figura: figura.to_owned(),
             pieza: String::new(),
+            lema: String::new(),
             restante: FIGURA,
             total: FIGURA,
             para: false,
@@ -125,6 +130,14 @@ impl Cartela {
         }
     }
 
+    /// La misma, con una linea de la historia al pie.
+    pub fn con_lema(self, lema: &str) -> Self {
+        Self {
+            lema: lema.to_owned(),
+            ..self
+        }
+    }
+
     /// El grito de salida, al acabar la cartela de entrada. Corto, grande y sin
     /// parar el mundo: el combate ya ha empezado.
     pub fn a_bailar() -> Self {
@@ -138,6 +151,7 @@ impl Cartela {
             orden: String::new(),
             figura: String::new(),
             pieza: String::new(),
+            lema: String::new(),
             restante: GRITO,
             total: GRITO,
             para: false,
@@ -249,6 +263,18 @@ impl Cartela {
 
         if !self.pieza.is_empty() {
             fuentes::centrado(&self.pieza, cx, y, 16.0, Cara::Cuerpo, fade(TENUE, a));
+            y += 46.0;
+        }
+
+        if !self.lema.is_empty() {
+            fuentes::centrado(
+                &self.lema,
+                cx,
+                y,
+                17.0,
+                Cara::Cuerpo,
+                fade(SUBRAYA, a * 0.85),
+            );
         }
     }
 }

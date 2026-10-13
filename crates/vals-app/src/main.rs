@@ -32,6 +32,7 @@ mod music;
 mod paleta;
 mod particulas;
 mod pelicula;
+mod prologo;
 mod protagonista;
 mod replay_io;
 mod salon;
@@ -59,10 +60,12 @@ use zumo::Zumo;
 ///
 /// El paseo va entre la pista y el combate: la calle que se anda antes del
 /// jefe, si su baile tiene una y no se ha andado ya. La
-/// modista es la tienda del mapa.
+/// modista es la tienda del mapa. El prologo cuenta la historia antes de la
+/// primera visita a la pista, y desde el menu cuando se pida.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Escena {
     Menu,
+    Prologo,
     Pista,
     Paseo,
     Combate,
@@ -278,6 +281,10 @@ async fn run_game() {
     let mut caida: Option<f32> = None;
     let mut repaso = false;
     let mut tienda = modista::Modista::new();
+    // El prologo en curso, y adonde se va al acabarlo: a la pista la primera
+    // vez, y de vuelta al menu si se ha pedido desde alli.
+    let mut historia = prologo::Prologo::nuevo();
+    let mut tras_prologo = Escena::Pista;
 
     loop {
         frames += 1;
@@ -373,7 +380,10 @@ async fn run_game() {
         }
         // Start/Select del mando hacen de ESC: salir un escalon. En la calle
         // no, que alli el super es el super.
-        if is_key_pressed(KeyCode::Escape) || mando.pulsado(InputFrame::SUPER) && !jugando {
+        // El prologo se salta con lo mismo, pero eso lo mira el.
+        if escena != Escena::Prologo
+            && (is_key_pressed(KeyCode::Escape) || mando.pulsado(InputFrame::SUPER) && !jugando)
+        {
             // Se sale un escalon cada vez: del baile o del paseo a la pista,
             // de la pista al menu.
             escena = match escena {
@@ -447,11 +457,10 @@ async fn run_game() {
                     let def = &paseos[k];
                     escena = Escena::Paseo;
                     paseo = Some((k, nuevo_paseo(def, &progreso)));
-                    cartela = Some(Cartela::prologo(
-                        &def.nombre,
-                        &def.subtitulo,
-                        Tema::de(jefe, 0).titulo(),
-                    ));
+                    cartela = Some(
+                        Cartela::prologo(&def.nombre, &def.subtitulo, Tema::de(jefe, 0).titulo())
+                            .con_lema(prologo::lema_del_paseo(jefe)),
+                    );
                 } else {
                     escena = Escena::Combate;
                     (world, recorder, cartela) = empezar_baile(jefe, progreso.equipo);
@@ -502,12 +511,52 @@ async fn run_game() {
         // que la X no hace nada aqui. Dejarla como sinonimo seria un segundo
         // boton que no dice nada, y el menu tendria que explicar por que hay
         // dos.
+        //
+        // La primera vez, antes de la pista, la historia. Y la X (cuadrado)
+        // la vuelve a contar, que es el mismo boton secundario que en la pista.
         if escena == Escena::Menu && (is_key_pressed(KeyCode::Z) || mando.pulsado(InputFrame::JUMP))
         {
             audio.play(Sfx::Empezar, 1.0);
-            escena = Escena::Pista;
+            escena = if progreso.prologo_visto {
+                Escena::Pista
+            } else {
+                historia = prologo::Prologo::nuevo();
+                tras_prologo = Escena::Pista;
+                Escena::Prologo
+            };
             accumulator = 0.0;
             fundido.empezar(0.30);
+        } else if escena == Escena::Menu
+            && (is_key_pressed(KeyCode::X) || mando.pulsado(InputFrame::DASH))
+        {
+            escena = Escena::Prologo;
+            historia = prologo::Prologo::nuevo();
+            tras_prologo = Escena::Menu;
+            fundido.empezar(0.30);
+        }
+        // El prologo va despues del menu y de la pista a proposito: la tecla
+        // que entra en el no puede leerse dos veces (la gracia la tapa), y la
+        // que lo acaba no puede entrar a un baile en el mismo frame.
+        if escena == Escena::Prologo {
+            historia.step(frame_dt);
+            if is_key_pressed(KeyCode::Z)
+                || is_key_pressed(KeyCode::Enter)
+                || mando.pulsado(InputFrame::JUMP)
+            {
+                historia.avanzar();
+            }
+            if is_key_pressed(KeyCode::Escape) || mando.pulsado(InputFrame::SUPER) {
+                historia.saltar();
+            }
+            if historia.acabado() {
+                escena = tras_prologo;
+                if !progreso.prologo_visto {
+                    progreso.prologo_visto = true;
+                    progreso.guardar();
+                }
+                accumulator = 0.0;
+                fundido.empezar(0.30);
+            }
         }
         // Saltarse el baile. Es una trampa y esta puesta a proposito: ver
         // como avanza el juego no deberia costar pasarse el jefe cada vez.
@@ -567,7 +616,7 @@ async fn run_game() {
                     }
                 }
                 Escena::Pista => pista.step(input),
-                Escena::Modista => {}
+                Escena::Modista | Escena::Prologo => {}
                 Escena::Paseo => {
                     if let Some((_, p)) = paseo.as_mut() {
                         p.step(input);
@@ -690,7 +739,7 @@ async fn run_game() {
         let t1 = get_time();
         // El paseo es apaisado; todo lo demas, la arena de siempre.
         let lamina = match escena {
-            Escena::Paseo => draw::Layout::para(VISTA_W, VISTA_H),
+            Escena::Paseo | Escena::Prologo => draw::Layout::para(VISTA_W, VISTA_H),
             _ => draw::Layout::compute(),
         };
         let layout = lamina.sacudido(zumo.desplazamiento());
@@ -719,6 +768,8 @@ async fn run_game() {
                 None => ["Z", "X"],
             };
             mapa::pista(&pista, alpha, &layout, &fichas, teclas);
+        } else if escena == Escena::Prologo {
+            historia.dibujar(&layout, mando.conectado().then(|| mando.botones()));
         } else if escena == Escena::Modista {
             tienda.dibujar(
                 &progreso,
@@ -757,6 +808,7 @@ async fn run_game() {
                     intentos,
                     mando.conectado().then(|| mando.botones()),
                 );
+                prologo::en_el_menu(&layout, mando.conectado().then(|| mando.botones()));
             } else if world.is_over() {
                 draw::fin_de_partida(&layout, &world, jefes::caida(caida.unwrap_or(0.0)));
             }
@@ -812,7 +864,8 @@ fn empezar_baile(jefe: usize, equipo: Equipo) -> (World, Recorder, Option<Cartel
         &world.boss.name,
         world.boss.phase_name(),
         Tema::de(world.baile, 0).titulo(),
-    );
+    )
+    .con_lema(prologo::lema_del_baile(world.baile));
     (world, recorder, Some(cartela))
 }
 

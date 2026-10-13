@@ -55,6 +55,9 @@ pub struct Guardado {
     pub compras: Vec<String>,
     /// Lo que se lleva puesto.
     pub equipo: Equipo,
+    /// Si ya se vio el prologo, que sale solo la primera vez. Un guardado de
+    /// antes no lo lleva y lo vera una vez, que es justo lo que se quiere.
+    pub prologo_visto: bool,
 }
 
 impl Guardado {
@@ -122,6 +125,10 @@ impl Guardado {
         if self.equipo.amuleto != Amuleto::default() {
             poner(AMULETO, self.equipo.amuleto.nombre());
         }
+        // Una version vieja lo leeria como un baile que no existe, y lo ignora.
+        if self.prologo_visto {
+            poner("", PROLOGO);
+        }
         out
     }
 
@@ -145,6 +152,8 @@ impl Guardado {
                 g.equipo.tiro = Tiro::por_nombre(t).unwrap_or_default();
             } else if let Some(a) = n.strip_prefix(AMULETO) {
                 g.equipo.amuleto = Amuleto::por_nombre(a).unwrap_or_default();
+            } else if n == PROLOGO {
+                g.prologo_visto = true;
             } else {
                 g.bailados.push(n.to_owned());
             }
@@ -157,6 +166,7 @@ const FICHA: &str = "ficha:";
 const COMPRA: &str = "compra:";
 const TIRO: &str = "tiro:";
 const AMULETO: &str = "amuleto:";
+const PROLOGO: &str = "visto:prologo";
 
 fn clave_ficha(paseo: &str, i: usize) -> String {
     format!("{paseo}:{i}")
@@ -318,6 +328,18 @@ mod tests {
         assert_eq!(g.equipo, Equipo::default());
         // Y sin fichas ni equipo se escribe igual que entonces.
         assert_eq!(g.a_texto(), "VALS1;El Vals;El paseo de Viena");
+    }
+
+    #[test]
+    fn el_prologo_visto_se_guarda_y_lo_de_antes_no_lo_ha_visto() {
+        let viejo = Guardado::desde_texto("VALS1;El Vals");
+        assert!(!viejo.prologo_visto, "un guardado de antes tiene que verlo");
+        let mut g = viejo.clone();
+        g.prologo_visto = true;
+        let leido = Guardado::desde_texto(&g.a_texto());
+        assert!(leido.prologo_visto);
+        assert!(!leido.tiene(PROLOGO), "no es un baile");
+        assert_eq!(leido.bailados, ["El Vals"]);
     }
 
     #[test]

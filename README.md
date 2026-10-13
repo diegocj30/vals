@@ -12,6 +12,15 @@ sin instalar nada.
 |---|---|
 | ![Combate contra El Vals](docs/media/jefe.gif) | ![El mapa del juego](docs/media/mapa.gif) |
 
+## La historia
+
+Hacia 1900, el Gran Salon viaja en tren de ciudad en ciudad. Una noche, al dar
+las doce, sus cosas cobran vida y se escapan con la musica, cada una a su
+ciudad. La bailarina del lazo escarlata sale a buscarla: calle a calle por los
+paseos, y baile a baile contra cada objeto, que solo devuelve la musica a quien
+le baile mejor. Se cuenta en un prologo de cinco laminas que se vuelve a ver
+desde el menu con `X` (cuadrado).
+
 ## Cada jefe es un baile
 
 Y no de nombre: cada uno tiene **un verbo del motor que es solo suyo**, cada fase
