@@ -12,7 +12,7 @@ the pattern's waits land **on the beat of its music**.
 | **The Waltz** | `Turn` | the aim rotates, and bullets come out in a spiral | 3/4 |
 | **The Tango** | negative `accel` | they fly out, stop dead and come back the way they came | accented 4/4 |
 | **The Charleston** | `spin` | they fly in arcs | 3-3-2 clave |
-| **The Cancan** | short `ttl` | they cut across a slice of the floor and fade away | 2/4, the galop |
+| **The Can-can** | short `ttl` | they cut across a slice of the floor and fade away | 2/4, the galop |
 
 No dance borrowing its neighbor's verb isn't just an intention: a test enforces
 it, `cada_baile_tiene_su_verbo_y_no_el_del_vecino` ("each dance has its own
@@ -142,11 +142,11 @@ the second eighth of each beat lands late, and that is where the needles go.
 |---|---|
 | <img src="media/partituras/charleston-1.svg" width="300" alt="The basic"> | **1. The basic.** On the floor: the 1923 step, pivoting on the ball of the foot and kicking forward and back.<br><br>In the game: one kick on every hit of the clave, a fan that flies out to one side and sweeps toward the other. Two layers per kick, one faster than the other, and the corridor between them is where you cross. |
 | <img src="media/partituras/charleston-2.svg" width="300" alt="Bee's knees"> | **2. Bee's knees.** On the floor: hands on the knees; the knees come together, the hands switch to the opposite knee and, as they open, the knees seem to have passed through each other.<br><br>In the game: one fan per knee. Open, ( ), and the gap in the middle is the safe spot. Together, the arcs cross in an X at the player's height. The hands are the medium bullets, the white gloves. |
-| <img src="media/partituras/charleston-3.svg" width="300" alt="The side switch"> | **3. The side switch.** On the floor: the end of the phrase, hopping across to the other side.<br><br>In the game: one bar dances in place and the next crosses the stage in four hops, releasing each volley where it lands. Three families that never sound at once: the kicks on the clave, the half turn on the swung eighth and the needles on the beat the clave skips. |
+| <img src="media/partituras/charleston-3.svg" width="300" alt="Switching sides"> | **3. Switching sides.** On the floor: the end of the phrase, hopping across to the other side.<br><br>In the game: one bar dances in place and the next crosses the stage in four hops, releasing each volley where it lands. Three families that never sound at once: the kicks on the clave, the half turn on the swung eighth and the needles on the beat the clave skips. |
 
 ---
 
-## The Cancan
+## The Can-can
 
 **Paris, the popular dance halls of the 1830s.** It grew out of the last
 figure of the quadrille, became the scandal of the music halls and the poster
@@ -168,7 +168,7 @@ fires: its fans come out in a row. Flirtatious in the first figure, unhinged in
 the last.
 
 **The music:** Offenbach's *Infernal Galop* (1858), what everyone calls "the
-cancan". It is the only dance in two-four time: 24 ticks per beat, and every
+can-can". It is the only dance in two-four time: 24 ticks per beat, and every
 wait is a multiple of 12.
 
 | | |

@@ -99,7 +99,7 @@ cual se haya jugado lo ultimo.
 
 En el entreacto el baile se para del todo (no avanza ni un tick, asi que los
 replays no se enteran) y se puede seguir, reintentar, volver a la pista o ir a
-las opciones: volumen de musica y efectos, trazo vivo, sacudida de pantalla,
+las opciones: idioma (espanol o ingles), volumen de musica y efectos, trazo vivo, sacudida de pantalla,
 pantalla completa (solo en la version de escritorio) y controles. Las opciones
 se guardan con el progreso.
 
@@ -143,7 +143,7 @@ flowchart LR
 - **El mismo codigo en nativo y en web.** Compila a `wasm32` sin
   `wasm-bindgen`; el mando (gilrs en nativo, Gamepad API en web) y el guardado
   (`localStorage`) se conectan con plugins de miniquad de unas pocas lineas.
-- **401 tests**, entre ellos bots que recorren cada paseo de punta a punta,
+- **406 tests**, entre ellos bots que recorren cada paseo de punta a punta,
   tests que exigen que cada baile use su verbo del motor y no el de otro, y uno
   que planta a una jugadora quieta en cada punto de la pantalla para que ninguna
   figura deje un sitio donde quedarse sin esquivar. El CI

@@ -37,8 +37,8 @@ beat of its music**. A test stops any dance from using another dance's verb.
 |---|---|---|
 | **The Waltz** | `Turn`: the aim rotates and a spiral comes out | the change step, the natural turn, the reverse turn, the fleckerl |
 | **The Tango** | negative `accel`: the bullet stops dead and comes back, like the corte | the walk, the ochos, the molinete |
-| **The Charleston** | `spin`: the bullet curves, like a foot pivoting on its ball, on the 3-3-2 clave | the basic, bee's knees, the side switch |
-| **The Cancan** | short `ttl`: the kick fires and fades away | the battement, the port d'armes, the cartwheel and the grand ecart |
+| **The Charleston** | `spin`: the bullet curves, like a foot pivoting on its ball, on the 3-3-2 clave | the basic, bee's knees, switching sides |
+| **The Can-can** | short `ttl`: the kick fires and fades away | the battement, the port d'armes, the cartwheel and the grand ecart |
 
 | The ochos: the rings stop and fold back onto the figure 8 the boss traces | The basic: every kick is an arc |
 |---|---|
@@ -50,7 +50,7 @@ the bullets draw it, and its long-exposure photo.
 ## What's inside
 
 - **Four bosses that are living objects**: The Waltz is a music box, The Tango
-  a bandoneon, The Charleston a gramophone and The Cancan a line of chorus
+  a bandoneon, The Charleston a gramophone and The Can-can a line of chorus
   girls. Each has its own figures (phases), its own music and its own bullet
   grammar: the waltz turns, the tango stops dead, the charleston curves.
 - **Four promenades**, side-scrolling run-and-gun levels before each boss:
@@ -102,7 +102,8 @@ always refer to the keyboard or the gamepad, whichever was used last.
 
 During the intermission the dance stops completely (not a single tick
 advances, so replays are unaffected), and you can resume, retry, go back to
-the dance floor or open the options: music and sound effects volume, living
+the dance floor or open the options: language (Spanish or English), music and
+sound effects volume, living
 ink, screen shake, fullscreen (desktop build only) and controls. Options are
 saved along with progress.
 
@@ -148,7 +149,7 @@ flowchart LR
   `wasm-bindgen`; gamepad support (gilrs on native, the Gamepad API on web) and
   saving (`localStorage`) are wired in through miniquad plugins a few lines
   long.
-- **401 tests**, including bots that play through every promenade end to end,
+- **406 tests**, including bots that play through every promenade end to end,
   tests that require each dance to use its own engine verb and no one else's,
   and one that plants a motionless player at every point on the screen so that
   no figure leaves a spot where you can stand still without dodging. CI runs
