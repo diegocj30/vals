@@ -33,6 +33,7 @@ mod mapa;
 mod modista;
 mod music;
 mod opciones;
+mod ovacion;
 mod paleta;
 mod particulas;
 mod pelicula;
@@ -301,6 +302,7 @@ async fn run_game() {
     let mut pantalla_puesta = false;
     let mut chispas = Particulas::new();
     let mut zumo = Zumo::new();
+    let mut ovacion = ovacion::Ovacion::new();
     let mut cartela: Option<Cartela> = None;
     // Donde murio la jugadora y cuando: de ahi sube su fantasma. Hay que
     // guardarlo antes del paso, porque `die` la devuelve a la salida en el
@@ -769,7 +771,11 @@ async fn run_game() {
                         let boca = (vec2(b.x, b.y), vec2(a.x, a.y));
                         let j = vec2(p.jugadora.pos.x, p.jugadora.pos.y);
                         let golpe = vec2(p.impacto.x, p.impacto.y);
-                        chispas.reaccionar_en(&p.events, j, golpe, boca);
+                        let baile = pista.nodos[nodo_actual].jefe;
+                        chispas.reaccionar_en(&p.events, j, golpe, boca, baile);
+                        if p.events.super_fired {
+                            ovacion.disparar(baile, Vec::new(), true);
+                        }
                         if p.events.fichas > 0 {
                             chispas.estallido(j, paleta::ORO);
                         }
@@ -785,7 +791,22 @@ async fn run_game() {
                     // Se apunta mientras se baila: el tick que gana cuenta y
                     // los de la pantalla de victoria no.
                     let bailando = !world.is_over();
+                    // La foto de las balas para la ovacion, solo con el super
+                    // pulsado: el tick que lo dispara lo lleva pulsado seguro,
+                    // y despues de `step` ya no queda ninguna que fotografiar.
+                    let foto = if input.is_down(InputFrame::SUPER) {
+                        world
+                            .bullets
+                            .iter_live()
+                            .map(|b| vec2(b.pos.x, b.pos.y))
+                            .collect()
+                    } else {
+                        Vec::new()
+                    };
                     world.step(input);
+                    if world.events.super_fired {
+                        ovacion.disparar(world.baile, foto, false);
+                    }
                     if bailando {
                         intento.apuntar(&mut progreso.marcas, &world.events, world.boss.phase);
                     }
@@ -800,6 +821,7 @@ async fn run_game() {
             // por frame, en un monitor de 144 Hz volarian al doble.
             chispas.step(DT);
             zumo.step();
+            ovacion.step();
         }
         // La cartela y el fundido corren con el reloj de pared, no con los
         // ticks. Es presentacion —tiene que durar igual a 60 que a 144 Hz— y,
@@ -961,6 +983,13 @@ async fn run_game() {
             let (pulso, _) = salon::latido(Tema::de(jefe, 0), p.tick as f32 + alpha);
             calle::dibujar(p, alpha, &layout, pulso, jefe);
             let camara = layout.sacudido(-vec2(calle::camara(p, alpha), calle::camara_y(p, alpha)));
+            let yo = p.jugadora.render_pos(alpha);
+            ovacion.dibujar(
+                &layout,
+                vec2(VISTA_W, VISTA_H),
+                camara.to_screen(yo.x, yo.y),
+                alpha,
+            );
             draw::particulas(&chispas, &camara);
             calle::encima(p, &layout, &n);
             if let Some(t) = intento.tarjeta.as_ref() {
@@ -976,6 +1005,11 @@ async fn run_game() {
                 _ => 1.0,
             };
             draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut(), cayendo);
+            if escena == Escena::Combate {
+                let yo = world.player.render_pos(alpha);
+                let tam = vec2(vals_core::ARENA_W, vals_core::ARENA_H);
+                ovacion.dibujar(&layout, tam, layout.to_screen(yo.x, yo.y), alpha);
+            }
             draw::particulas(&chispas, &layout);
             if let Some((donde, cuando)) = fantasma
                 && escena == Escena::Combate

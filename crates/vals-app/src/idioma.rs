@@ -278,6 +278,12 @@ textos! {
     Ayuda: "{} disparar  {} saltar  {} dash  {} parry  {} super  {} focus  {} pausa  {} reintentar  M mudo  F1  F3 pasar",
         "{} shoot  {} jump  {} dash  {} parry  {} super  {} focus  {} pause  {} retry  M mute  F1  F3 skip";
     Bravo: "¡BRAVO!", "BRAVO!";
+    // El rotulo del super, uno por baile (ver `ovacion.rs`): gritos de
+    // patio de butacas de los de siempre, sin dobles sentidos.
+    SuperVals: "¡BIS!", "ENCORE!";
+    SuperTango: "¡BRAVÍSIMO!", "BRAVISSIMO!";
+    SuperCharleston: "¡HURRA!", "HOORAY!";
+    SuperCancan: "¡ALLEZ HOP!", "ALLEZ HOP!";
     BailadoEntero: "{}, bailado entero", "{}, danced to the end";
     VictoriaAyuda: "{} otra vez    {} volver a la pista", "{} again    {} back to the dance floor";
     SeAcabo: "SE ACABO", "CURTAINS";

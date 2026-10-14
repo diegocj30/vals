@@ -134,14 +134,21 @@ impl Particulas {
         let jefe = vec2(world.boss.pos.x, world.boss.pos.y);
         // Un fogonazo corto hacia arriba: la boca del arma.
         let boca = (jugador + vec2(0.0, -12.0), vec2(0.0, -1.0));
-        self.reaccionar_en(ev, jugador, jefe, boca);
+        self.reaccionar_en(ev, jugador, jefe, boca, world.baile);
     }
 
     /// Lo mismo, con los sitios dichos a mano: donde esta la jugadora, donde
     /// ha sido el golpe y por donde sale el disparo. El paseo no tiene un jefe
     /// en un sitio fijo ni dispara hacia arriba, y las chispas tienen que salir
     /// del enemigo al que se ha dado y de la boca que apunta de lado.
-    pub fn reaccionar_en(&mut self, ev: &Events, jugador: Vec2, jefe: Vec2, boca: (Vec2, Vec2)) {
+    pub fn reaccionar_en(
+        &mut self,
+        ev: &Events,
+        jugador: Vec2,
+        jefe: Vec2,
+        boca: (Vec2, Vec2),
+        baile: usize,
+    ) {
         if ev.player_shot {
             self.cono(boca.0, boca.1, 3, 260.0, 0.10, SHOT);
         }
@@ -159,7 +166,12 @@ impl Particulas {
             self.rafaga(jugador, 18 * ev.parried.min(4), 420.0, 0.42, 2.4, PARRY);
         }
         if ev.super_fired {
-            self.rafaga(jugador, 90, 620.0, 0.75, 3.0, SUPER);
+            // Serpentinas a las dos tintas del baile y al rojo de su lazo: el
+            // confeti de la ovacion (ver `ovacion.rs`).
+            let (tinta, ropa) = crate::paleta::del_baile(baile);
+            for color in [tinta, ropa, crate::protagonista::LAZO] {
+                self.rafaga(jugador, 24, 640.0, 0.8, 2.8, color);
+            }
         }
         if ev.phase_changed {
             self.rafaga(jefe, 60, 480.0, 0.65, 2.6, FASE);
@@ -206,7 +218,6 @@ const SHOT: Color = color_u8!(180, 255, 240, 220);
 const CHISPA: Color = color_u8!(255, 200, 120, 235);
 const GRAZE: Color = color_u8!(120, 255, 200, 200);
 const PARRY: Color = color_u8!(255, 145, 210, 255);
-const SUPER: Color = color_u8!(255, 235, 140, 255);
 const FASE: Color = color_u8!(120, 240, 255, 245);
 const MUERTE: Color = color_u8!(255, 90, 130, 245);
 

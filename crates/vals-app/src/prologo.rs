@@ -520,8 +520,10 @@ fn intertitulo(l: &Layout, textos: &[Texto; 3], s: f32) {
 ///
 /// Los decorados se salen de su franja a proposito (el sol del club, la
 /// bambalina del Moulin Rouge) y con cuatro en fila se pisarian. El paspartu
-/// no sirve aqui, porque entre cartel y cartel no hay papel sino pared.
-fn recortado(l: &Layout, (x, y, w, h): (f32, f32, f32, f32), pinta: impl FnOnce()) {
+/// no sirve aqui, porque entre cartel y cartel no hay papel sino pared. La
+/// ovacion del super tambien lo usa: su onda llega a las esquinas y no puede
+/// salirse al papel.
+pub(crate) fn recortado(l: &Layout, (x, y, w, h): (f32, f32, f32, f32), pinta: impl FnOnce()) {
     let p = l.to_screen(x, y);
     // El recorte va en pixeles del framebuffer, no en los logicos de macroquad.
     let dpi = screen_dpi_scale();

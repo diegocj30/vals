@@ -21,7 +21,7 @@ use vals_core::math::{PI, sin_cos};
 use vals_core::paseo::{
     CADENCIA_CAMARERO, Enemigo, Forma, PIES, Paseo, RADIO_FICHA, SUELO_Y, Tipo, VISTA_H, VISTA_W,
 };
-use vals_core::player::{PARRY_RADIUS, SUPER_TICKS};
+use vals_core::player::PARRY_RADIUS;
 use vals_core::rng::Pcg32;
 
 use crate::acciones::Nombres;
@@ -145,7 +145,7 @@ pub fn dibujar(p: &Paseo, alpha: f32, l: &Layout, pulso: f32, baile: usize) {
     calle_montmartre::fugaces(p, &calle, t, tintas);
     disparos(p, &calle);
     dibujar_jugadora(p, alpha, t, &calle);
-    parry_y_super(p, alpha, &calle);
+    parry(p, alpha, &calle);
 }
 
 /// El fondo de Viena, de lo mas lejano a las farolas de la acera.
@@ -1148,8 +1148,9 @@ fn dibujar_jugadora(p: &Paseo, alpha: f32, t: f32, l: &Layout) {
     protagonista::dibujar(&pose, &gesto, centro, &ls, alfa, false);
 }
 
-/// El alcance del parry y el fogonazo del super, encima de todo lo de la calle.
-fn parry_y_super(p: &Paseo, alpha: f32, l: &Layout) {
+/// El alcance del parry, encima de todo lo de la calle. El super lo pinta
+/// `ovacion.rs`, por encima de esto.
+fn parry(p: &Paseo, alpha: f32, l: &Layout) {
     let j = &p.jugadora;
     let pos = j.render_pos(alpha);
     let s = l.to_screen(pos.x, pos.y);
@@ -1157,15 +1158,6 @@ fn parry_y_super(p: &Paseo, alpha: f32, l: &Layout) {
         let r = l.len(PARRY_RADIUS);
         draw_circle(s.x, s.y, r, fade(ROSA, 0.10));
         draw_circle_lines(s.x, s.y, r, 2.0, fade(WHITE, 0.75));
-    }
-    if j.super_ticks > 0 {
-        let k = j.super_ticks as f32 / SUPER_TICKS as f32;
-        draw_circle(
-            s.x,
-            s.y,
-            l.len(30.0 + 500.0 * (1.0 - k)),
-            fade(draw::METER_FULL, k * 0.35),
-        );
     }
 }
 

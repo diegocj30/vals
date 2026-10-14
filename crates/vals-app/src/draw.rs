@@ -245,7 +245,6 @@ pub fn frame(
     draw_hp_bar(world, layout);
     draw_cartas(world, layout);
     draw_hud(world, layout);
-    draw_super_flash(world, layout);
 }
 
 /// El proscenio: el borde del escenario, con candilejas.
@@ -282,23 +281,6 @@ fn draw_ground(l: &Layout, t: f32) {
         draw_rectangle(x - l.len(9.0), o.y + 2.0, l.len(18.0), l.len(7.0), TINTA);
         draw_circle(x, o.y + 2.0, l.len(5.0), fade(paleta::LUZ, brillo));
     }
-}
-
-/// Fogonazo del super. Es la unica cosa que ocupa la pantalla entera, y por eso
-/// se lee como "ha pasado algo gordo" sin necesidad de explicarlo.
-fn draw_super_flash(world: &World, l: &Layout) {
-    if world.player.super_ticks == 0 {
-        return;
-    }
-    let k = world.player.super_ticks as f32 / player::SUPER_TICKS as f32;
-    let o = l.to_screen(0.0, 0.0);
-    draw_rectangle(
-        o.x,
-        o.y,
-        l.len(ARENA_W),
-        l.len(ARENA_H),
-        fade(METER, k * k * 0.5),
-    );
 }
 
 /// Nombre del jefe, cual de cuantos es, y las vidas que quedan.
@@ -719,7 +701,12 @@ fn draw_boss(world: &World, alpha: f32, l: &Layout, caida: f32) {
     // Y la figura. El jefe es un bailarin, y baila lo suyo.
     // Al caer, el blanco del golpe solo dura el hitstop: `hit_flash` ya no
     // baja con el jefe quieto, y un jefe blanco entero no se ve morir.
-    let golpeado = b.hit_flash > 0 && (!b.defeated || caida == 0.0);
+    // El super le pega de lleno: blanco, echado hacia atras y encogido, y
+    // vuelve a su sitio durante los ticks del super. Sale de `super_ticks`, que
+    // es de la simulacion, asi que se ve igual en un replay.
+    let golpe = world.player.super_ticks as f32 / player::SUPER_TICKS as f32;
+    let retroceso = golpe * golpe;
+    let golpeado = (b.hit_flash > 0 || golpe > 0.7) && (!b.defeated || caida == 0.0);
     let (cuerpo, tela) = if golpeado {
         (BOSS_FLASH, BOSS_FLASH)
     } else {
@@ -733,9 +720,11 @@ fn draw_boss(world: &World, alpha: f32, l: &Layout, caida: f32) {
         l.to_screen(0.0, player::GROUND_Y + player::PLAYER_SPRITE_RADIUS)
             .y
     });
+    let yo = world.player.render_pos(alpha);
+    let atras = (s - l.to_screen(yo.x, yo.y)).normalize_or(vec2(0.0, -1.0));
     let escena = jefes::Escena {
-        centro: s,
-        escala: l.escalado(bailarines::ESCALA).scale(),
+        centro: s + atras * l.len(18.0) * retroceso,
+        escala: l.escalado(bailarines::ESCALA).scale() * (1.0 - 0.12 * retroceso),
         t,
         fase: b.phase,
         vida,
@@ -1188,17 +1177,6 @@ fn draw_player(world: &World, alpha: f32, l: &Layout) {
         let r = l.len(player::PARRY_RADIUS);
         draw_circle(s.x, s.y, r, fade(PARRYABLE, 0.10));
         draw_circle_lines(s.x, s.y, r, 2.0, fade(PARRY_RING, 0.75));
-    }
-
-    // Fogonazo del super.
-    if world.player.super_ticks > 0 {
-        let k = world.player.super_ticks as f32 / player::SUPER_TICKS as f32;
-        draw_circle(
-            s.x,
-            s.y,
-            sprite_r * (3.0 + 28.0 * (1.0 - k)),
-            fade(METER, k * 0.35),
-        );
     }
 
     // La hitbox real. Siempre visible: aprender que casi todo el personaje es
