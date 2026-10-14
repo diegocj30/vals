@@ -119,6 +119,7 @@ pub enum Sfx {
     Parry,
     Graze,
     Impacto,
+    Fase,
     Muerte,
     Super,
     Victoria,
@@ -132,11 +133,12 @@ pub enum Sfx {
     Ficha,
 }
 
-const TODOS: [Sfx; 14] = [
+const TODOS: [Sfx; 15] = [
     Sfx::Disparo,
     Sfx::Parry,
     Sfx::Graze,
     Sfx::Impacto,
+    Sfx::Fase,
     Sfx::Muerte,
     Sfx::Super,
     Sfx::Victoria,
@@ -151,7 +153,7 @@ const TODOS: [Sfx; 14] = [
 
 /// Los efectos que suenan **dentro** de la musica, y no por encima de ella.
 ///
-/// Son los dos que son notas y no ruidos, y por eso los unicos que pueden
+/// Son los tres que son notas y no ruidos, y por eso los unicos que pueden
 /// desafinar: una ficha en si y mi sobre un tango en la menor rompe la frase
 /// aunque suene bajito. Se sintetizan una vez por tema, en su tonalidad y con
 /// el seno de su melodia, y al sonar se coge el del tema que esta puesto.
@@ -160,7 +162,7 @@ const TODOS: [Sfx; 14] = [
 /// impacto son ruidos y chasquidos, sin tono que chocar; el parry y el super
 /// son barridos, que el oido toma por gesto y no por nota; y la muerte TIENE
 /// que sonar mal, que es lo que la distingue de pasar de figura.
-const TEMATICOS: [Sfx; 2] = [Sfx::Ficha, Sfx::Victoria];
+const TEMATICOS: [Sfx; 3] = [Sfx::Fase, Sfx::Ficha, Sfx::Victoria];
 
 /// Una nota de celesta: el seno de la melodia y su octava, que se apaga
 /// enseguida.
@@ -237,6 +239,23 @@ impl Sfx {
             // Casi un susurro: pasa muchas veces seguidas.
             Sfx::Graze => vec![Voz::new(Sine, 2200.0, 2600.0, 0.03, 0.06, 4.0)],
             Sfx::Impacto => vec![Voz::new(Noise, 1.0, 1.0, 0.045, 0.11, 5.0)],
+            // Pasar de figura: el acorde de la tonica del tema nuevo, GRAVE y
+            // suave, tocado a la vez, como la orquesta que marca el primer
+            // tiempo de la pieza siguiente. Se probo con campanillas agudas
+            // (estridentes, rompian la melodia) y con nada (raro: la musica
+            // cambiaba sin que nada lo subrayase). Grave para que no compita
+            // con la melodia, y en el tono del tema que entra, que suena en
+            // el mismo frame.
+            Sfx::Fase => {
+                // Triada cerrada con la raiz entre re3 y do#4: por debajo de
+                // donde va la melodia, y por encima de lo que un altavoz de
+                // portatil ya no da.
+                let raiz = tonica_desde(t, 5);
+                [raiz, raiz + tercera, raiz + 7]
+                    .iter()
+                    .map(|s| Voz::nota(Sine, music::frecuencia(*s), 1.1, VOL_EN_TONO * 0.5, 1.1))
+                    .collect()
+            }
             Sfx::Muerte => vec![
                 Voz::new(Noise, 1.0, 1.0, 0.45, 0.28, 2.0),
                 Voz::new(Square, 320.0, 50.0, 0.50, 0.26, 1.4),
@@ -510,8 +529,9 @@ impl Audio {
         if ev.boss_hit {
             self.play(Sfx::Impacto, 1.0);
         }
-        // Pasar de figura no suena: ya cambia la musica, y un aviso encima era
-        // redundante. La caida del jefe tiene su propio sonido.
+        if ev.phase_changed {
+            self.play(Sfx::Fase, 1.0);
+        }
         if ev.super_fired {
             self.play(Sfx::Super, 1.0);
         }
@@ -572,7 +592,7 @@ pub fn exportar_sonidos(dir: &std::path::Path) -> std::io::Result<Vec<std::path:
     let mut hechos = Vec::new();
     for (i, t) in TEMAS.into_iter().enumerate() {
         let nombre = fichero(t);
-        for (sfx, que) in TEMATICOS.into_iter().zip(["ficha", "victoria"]) {
+        for (sfx, que) in TEMATICOS.into_iter().zip(["fase", "ficha", "victoria"]) {
             let ruta = dir.join(format!("{i:02} {nombre} - {que}.wav"));
             std::fs::write(&ruta, wav_sfx(sfx, t))?;
             hechos.push(ruta);
@@ -604,6 +624,7 @@ fn mezcla(t: Tema) -> Vec<i16> {
             }
         }
     };
+    encima(&mut m, Sfx::Fase, 0.0);
     encima(&mut m, Sfx::Ficha, compas + negra(t));
     encima(&mut m, Sfx::Ficha, compas * 2.0 + negra(t) * 1.5);
     encima(&mut m, Sfx::Victoria, compas * 3.0);
@@ -860,6 +881,17 @@ mod tests {
             Voz::new(Wave::Sine, 440.0, 440.0, 0.1, 0.5, 2.0).tras(0.2),
         ]);
         assert!(larga.len() > corta.len() * 2);
+    }
+
+    #[test]
+    fn pasar_de_figura_suena_grave() {
+        // Nada por encima de un la4: es un acorde de acompanamiento, no un
+        // aviso que se oiga por encima de la melodia.
+        for t in TEMAS {
+            for v in Sfx::Fase.receta(t) {
+                assert!(v.frecuencia() < 445.0, "{t:?}: {} Hz", v.frecuencia());
+            }
+        }
     }
 
     #[test]
