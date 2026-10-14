@@ -17,12 +17,14 @@
 //!   y cruceta.
 //!
 //! Y se recuerda **con que se jugo lo ultimo** (`Dispositivo`): toda ayuda en
-//! pantalla sale de `Nombres`, que habla del teclado o del mando segun eso.
+//! pantalla sale de `Nombres`, que habla del teclado o del mando segun eso, y
+//! lo dice con el dibujo de cada boton (ver `glifos`).
 
 use macroquad::prelude::{KeyCode, get_last_key_pressed, is_key_down, is_key_pressed};
 use vals_core::InputFrame;
 
-use crate::idioma::{Texto, tx, txf};
+use crate::glifos::{self, Boton, Dir, Forma, Trozo, txg};
+use crate::idioma::{Texto, tx};
 use crate::mando::{self, Mando, boton};
 
 /// Con que se esta jugando.
@@ -168,10 +170,9 @@ impl Juego {
 /// Lo que se ensena de una accion sin tecla. No pasa con lo de serie.
 const NADA: &str = "-";
 
-/// El nombre en pantalla de una tecla o un boton, en el idioma de ahora. Los
-/// de `TECLAS` son tambien los del guardado, asi que no se tocan: se traducen
-/// aqui, al ensenarlos, y los de `mando::NOMBRES` con ellos. Los que no estan
-/// se dicen igual en los dos.
+/// El nombre en pantalla de una tecla, en el idioma de ahora. Los de `TECLAS`
+/// son tambien los del guardado, asi que no se tocan: se traducen aqui, al
+/// ensenarlos. Los que no estan se dicen igual en los dos.
 fn en_pantalla(n: &'static str) -> &'static str {
     let t = match n {
         "ESPACIO" => Texto::Espacio,
@@ -179,17 +180,6 @@ fn en_pantalla(n: &'static str) -> &'static str {
         "CTRL DCHO" => Texto::CtrlDcho,
         "INTRO" => Texto::Intro,
         "BORRAR" => Texto::Borrar,
-        "ARRIBA" => Texto::Arriba,
-        "ABAJO" => Texto::Abajo,
-        "IZQUIERDA" => Texto::Izquierda,
-        "DERECHA" => Texto::Derecha,
-        "circulo" => Texto::Circulo,
-        "cuadrado" => Texto::Cuadrado,
-        "triangulo" => Texto::Triangulo,
-        "arriba" => Texto::CrucetaArriba,
-        "abajo" => Texto::CrucetaAbajo,
-        "izquierda" => Texto::CrucetaIzquierda,
-        "derecha" => Texto::CrucetaDerecha,
         _ => return n,
     };
     tx(t)
@@ -272,32 +262,44 @@ pub fn bit_boton(nuevos: u32) -> Option<u64> {
     (libres != 0).then(|| 1 << libres.trailing_zeros())
 }
 
-/// El nombre en pantalla de una tecla cualquiera, de las asignables o de las
-/// fijas de los menus.
-fn nombre_tecla(k: KeyCode) -> &'static str {
-    en_pantalla(match k {
+/// Como se dibuja una tecla cualquiera, de las asignables o de las fijas de
+/// los menus: las flechas con su flecha y las demas con su nombre.
+fn glifo_tecla(k: KeyCode) -> Boton {
+    Boton::Tecla(en_pantalla(match k {
+        KeyCode::Up => return Boton::Flecha(Dir::Arriba),
+        KeyCode::Down => return Boton::Flecha(Dir::Abajo),
+        KeyCode::Left => return Boton::Flecha(Dir::Izquierda),
+        KeyCode::Right => return Boton::Flecha(Dir::Derecha),
         KeyCode::Escape => "ESC",
         KeyCode::Backspace => "BORRAR",
         KeyCode::R => "R",
         KeyCode::P => "P",
         KeyCode::L => "L",
-        KeyCode::Up => "ARRIBA",
-        KeyCode::Down => "ABAJO",
-        KeyCode::Left => "IZQUIERDA",
-        KeyCode::Right => "DERECHA",
         _ => TECLAS.iter().find(|(t, _)| *t == k).map_or("?", |(_, n)| n),
-    })
+    }))
 }
 
-/// El nombre de un boton crudo en este mando. Si `bit` lleva varios, el
-/// primero.
-fn nombre_boton(bit: u32, playstation: bool) -> &'static str {
-    let (ps, xbox) = mando::NOMBRES[bit.trailing_zeros() as usize % mando::NOMBRES.len()];
-    match (playstation, ps) {
-        // La "X" de PlayStation es la cruz; la de Xbox y la del teclado, una X.
-        (true, "X") => tx(Texto::Cruz),
-        (true, _) => en_pantalla(ps),
-        _ => en_pantalla(xbox),
+/// Como se dibuja un boton crudo en este mando. Si `bit` lleva varios, el
+/// primero. El sitio en `mando::NOMBRES` dice que clase de boton es, y el
+/// nombre, lo que lleva escrito.
+fn glifo_boton(bit: u32, playstation: bool) -> Boton {
+    const CARA: [Forma; 4] = [
+        Forma::Cruz,
+        Forma::Circulo,
+        Forma::Cuadrado,
+        Forma::Triangulo,
+    ];
+    const CRUCETA: [Dir; 4] = [Dir::Arriba, Dir::Abajo, Dir::Izquierda, Dir::Derecha];
+    let i = bit.trailing_zeros() as usize % mando::NOMBRES.len();
+    let (ps, xbox) = mando::NOMBRES[i];
+    let nombre = if playstation { ps } else { xbox };
+    match i {
+        0..=3 if playstation => Boton::Ps(CARA[i]),
+        0..=3 => Boton::Xbox(xbox),
+        4..=7 => Boton::Hombro(nombre),
+        10 | 11 => Boton::Stick(nombre, None),
+        12..=15 => Boton::Cruceta(Some(CRUCETA[i - 12])),
+        _ => Boton::Pastilla(nombre),
     }
 }
 
@@ -420,27 +422,24 @@ impl Controles {
         f
     }
 
-    /// El nombre de lo que tiene la accion `j` en el aparato `d`: la primera
-    /// de sus teclas o botones, que es la que se ensena.
-    pub fn nombre(&self, d: Dispositivo, j: Juego, playstation: bool) -> &'static str {
-        match d {
+    /// Lo que tiene la accion `j` en el aparato `d`, para dibujarlo: la
+    /// primera de sus teclas o botones, que es la que se ensena.
+    pub fn glifo(&self, d: Dispositivo, j: Juego, playstation: bool) -> Vec<Trozo> {
+        let b = match d {
             Dispositivo::Teclado => {
                 let m = self.teclado[j as usize];
                 TECLAS
                     .iter()
                     .enumerate()
                     .find(|(i, _)| m & (1 << i) != 0)
-                    .map_or(NADA, |(_, (_, n))| en_pantalla(n))
+                    .map(|(_, (_, n))| Boton::Tecla(en_pantalla(n)))
             }
             Dispositivo::Mando => {
                 let m = self.mando[j as usize] as u32;
-                if m == 0 {
-                    NADA
-                } else {
-                    nombre_boton(m, playstation)
-                }
+                (m != 0).then(|| glifo_boton(m, playstation))
             }
-        }
+        };
+        b.map_or_else(|| glifos::txt(NADA), glifos::boton)
     }
 
     /// Lo que se guarda: `teclado.disparar=Z`, `mando.super=3+5`... Solo lo
@@ -507,38 +506,50 @@ impl Controles {
     }
 }
 
-/// Todos los nombres que salen en pantalla, en el aparato que se este usando.
+/// Todos los botones que salen en pantalla, en el aparato que se este usando.
 ///
 /// Se monta una vez por frame y se pasa a quien dibuja ayuda: es **el unico
-/// sitio** que decide si se dice "Z" o "X", y por eso ya no puede pasar que el
-/// menu hable del mando y el KO del teclado.
+/// sitio** que decide si se ensena la Z o la cruz, y por eso ya no puede
+/// pasar que el menu hable del mando y el KO del teclado. Cada uno es un
+/// trozo de linea (`glifos`), casi siempre un boton solo, que va al hueco de
+/// su plantilla.
 #[derive(Clone, Debug)]
 pub struct Nombres {
-    pub aceptar: &'static str,
-    pub atras: &'static str,
-    pub reintentar: &'static str,
-    pub pausa: &'static str,
-    pub pasear: &'static str,
-    pub libro: &'static str,
-    pub historia: &'static str,
-    pub mover: &'static str,
-    pub arriba: &'static str,
-    pub disparar: &'static str,
-    pub saltar: String,
-    pub dash: &'static str,
-    pub parry: &'static str,
-    pub super_: &'static str,
-    pub focus: &'static str,
+    pub aceptar: Vec<Trozo>,
+    pub atras: Vec<Trozo>,
+    pub reintentar: Vec<Trozo>,
+    pub pausa: Vec<Trozo>,
+    pub pasear: Vec<Trozo>,
+    pub libro: Vec<Trozo>,
+    pub historia: Vec<Trozo>,
+    pub mover: Vec<Trozo>,
+    pub arriba: Vec<Trozo>,
+    pub disparar: Vec<Trozo>,
+    pub saltar: Vec<Trozo>,
+    pub dash: Vec<Trozo>,
+    pub parry: Vec<Trozo>,
+    pub super_: Vec<Trozo>,
+    pub focus: Vec<Trozo>,
 }
 
 impl Nombres {
     pub fn de(d: Dispositivo, playstation: bool, c: &Controles) -> Self {
-        let accion = |a: Accion| match d {
-            Dispositivo::Teclado => nombre_tecla(a.teclas()[0]),
-            Dispositivo::Mando => nombre_boton(a.botones(), playstation),
+        let accion = |a: Accion| {
+            glifos::boton(match d {
+                Dispositivo::Teclado => glifo_tecla(a.teclas()[0]),
+                Dispositivo::Mando => glifo_boton(a.botones(), playstation),
+            })
         };
-        let juego = |j: Juego| c.nombre(d, j, playstation);
+        let juego = |j: Juego| c.glifo(d, j, playstation);
         let teclado = d == Dispositivo::Teclado;
+        // El stick que mueve es el izquierdo, y lleva su nombre dentro: un
+        // circulo vacio, al lado del de PlayStation, se confundia con el.
+        let stick = if playstation { "L" } else { "LS" };
+        let arriba = glifos::boton(if teclado {
+            Boton::Flecha(Dir::Arriba)
+        } else {
+            Boton::Stick(stick, Some(Dir::Arriba))
+        });
         Self {
             aceptar: accion(Accion::Aceptar),
             atras: accion(Accion::Atras),
@@ -547,22 +558,25 @@ impl Nombres {
             pasear: accion(Accion::Pasear),
             libro: accion(Accion::Libro),
             historia: accion(Accion::Historia),
-            mover: tx(if teclado {
-                Texto::Flechas
+            // La barra se lee igual en los dos idiomas.
+            mover: if teclado {
+                glifos::boton(Boton::Flechas)
             } else {
-                Texto::StickOCruceta
-            }),
-            arriba: tx(if teclado {
-                Texto::Arriba
-            } else {
-                Texto::StickArriba
-            }),
-            disparar: juego(Juego::Disparar),
-            saltar: if teclado {
-                txf(Texto::ArribaO, &[&juego(Juego::Saltar)])
-            } else {
-                juego(Juego::Saltar).to_owned()
+                glifos::rellenar(
+                    "{} / {}",
+                    &[
+                        &glifos::boton(Boton::Stick(stick, None)),
+                        &glifos::boton(Boton::Cruceta(None)),
+                    ],
+                )
             },
+            saltar: if teclado {
+                txg(Texto::ArribaO, &[&arriba, &juego(Juego::Saltar)])
+            } else {
+                juego(Juego::Saltar)
+            },
+            arriba,
+            disparar: juego(Juego::Disparar),
             dash: juego(Juego::Dash),
             parry: juego(Juego::Parry),
             super_: juego(Juego::Super),
@@ -684,11 +698,20 @@ mod tests {
         );
         // Y los nombres siguen al aparato.
         let c = Controles::default();
-        assert_eq!(Nombres::de(Teclado, false, &c).reintentar, "R");
-        assert_eq!(Nombres::de(Mando, false, &c).reintentar, "Back");
-        assert_eq!(Nombres::de(Mando, true, &c).pausa, "Options");
-        assert_eq!(Nombres::de(Mando, true, &c).parry, "círculo");
-        assert_eq!(Nombres::de(Teclado, true, &c).parry, "C");
+        let b = glifos::boton;
+        let tecla = Nombres::de(Teclado, true, &c);
+        assert_eq!(tecla.reintentar, b(Boton::Tecla("R")));
+        assert_eq!(tecla.parry, b(Boton::Tecla("C")));
+        assert_eq!(tecla.pausa, b(Boton::Tecla("ESC")));
+        assert_eq!(tecla.mover, b(Boton::Flechas));
+        let xbox = Nombres::de(Mando, false, &c);
+        assert_eq!(xbox.reintentar, b(Boton::Pastilla("View")));
+        assert_eq!(xbox.saltar, b(Boton::Xbox("A")));
+        assert_eq!(xbox.disparar, b(Boton::Hombro("RB")));
+        let ps = Nombres::de(Mando, true, &c);
+        assert_eq!(ps.pausa, b(Boton::Pastilla("Options")));
+        assert_eq!(ps.parry, b(Boton::Ps(Forma::Circulo)));
+        assert_eq!(ps.aceptar, b(Boton::Ps(Forma::Cruz)));
     }
 
     #[test]
@@ -697,15 +720,23 @@ mod tests {
         let x = bit_tecla(KeyCode::X).unwrap();
         // El dash tenia la X: al darsela a disparar, el dash se queda la Z.
         c.asignar(Dispositivo::Teclado, Juego::Disparar, x);
-        assert_eq!(c.nombre(Dispositivo::Teclado, Juego::Disparar, false), "X");
-        assert_eq!(c.nombre(Dispositivo::Teclado, Juego::Dash, false), "Z");
+        let tecla = |n| glifos::boton(Boton::Tecla(n));
+        assert_eq!(
+            c.glifo(Dispositivo::Teclado, Juego::Disparar, false),
+            tecla("X")
+        );
+        assert_eq!(
+            c.glifo(Dispositivo::Teclado, Juego::Dash, false),
+            tecla("Z")
+        );
         // Si la otra tenia dos, solo pierde esa y no se lleva nada.
         let v = bit_tecla(KeyCode::V).unwrap();
         c.asignar(Dispositivo::Teclado, Juego::Parry, v);
         assert_eq!(
-            c.nombre(Dispositivo::Teclado, Juego::Super, false),
-            "ESPACIO"
+            c.glifo(Dispositivo::Teclado, Juego::Super, false),
+            tecla("ESPACIO")
         );
+
         assert_eq!(c.teclado[Juego::Super as usize].count_ones(), 1);
         // Nunca hay una tecla en dos sitios ni una accion sin nada.
         let todas = c.teclado.iter().fold(0, |a, m| {

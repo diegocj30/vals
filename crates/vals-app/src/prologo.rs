@@ -27,6 +27,7 @@ use crate::acciones::Nombres;
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{circulo, linea, rect, tri};
 use crate::fuentes::{self, Cara};
+use crate::glifos;
 use crate::idioma::{Texto, nombre, tx};
 use crate::music::Tema;
 use crate::paleta::{self, LUZ, ORO, PAPEL, PARED, TARIMA, TINTA, VETA};
@@ -170,31 +171,39 @@ impl Prologo {
 
     /// Debajo de la lamina, en el papel: por donde vamos y como se pasa.
     fn ayuda(&self, l: &Layout, teclas: &Nombres) {
-        let (ok, esc) = (teclas.aceptar, teclas.atras);
         let o = l.to_screen(0.0, 0.0);
         let y = o.y + l.len(VISTA_H) + 26.0;
         let c = paleta::TINTA_TENUE;
         let n = format!("{} / {}", self.lamina + 1, LAMINAS.len());
         fuentes::texto(&n, o.x, y, 16.0, Cara::Cuerpo, c);
         let (siguiente, saltar) = (tx(Texto::Siguiente), tx(Texto::SaltarHistoria));
-        let ayuda = format!("{ok}  {siguiente}      {esc}  {saltar}");
-        fuentes::derecha(&ayuda, o.x + l.len(VISTA_W), y, 16.0, Cara::Cuerpo, c);
+        let ayuda = glifos::rellenar(
+            "{}  {}      {}  {}",
+            &[
+                &teclas.aceptar,
+                &glifos::txt(siguiente),
+                &teclas.atras,
+                &glifos::txt(saltar),
+            ],
+        );
+        glifos::derecha(&ayuda, o.x + l.len(VISTA_W), y, 16.0, c);
     }
 }
 
 /// La invitacion del menu a volver a verlo, arriba a la izquierda de la
 /// arena: discreta, que lo que se viene a hacer al menu es jugar.
 pub fn en_el_menu(l: &Layout, teclas: &Nombres) {
-    let tecla = teclas.historia;
     let o = l.to_screen(0.0, 0.0);
     let u = l.scale().clamp(0.55, 1.2);
-    let texto = format!("{tecla}   {}", tx(Texto::LaHistoria));
-    fuentes::texto(
+    let texto = glifos::rellenar(
+        "{}   {}",
+        &[&teclas.historia, &glifos::txt(tx(Texto::LaHistoria))],
+    );
+    glifos::texto(
         &texto,
         o.x + 22.0 * u,
         o.y + 64.0 * u,
         17.0 * u,
-        Cara::Cuerpo,
         draw::TEXT_DIM,
     );
 }

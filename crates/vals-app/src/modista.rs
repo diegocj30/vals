@@ -19,6 +19,7 @@ use crate::acciones::{Accion, Entrada, Nombres};
 use crate::audio::Sfx;
 use crate::draw::{Layout, fade, paspartu};
 use crate::fuentes::{self, Cara};
+use crate::glifos;
 use crate::guardado::Guardado;
 use crate::idioma::{Texto, tx, txf};
 use crate::paleta::{LUZ, ORO, PAPEL, TINTA, TINTA_TENUE};
@@ -293,17 +294,9 @@ impl Modista {
         let bolsillo = txf(plural(n, Texto::Bolsillo, Texto::Bolsillos), &[&n]);
         let s = p(58.0, y);
         fuentes::texto(&bolsillo, s.x, s.y, l.len(19.0), Cara::Cuerpo, PAPEL);
-        let (ok, atras) = (teclas.aceptar, teclas.atras);
-        let ayuda = txf(Texto::AyudaModista, &[&ok, &atras]);
+        let ayuda = glifos::txg(Texto::AyudaModista, &[&teclas.aceptar, &teclas.atras]);
         let s = p(616.0, y);
-        fuentes::derecha(
-            &ayuda,
-            s.x,
-            s.y,
-            l.len(16.0),
-            Cara::Cuerpo,
-            fade(PAPEL, 0.8),
-        );
+        glifos::derecha(&ayuda, s.x, s.y, l.len(16.0), fade(PAPEL, 0.8));
 
         paspartu(l);
     }

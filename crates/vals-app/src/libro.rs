@@ -28,6 +28,7 @@ use vals_core::{ARENA_H, ARENA_W, TICK_HZ};
 use crate::acciones::Nombres;
 use crate::draw::{Layout, fade, paspartu};
 use crate::fuentes::{self, Cara};
+use crate::glifos;
 use crate::guardado::Guardado;
 use crate::idioma::{Texto, nombre, tx};
 use crate::jefes;
@@ -38,13 +39,14 @@ use crate::paleta::{self, PAPEL, TINTA, TINTA_TENUE};
 mod textos {
     use vals_core::nota::Nota;
 
+    use crate::glifos::{Trozo, txg};
     use crate::idioma::{Texto, tx, txf};
 
-    pub fn volver(ok: &str, otra: &str) -> String {
-        txf(Texto::TarjetaVolver, &[&ok, &otra])
+    pub fn volver(ok: &[Trozo], otra: &[Trozo]) -> Vec<Trozo> {
+        txg(Texto::TarjetaVolver, &[ok, otra])
     }
-    pub fn seguir(ok: &str) -> String {
-        txf(Texto::Seguir, &[&ok])
+    pub fn seguir(ok: &[Trozo]) -> Vec<Trozo> {
+        txg(Texto::Seguir, &[ok])
     }
     pub fn intentos(n: u32) -> String {
         txf(
@@ -65,11 +67,11 @@ mod textos {
     pub fn jugado(t: &str) -> String {
         txf(Texto::Jugado, &[&t])
     }
-    pub fn cerrar(atras: &str) -> String {
-        txf(Texto::CerrarLibro, &[&atras])
+    pub fn cerrar(atras: &[Trozo]) -> Vec<Trozo> {
+        txg(Texto::CerrarLibro, &[atras])
     }
-    pub fn abrir(tecla: &str) -> String {
-        txf(Texto::AbrirLibro, &[&tecla])
+    pub fn abrir(tecla: &[Trozo]) -> Vec<Trozo> {
+        txg(Texto::AbrirLibro, &[tecla])
     }
     /// Lo que hace el publico con cada nota.
     pub fn publico(n: Nota) -> &'static str {
@@ -464,10 +466,16 @@ pub fn tarjeta_de_baile(t: &Tarjeta, l: &Layout, teclas: &Nombres) {
         );
     }
     if t.lista() {
-        let (ok, otra) = (teclas.aceptar, teclas.reintentar);
         let s = l.to_screen(r.x + r.w * 0.5, r.y + r.h - 22.0);
-        let ayuda = textos::volver(ok, otra);
-        fuentes::centrado(&ayuda, s.x, s.y, l.len(15.0), Cara::Cuerpo, TINTA_TENUE);
+        let ayuda = textos::volver(&teclas.aceptar, &teclas.reintentar);
+        glifos::encajado(
+            &ayuda,
+            s.x,
+            s.y,
+            l.len(15.0),
+            l.len(r.w - 24.0),
+            TINTA_TENUE,
+        );
     }
 }
 
@@ -493,10 +501,9 @@ pub fn tarjeta_de_paseo(t: &Tarjeta, nombre: &str, l: &Layout, teclas: &Nombres)
     ];
     let y = tarjeta(l, r, nombre, tx(Texto::HastaLaPuerta), &filas, a);
     if edad > LEER as f32 / TICK_HZ as f32 {
-        let ok = teclas.aceptar;
         let s = l.to_screen(r.x + w * 0.5, y + 2.0);
-        let ayuda = textos::seguir(ok);
-        fuentes::centrado(&ayuda, s.x, s.y, l.len(15.0), Cara::Cuerpo, TINTA_TENUE);
+        let ayuda = textos::seguir(&teclas.aceptar);
+        glifos::centrado(&ayuda, s.x, s.y, l.len(15.0), TINTA_TENUE);
     }
 }
 
@@ -506,17 +513,9 @@ pub fn tarjeta_de_paseo(t: &Tarjeta, nombre: &str, l: &Layout, teclas: &Nombres)
 pub fn aviso_en_el_menu(l: &Layout, teclas: &Nombres) {
     // Se abre con la L, o con el gatillo de focus: "L1" en PlayStation, "LB"
     // en Xbox.
-    let tecla = teclas.libro;
     let s = l.to_screen(24.0, 40.0);
-    let texto = textos::abrir(tecla);
-    fuentes::texto(
-        &texto,
-        s.x,
-        s.y,
-        l.len(16.0),
-        Cara::Cuerpo,
-        fade(PAPEL, 0.8),
-    );
+    let texto = textos::abrir(&teclas.libro);
+    glifos::texto(&texto, s.x, s.y, l.len(16.0), fade(PAPEL, 0.8));
 }
 
 /// La pagina del libro: cada baile con su sello, su mejor tiempo, sus
@@ -658,10 +657,10 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
     let s = p(48.0, 756.0);
     let jugado = textos::jugado(&horas(g.marcas.jugado));
     fuentes::texto(&jugado, s.x, s.y, l.len(15.0), Cara::Cuerpo, TINTA);
-    let atras = teclas.atras;
     let s = p(592.0, 756.0);
-    let ayuda = textos::cerrar(atras);
-    fuentes::derecha(&ayuda, s.x, s.y, l.len(15.0), Cara::Cuerpo, TINTA_TENUE);
+    let ayuda = textos::cerrar(&teclas.atras);
+    glifos::derecha(&ayuda, s.x, s.y, l.len(15.0), TINTA_TENUE);
+
     paspartu(l);
 }
 

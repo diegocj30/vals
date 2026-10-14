@@ -31,6 +31,7 @@ use crate::calle_montmartre;
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{Instrumento, arco, circulo, linea, musico, rect, tri};
 use crate::fuentes::{self, Cara};
+use crate::glifos;
 use crate::idioma::{Texto, nombre, tx, txf};
 use crate::modista;
 use crate::paleta::{self, LUZ, ORO, PAPEL, TINTA};
@@ -169,6 +170,7 @@ pub fn encima(p: &Paseo, l: &Layout, n: &Nombres) {
         p.vidas,
         p.terminado(),
         &p.jugadora,
+        &n.super_,
     );
     camino(p, l);
 
@@ -206,16 +208,9 @@ pub fn encima(p: &Paseo, l: &Layout, n: &Nombres) {
     // explica no existe. Se dice los primeros segundos.
     let k = 1.0 - ((p.tick as f32 - 420.0) / 60.0).clamp(0.0, 1.0);
     if k > 0.0 {
-        let aviso = txf(Texto::Plantar, &[&n.focus, &n.arriba]);
+        let aviso = glifos::txg(Texto::Plantar, &[&n.focus, &n.arriba]);
         let y = l.to_screen(0.0, VISTA_H).y - 16.0;
-        fuentes::derecha(
-            &aviso,
-            o.x + w - 12.0,
-            y,
-            16.0,
-            Cara::Cuerpo,
-            fade(TEXTO, k),
-        );
+        glifos::derecha(&aviso, o.x + w - 12.0, y, 16.0, fade(TEXTO, k));
     }
 
     if p.derrota {
@@ -1247,10 +1242,10 @@ fn ko(p: &Paseo, l: &Layout, n: &Nombres) {
     fuentes::centrado(&dicho, cx, y, 17.0, Cara::Cuerpo, TEXTO_TENUE);
     y += 40.0;
     for linea in [
-        txf(Texto::ReintentarPaseo, &[&n.aceptar, &n.reintentar]),
-        txf(Texto::VolverPista, &[&n.atras]),
+        glifos::txg(Texto::ReintentarPaseo, &[&n.aceptar, &n.reintentar]),
+        glifos::txg(Texto::VolverPista, &[&n.atras]),
     ] {
-        fuentes::centrado(&linea, cx, y, 19.0, Cara::Cuerpo, TEXTO);
-        y += 25.0;
+        glifos::centrado(&linea, cx, y, 19.0, TEXTO);
+        y += 27.0;
     }
 }

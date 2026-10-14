@@ -19,6 +19,7 @@ use vals_core::{ARENA_H, ARENA_W};
 
 use crate::draw::{Layout, METER_FULL, TEXT_DIM, TITLE, fade, paspartu};
 use crate::fuentes::{self, Cara};
+use crate::glifos::{self, Trozo, txg, txt};
 use crate::idioma::{Texto, nombre, tx, txf};
 use crate::libro;
 use crate::modista;
@@ -823,7 +824,7 @@ pub fn pista(
     l: &Layout,
     fichas: &Fichas,
     notas: &[Option<Nota>],
-    teclas: [&str; 4],
+    teclas: [&[Trozo]; 4],
 ) {
     clear_background(PAPEL);
     let o = l.to_screen(0.0, 0.0);
@@ -925,19 +926,21 @@ pub fn pista(
             } else {
                 Texto::Volando
             });
-            let baile = nombre(&p.nodos[i].nombre);
-            let bailar = txf(Texto::Bailar, &[&ok, &baile, &donde]);
+            let baile = txt(nombre(&p.nodos[i].nombre));
+            let bailar = txg(Texto::Bailar, &[ok, &baile, &txt(donde)]);
             // Si su paseo ya se anduvo, se puede volver a el a por fichas.
             match fichas.paseos.get(i).copied().flatten() {
-                Some((tuyas, total)) => txf(Texto::Pasear, &[&bailar, &dash, &tuyas, &total]),
+                Some((tuyas, total)) => {
+                    txg(Texto::Pasear, &[&bailar, dash, &txt(tuyas), &txt(total)])
+                }
                 None => bailar,
             }
         }
         // Un baile cerrado dice **por que** lo esta. "Bloqueado" a secas manda
         // a probar cosas al azar; decir que falta el nivel de antes no.
-        Some(i) => txf(Texto::TodaviaNo, &[&nombre(&p.nodos[i].nombre)]),
-        None if p.en_la_modista() => txf(Texto::EntrarModista, &[&ok]),
-        None => txf(Texto::Andar, &[&mover, &atras]),
+        Some(i) => txg(Texto::TodaviaNo, &[&txt(nombre(&p.nodos[i].nombre))]),
+        None if p.en_la_modista() => txg(Texto::EntrarModista, &[ok]),
+        None => txg(Texto::Andar, &[mover, atras]),
     };
     let color = if p.nodo_cerca().is_some_and(|i| p.abierto(i)) || p.en_la_modista() {
         // Late, para que se vea que ahi hay algo que hacer.
@@ -947,7 +950,8 @@ pub fn pista(
         TEXT_DIM
     };
     let ancho = l.len(ARENA_W) - 40.0;
-    fuentes::encajado(&aviso, cx, pie_y, 19.0, ancho, Cara::Cuerpo, color);
+    glifos::encajado(&aviso, cx, pie_y, 19.0, ancho, color);
+
     paspartu(l);
 }
 

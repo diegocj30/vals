@@ -335,8 +335,8 @@ textos! {
     Figura3: "FIGURA TERCERA", "THIRD FIGURE";
     Figura4: "FIGURA CUARTA", "FOURTH FIGURE";
     Prologo: "PRÓLOGO", "PROLOGUE";
-    Ayuda: "{} disparar  {} saltar  {} dash  {} parry  {} super  {} focus  {} pausa  {} reintentar  M mudo  F1  F3 pasar",
-        "{} shoot  {} jump  {} dash  {} parry  {} super  {} focus  {} pause  {} retry  M mute  F1  F3 skip";
+    Ayuda: "{} disparar  {} saltar  {} dash  {} parry  {} super  {} focus  {} pausa  {} reintentar  {} mudo  {}  {} pasar",
+        "{} shoot  {} jump  {} dash  {} parry  {} super  {} focus  {} pause  {} retry  {} mute  {}  {} skip";
     Bravo: "¡BRAVO!", "BRAVO!";
     // El rotulo del super, uno por baile (ver `ovacion.rs`): gritos de
     // patio de butacas de los de siempre, sin dobles sentidos.
@@ -488,27 +488,12 @@ textos! {
     Parry: "Parry", "Parry";
     Super: "Super", "Super";
     Focus: "Focus", "Focus";
-    Flechas: "flechas", "arrows";
-    StickOCruceta: "stick o cruceta", "stick or d-pad";
-    StickArriba: "stick arriba", "stick up";
-    ArribaO: "ARRIBA o {}", "UP or {}";
+    ArribaO: "{} o {}", "{} or {}";
     Espacio: "ESPACIO", "SPACE";
     ShiftDcho: "SHIFT DCHO", "RIGHT SHIFT";
     CtrlDcho: "CTRL DCHO", "RIGHT CTRL";
     Intro: "INTRO", "ENTER";
     Borrar: "BORRAR", "BACKSPACE";
-    Arriba: "ARRIBA", "UP";
-    Abajo: "ABAJO", "DOWN";
-    Izquierda: "IZQUIERDA", "LEFT";
-    Derecha: "DERECHA", "RIGHT";
-    Cruz: "X", "cross";
-    Circulo: "círculo", "circle";
-    Cuadrado: "cuadrado", "square";
-    Triangulo: "triángulo", "triangle";
-    CrucetaArriba: "arriba", "up";
-    CrucetaAbajo: "abajo", "down";
-    CrucetaIzquierda: "izquierda", "left";
-    CrucetaDerecha: "derecha", "right";
 
     // --- El prologo ---
     Siguiente: "siguiente", "next";

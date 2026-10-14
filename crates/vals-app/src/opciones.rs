@@ -21,6 +21,7 @@ use crate::acciones::{
 };
 use crate::draw::fade;
 use crate::fuentes::{self, Cara};
+use crate::glifos::{self, Trozo, txg, txt};
 use crate::idioma::{Idioma, Texto, tx, txf};
 use crate::mando::boton;
 use crate::paleta::{ORO, PAPEL, TINTA, TINTA_TENUE};
@@ -474,8 +475,8 @@ impl Carta {
             if let Some(v) = valor {
                 let esperando = elegida && self.esperando.is_some();
                 let color = if esperando { ORO } else { tinta };
-                let v = if esperando { "...".to_owned() } else { v };
-                fuentes::derecha(&v, x0 + w - 44.0 * u, y, tam, Cara::Cuerpo, color);
+                let v = if esperando { txt("...") } else { v };
+                glifos::derecha(&v, x0 + w - 44.0 * u, y, tam, color);
             }
             y += alto_fila;
         }
@@ -487,21 +488,23 @@ impl Carta {
                     Dispositivo::Teclado => Texto::PulsaTecla,
                     Dispositivo::Mando => Texto::PulsaBoton,
                 };
-                format!(
+                glifos::rellenar(
                     "{}    {}",
-                    txf(pide, &[&j.nombre().to_lowercase()]),
-                    txf(Texto::Cancelar, &[&n.pausa])
+                    &[
+                        &txt(txf(pide, &[&j.nombre().to_lowercase()])),
+                        &txg(Texto::Cancelar, &[&n.pausa]),
+                    ],
                 )
             }
             _ => {
-                let mut p = txf(Texto::Pie, &[&n.aceptar, &n.atras]);
+                let mut p = txg(Texto::Pie, &[&n.aceptar, &n.atras]);
                 if self.pantalla == Pantalla::Opciones
                     && matches!(
                         filas[self.cursor.min(filas.len() - 1)],
                         Fila::Musica | Fila::Efectos | Fila::Idioma
                     )
                 {
-                    p.push_str(&txf(Texto::PieCambiar, &[&n.mover]));
+                    p.extend(txg(Texto::PieCambiar, &[&n.mover]));
                 }
                 p
             }
@@ -517,7 +520,7 @@ impl Carta {
         );
         let py = y0 + h - 26.0 * u;
         let ancho = w - 60.0 * u;
-        fuentes::encajado(&pie, cx, py, 17.0 * u, ancho, Cara::Cuerpo, TINTA_TENUE);
+        glifos::encajado(&pie, cx, py, 17.0 * u, ancho, TINTA_TENUE);
         if let Some((aviso, cuando)) = self.aviso {
             let k = 1.0 - (((get_time() - cuando) as f32 - 1.6) / 0.4).clamp(0.0, 1.0);
             if k > 0.0 {
@@ -533,21 +536,22 @@ impl Carta {
         }
     }
 
-    /// El texto de una fila y, si lo tiene, su valor a la derecha.
+    /// El texto de una fila y, si lo tiene, su valor a la derecha: un si o un
+    /// no, el idioma, o el boton que hace eso, dibujado.
     fn fila(
         &self,
         f: Fila,
         op: &Opciones,
         n: &Nombres,
         playstation: bool,
-    ) -> (&'static str, Option<String>) {
-        let si_no = |b: bool| Some(tx(if b { Texto::Si } else { Texto::No }).to_owned());
+    ) -> (&'static str, Option<Vec<Trozo>>) {
+        let si_no = |b: bool| Some(txt(tx(if b { Texto::Si } else { Texto::No })));
         let (texto, valor) = match f {
-            Fila::Seguir => (Texto::FilaSeguir, Some(n.pausa.to_owned())),
-            Fila::Reintentar => (Texto::FilaReintentar, Some(n.reintentar.to_owned())),
+            Fila::Seguir => (Texto::FilaSeguir, Some(n.pausa.clone())),
+            Fila::Reintentar => (Texto::FilaReintentar, Some(n.reintentar.clone())),
             Fila::Mapa => (Texto::FilaMapa, None),
             Fila::Opciones => (Texto::FilaOpciones, None),
-            Fila::Idioma => (Texto::FilaIdioma, Some(op.idioma.nombre().to_owned())),
+            Fila::Idioma => (Texto::FilaIdioma, Some(txt(op.idioma.nombre()))),
             // El volumen se dibuja aparte, en rayas.
             Fila::Musica => (Texto::Musica, None),
             Fila::Efectos => (Texto::Efectos, None),
@@ -561,8 +565,7 @@ impl Carta {
                 let Pantalla::Controles(d) = self.pantalla else {
                     return (j.nombre(), None);
                 };
-                let tecla = op.controles.nombre(d, j, playstation);
-                return (j.nombre(), Some(tecla.to_owned()));
+                return (j.nombre(), Some(op.controles.glifo(d, j, playstation)));
             }
             Fila::Restaurar => (Texto::Restaurar, None),
             Fila::Volver => (Texto::Volver, None),

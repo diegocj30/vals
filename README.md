@@ -82,8 +82,8 @@ lo dibujan las balas y su foto de larga exposicion.
 | Parry | `C` | Circulo / B |
 | Super | `Espacio` / `V` | Triangulo / Y |
 | Focus (lento; en los paseos, plantarse y apuntar) | `Shift` | L1 / L2 (LB / LT) |
-| Entreacto (pausa) y, en el titulo, opciones | `Esc` / `P` | Options / Start |
-| Reintentar el baile o el paseo, en cualquier momento | `R` | Share / Back |
+| Entreacto (pausa) y, en el titulo, opciones | `Esc` / `P` | Options / Menu (Start) |
+| Reintentar el baile o el paseo, en cualquier momento | `R` | Share / View (Back) |
 | Aceptar en los menus | `Z` / `Intro` / `Espacio` | Boton de abajo |
 | Atras en los menus, y salir de la pista o la tienda | `Esc` / `Borrar` | Circulo / B |
 | Abrir el libro de baile (en el menu) | `L` | L1 / LB |

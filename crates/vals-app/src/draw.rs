@@ -11,6 +11,7 @@ use crate::bailarines;
 use crate::bullet_renderer::BulletRenderer;
 use crate::cartela;
 use crate::fuentes::{self, Cara};
+use crate::glifos::{self, Boton, Trozo, txg};
 use crate::idioma::{Texto, nombre, tx, txf};
 use crate::jefes;
 use crate::libro;
@@ -218,6 +219,7 @@ pub fn frame(
     layout: &Layout,
     bullets_gpu: Option<&mut BulletRenderer>,
     caida: f32,
+    n: &Nombres,
 ) {
     papel();
     draw_arena(
@@ -243,7 +245,7 @@ pub fn frame(
     paspartu(layout);
     paneles(world, alpha, layout);
     draw_hp_bar(world, layout);
-    draw_cartas(world, layout);
+    draw_cartas(world, layout, &n.super_);
     draw_hud(world, layout);
 }
 
@@ -350,13 +352,13 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, n: &Nombres) {
     // separadas porque no pesan lo mismo: lo primero es una invitacion y lo
     // segundo una chuleta. Antes eran dos (volando o con salto), pero desde la
     // ultima version el modo lo trae cada baile y no se elige aqui.
-    let lineas: Vec<String> = vec![
-        txf(Texto::MenuEntrar, &[&n.aceptar, &cola]),
-        txf(Texto::MenuMover, &[&n.mover, &n.disparar, &n.dash]),
-        txf(Texto::MenuParry, &[&n.parry, &n.saltar, &n.focus]),
-        tx(Texto::MenuRosas).to_owned(),
-        txf(Texto::MenuSuper, &[&n.super_]),
-        txf(Texto::MenuPausa, &[&n.pausa, &n.reintentar]),
+    let lineas: Vec<Vec<Trozo>> = vec![
+        txg(Texto::MenuEntrar, &[&n.aceptar, &glifos::txt(cola)]),
+        txg(Texto::MenuMover, &[&n.mover, &n.disparar, &n.dash]),
+        txg(Texto::MenuParry, &[&n.parry, &n.saltar, &n.focus]),
+        glifos::txt(tx(Texto::MenuRosas)),
+        txg(Texto::MenuSuper, &[&n.super_]),
+        txg(Texto::MenuPausa, &[&n.pausa, &n.reintentar]),
     ];
 
     let o = l.to_screen(0.0, 0.0);
@@ -436,10 +438,7 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, n: &Nombres) {
     // esta ella.
     let y = ry + 66.0 * u;
     for linea in &lineas[..1] {
-        con_sombra(
-            |dx, c| fuentes::centrado(linea, cx + dx, y + dx, 21.0 * u, Cara::Cuerpo, c),
-            fade(TITLE, latido),
-        );
+        glifos::centrado_con_sombra(linea, cx, y, 21.0 * u, fade(TITLE, latido));
     }
 
     // Y la chuleta, en una carta abajo, pequena.
@@ -449,7 +448,7 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, n: &Nombres) {
     draw_rectangle_lines(x0, y0, cw, ch, 1.5, fade(METER_FULL, 0.7));
     let mut y = y0 + 26.0 * u;
     for linea in &lineas[1..] {
-        fuentes::centrado(linea, cx, y, 16.0 * u, Cara::Cuerpo, TEXT);
+        glifos::encajado(linea, cx, y, 16.0 * u, cw - 20.0 * u, TEXT);
         y += 21.0 * u;
     }
 }
@@ -527,11 +526,8 @@ fn sello_de_victoria(l: &Layout, world: &World, con_tarjeta: bool, n: &Nombres) 
         return;
     }
     y += 44.0;
-    let ayuda = txf(Texto::VictoriaAyuda, &[&n.reintentar, &n.aceptar]);
-    con_sombra(
-        |dx, c| fuentes::centrado(&ayuda, cx + dx, y + dx, 19.0, Cara::Cuerpo, c),
-        TEXT,
-    );
+    let ayuda = txg(Texto::VictoriaAyuda, &[&n.reintentar, &n.aceptar]);
+    glifos::centrado_con_sombra(&ayuda, cx, y, 19.0, TEXT);
 }
 
 /// Confeti en las tintas del baile y alguna rosa: lo que le tira el publico a
@@ -659,11 +655,11 @@ fn sello_de_derrota(l: &Layout, world: &World, n: &Nombres) {
     y += 40.0;
 
     for linea in [
-        txf(Texto::ReintentarBaile, &[&n.aceptar, &n.reintentar]),
-        txf(Texto::VolverPista, &[&n.atras]),
+        txg(Texto::ReintentarBaile, &[&n.aceptar, &n.reintentar]),
+        txg(Texto::VolverPista, &[&n.atras]),
     ] {
-        fuentes::centrado(&linea, cx, y, 19.0, Cara::Cuerpo, TEXT);
-        y += 25.0;
+        glifos::centrado(&linea, cx, y, 19.0, TEXT);
+        y += 27.0;
     }
 }
 
@@ -1447,15 +1443,22 @@ fn hueso(a: Vec2, b: Vec2, r0: f32, r1: f32, arqueo: f32, l: &Layout, color: Col
 /// impresa se lee igual de rapido y dice de que epoca es el juego. Cuando queda
 /// una vida la carta se pone roja y parpadea, que es lo que hace la de Cuphead,
 /// y por lo mismo: es el unico momento en que hay que mirarla.
-fn draw_cartas(world: &World, l: &Layout) {
+fn draw_cartas(world: &World, l: &Layout, super_: &[Trozo]) {
     let o = l.to_screen(0.0, ARENA_H);
-    cartas(o, world.lives, world.is_over(), &world.player);
+    cartas(o, world.lives, world.is_over(), &world.player, super_);
 }
 
 /// Las cartas en la esquina `o` (abajo a la izquierda de la lamina). Aparte de
 /// `draw_cartas` para que el paseo lleve las mismas: la vida se lee igual en la
-/// calle que en el salon.
-pub(crate) fn cartas(o: Vec2, vidas: u32, acabado: bool, jugadora: &player::Player) {
+/// calle que en el salon. `super_` es el boton del super, que se ensena
+/// cuando esta lleno.
+pub(crate) fn cartas(
+    o: Vec2,
+    vidas: u32,
+    acabado: bool,
+    jugadora: &player::Player,
+    super_: &[Trozo],
+) {
     let (x0, y) = (o.x + 12.0, o.y - 42.0);
 
     let critico = vidas <= 1 && !acabado;
@@ -1501,19 +1504,15 @@ pub(crate) fn cartas(o: Vec2, vidas: u32, acabado: bool, jugadora: &player::Play
         if lleno { METER_FULL } else { TEXT },
     );
     if lleno {
-        // Latido y aviso explicito de la tecla: si no lo dice, no existe.
+        // Latido y aviso explicito del boton: si no lo dice, no existe. Antes
+        // decia ESPACIO siempre, con el mando en la mano y con el super
+        // cambiado de tecla.
         let t = (get_time() as f32 * 6.0).sin() * 0.5 + 0.5;
-        con_sombra(
-            |dx, c| {
-                fuentes::texto(
-                    tx(Texto::Espacio),
-                    x_super + 50.0 + dx,
-                    y + 21.0 + dx,
-                    19.0,
-                    Cara::Cuerpo,
-                    c,
-                )
-            },
+        glifos::texto(
+            super_,
+            x_super + 48.0,
+            y + 21.0,
+            18.0,
             fade(METER_FULL, 0.55 + 0.45 * t),
         );
     }
@@ -1693,7 +1692,9 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32, chispas: usi
     // Con los nombres de lo que se este usando. Esta es la linea que esta
     // puesta todo el rato, asi que es la que de verdad se lee: tenerla en
     // teclado mientras el menu decia otra cosa era peor que no tener ninguna.
-    let help = txf(
+    // M, F1 y F3 son del teclado siempre, tambien con el mando en la mano.
+    let tecla = |t| glifos::boton(Boton::Tecla(t));
+    let help = txg(
         Texto::Ayuda,
         &[
             &n.disparar,
@@ -1704,16 +1705,13 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32, chispas: usi
             &n.focus,
             &n.pausa,
             &n.reintentar,
+            &tecla("M"),
+            &tecla("F1"),
+            &tecla("F3"),
         ],
     );
-    fuentes::texto(
-        &help,
-        X,
-        screen_height() - 14.0,
-        15.0,
-        Cara::Cuerpo,
-        TEXT_PAPEL,
-    );
+    let tam = glifos::encoger(&help, 15.0, screen_width() - 2.0 * X);
+    glifos::texto(&help, X, screen_height() - 14.0, tam, TEXT_PAPEL);
 }
 
 /// Aviso de una linea. Verde si fue bien, rojo si no.

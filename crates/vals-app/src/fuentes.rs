@@ -110,19 +110,6 @@ pub fn centrado(s: &str, cx: f32, y: f32, tam: f32, cara: Cara, color: Color) {
     texto(s, cx - m.width * 0.5, y, tam, cara, color);
 }
 
-/// Como `centrado`, pero encogido si no cabe en `ancho`. Para las lineas de
-/// ayuda: con los nombres del mando y el ingles, la misma linea puede medir
-/// bastante mas que con los del teclado en espanol.
-pub fn encajado(s: &str, cx: f32, y: f32, tam: f32, ancho: f32, cara: Cara, color: Color) {
-    let mide = medir(s, tam, cara).width;
-    let tam = if mide > ancho {
-        tam * ancho / mide
-    } else {
-        tam
-    };
-    centrado(s, cx, y, tam, cara, color);
-}
-
 /// Dibuja texto pegado a la derecha de `dx`.
 pub fn derecha(s: &str, dx: f32, y: f32, tam: f32, cara: Cara, color: Color) {
     let m = medir(s, tam, cara);

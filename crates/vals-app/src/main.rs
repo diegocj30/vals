@@ -23,6 +23,7 @@ mod cartela;
 mod draw;
 mod escenarios;
 mod fuentes;
+mod glifos;
 mod guardado;
 mod hot;
 mod idioma;
@@ -964,7 +965,7 @@ async fn run_game() {
                     })
                     .collect(),
             };
-            let teclas = [n.aceptar, n.pasear, n.mover, n.atras];
+            let teclas = [&n.aceptar[..], &n.pasear, &n.mover, &n.atras];
             let notas: Vec<_> = pista
                 .nodos
                 .iter()
@@ -1005,7 +1006,7 @@ async fn run_game() {
                 Escena::Combate => jefes::caida(caida.unwrap_or(0.0)),
                 _ => 1.0,
             };
-            draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut(), cayendo);
+            draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut(), cayendo, &n);
             if escena == Escena::Combate {
                 let yo = world.player.render_pos(alpha);
                 let tam = vec2(vals_core::ARENA_W, vals_core::ARENA_H);
@@ -1185,8 +1186,8 @@ async fn run_replay(path: String) {
 
         let t1 = get_time();
         let layout = draw::Layout::compute();
-        draw::frame(&world, alpha, &layout, bullets_gpu.as_mut(), 1.0);
         let n = Nombres::de(Dispositivo::Teclado, false, &Controles::default());
+        draw::frame(&world, alpha, &layout, bullets_gpu.as_mut(), 1.0, &n);
         draw::debug_overlay(&world, &stats, steps, 0, &n);
         draw::replay_badge(cursor, replay.inputs.len(), divergencia);
         stats.push_render((get_time() - t1) as f32);
