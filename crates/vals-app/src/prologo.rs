@@ -27,79 +27,56 @@ use crate::acciones::Nombres;
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{circulo, linea, rect, tri};
 use crate::fuentes::{self, Cara};
+use crate::idioma::{Texto, nombre, tx};
 use crate::music::Tema;
 use crate::paleta::{self, LUZ, ORO, PAPEL, PARED, TARIMA, TINTA, VETA};
 use crate::protagonista::{self, Expresion};
 use crate::{escenarios, jefes, modista, salon, skeleton};
 
 // ---------------------------------------------------------------------------
-// Los textos, todos aqui: la traduccion los busca en un solo sitio.
+// Los textos: estan en `idioma`, y aqui en que orden salen.
 // ---------------------------------------------------------------------------
 
-/// Lo que dice el menu para volver a verlo.
-pub const EN_EL_MENU: &str = "la historia";
-const SIGUIENTE: &str = "siguiente";
-const SALTAR: &str = "saltar";
-
 /// Cada lamina: el titulo y dos lineas, como un intertitulo de cine mudo.
-const LAMINAS: [[&str; 3]; 5] = [
-    [
-        "EL GRAN SALON",
-        "Hacia 1900, un salon de baile viaja en tren de ciudad en ciudad.",
-        "Esta noche estrena bailarina.",
-    ],
-    [
-        "A MEDIANOCHE",
-        "Al dar las doce, las cosas del salon se despiertan...",
-        "...y se ponen a bailar solas.",
-    ],
-    [
-        "Y SE LLEVAN LA MUSICA",
-        "La caja de musica, el bandoneon, el gramofono y las coristas",
-        "se escapan cada uno a su ciudad. El salon se queda mudo.",
-    ],
-    [
-        "SIN MUSICA NO HAY BAILE",
-        "Asi que ella va a buscarla: calle a calle y baile a baile.",
-        "Las fichas del camino, a la modista, que cose lo que haga falta.",
-    ],
-    [
-        "PROGRAMA DE LA NOCHE",
-        "Solo devuelven la musica a quien les baile mejor que ellos.",
-        "Que empiece la funcion.",
-    ],
+const LAMINAS: [[Texto; 3]; 5] = [
+    [Texto::Lamina1, Texto::Lamina1A, Texto::Lamina1B],
+    [Texto::Lamina2, Texto::Lamina2A, Texto::Lamina2B],
+    [Texto::Lamina3, Texto::Lamina3A, Texto::Lamina3B],
+    [Texto::Lamina4, Texto::Lamina4A, Texto::Lamina4B],
+    [Texto::Lamina5, Texto::Lamina5A, Texto::Lamina5B],
 ];
 
-/// Adonde se fue cada baile, en el orden de `paleta::TINTAS`.
+/// Adonde se fue cada baile, en el orden de `paleta::TINTAS`. Se traducen con
+/// `idioma::nombre`, como los bailes.
 const CIUDADES: [&str; 4] = ["VIENA", "BUENOS AIRES", "CHICAGO", "PARIS"];
 /// Los numeros del programa, en el mismo orden.
 const NUMEROS: [&str; 4] = ["El Vals", "El Tango", "El Charleston", "El Cancan"];
 const ROMANOS: [&str; 4] = ["I.", "II.", "III.", "IV."];
 
 /// Una linea por jefe, para su cartela de entrada.
-const LEMAS_BAILE: [&str; 4] = [
-    "Se llevo el vals a Viena, y gira sin que nadie le de cuerda.",
-    "Se llevo el tango al arrabal, y no lo suelta ni un compas.",
-    "Se llevo el jazz a Chicago, y lo pone una y otra vez.",
-    "Se llevaron el galop a Paris, y patean sin parar.",
+const LEMAS_BAILE: [Texto; 4] = [
+    Texto::LemaVals,
+    Texto::LemaTango,
+    Texto::LemaCharleston,
+    Texto::LemaCancan,
 ];
 
 /// Una linea por paseo, por el jefe al que lleva.
-const LEMAS_PASEO: [&str; 4] = [
-    "Las calles de Viena todavia silban el vals que se llevaron.",
-    "En La Boca hasta los compadritos buscan al bandoneon.",
-    "En Chicago la musica suena por los tejados: hay que subir.",
-    "Cuesta arriba, hasta el molino rojo donde patean las coristas.",
+const LEMAS_PASEO: [Texto; 4] = [
+    Texto::LemaViena,
+    Texto::LemaArrabal,
+    Texto::LemaChicago,
+    Texto::LemaMontmartre,
 ];
 
 /// El lema de un jefe. Uno que no exista se queda sin lema: es adorno.
 pub fn lema_del_baile(jefe: usize) -> &'static str {
-    LEMAS_BAILE.get(jefe).copied().unwrap_or("")
+    LEMAS_BAILE.get(jefe).map_or("", |t| tx(*t))
 }
 
 /// El lema del paseo que va antes del jefe `jefe`.
 pub fn lema_del_paseo(jefe: usize) -> &'static str {
-    LEMAS_PASEO.get(jefe).copied().unwrap_or("")
+    LEMAS_PASEO.get(jefe).map_or("", |t| tx(*t))
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +176,8 @@ impl Prologo {
         let c = paleta::TINTA_TENUE;
         let n = format!("{} / {}", self.lamina + 1, LAMINAS.len());
         fuentes::texto(&n, o.x, y, 16.0, Cara::Cuerpo, c);
-        let ayuda = format!("{ok}  {SIGUIENTE}      {esc}  {SALTAR}");
+        let (siguiente, saltar) = (tx(Texto::Siguiente), tx(Texto::SaltarHistoria));
+        let ayuda = format!("{ok}  {siguiente}      {esc}  {saltar}");
         fuentes::derecha(&ayuda, o.x + l.len(VISTA_W), y, 16.0, Cara::Cuerpo, c);
     }
 }
@@ -210,7 +188,7 @@ pub fn en_el_menu(l: &Layout, teclas: &Nombres) {
     let tecla = teclas.historia;
     let o = l.to_screen(0.0, 0.0);
     let u = l.scale().clamp(0.55, 1.2);
-    let texto = format!("{tecla}   {EN_EL_MENU}");
+    let texto = format!("{tecla}   {}", tx(Texto::LaHistoria));
     fuentes::texto(
         &texto,
         o.x + 22.0 * u,
@@ -403,7 +381,7 @@ fn ciudades(l: &Layout, s: f32) {
         draw_rectangle(p.x, p.y, w, cinta, TINTA);
         let tam = l.len(22.0);
         let y = p.y + cinta * 0.5 + tam * 0.3;
-        fuentes::centrado(ciudad, p.x + w * 0.5, y, tam, Cara::Titulo, PAPEL);
+        fuentes::centrado(nombre(ciudad), p.x + w * 0.5, y, tam, Cara::Titulo, PAPEL);
     }
 }
 
@@ -464,7 +442,8 @@ fn programa(l: &Layout, s: f32) {
     draw_line(cx - media, ry, cx + media, ry, 1.5, TINTA);
     draw_poly(cx, ry, 4, l.len(5.0), 45.0, TINTA);
 
-    for (i, nombre) in NUMEROS.iter().enumerate() {
+    for (i, numero) in NUMEROS.iter().enumerate() {
+        let titulo = nombre(numero);
         let a = ((s - 0.5 - 0.45 * i as f32) / 0.4).clamp(0.0, 1.0);
         if a <= 0.0 {
             continue;
@@ -485,15 +464,15 @@ fn programa(l: &Layout, s: f32) {
         let tenue = fade(paleta::TINTA_TENUE, a);
         fuentes::texto(ROMANOS[i], x, base, tam, Cara::Titulo, tenue);
         let x = l.to_screen(350.0, 0.0).x;
-        fuentes::texto(nombre, x, base, tam, Cara::Titulo, fade(TINTA, a));
-        let ancho = fuentes::medir(nombre, tam, Cara::Titulo).width;
+        fuentes::texto(titulo, x, base, tam, Cara::Titulo, fade(TINTA, a));
+        let ancho = fuentes::medir(titulo, tam, Cara::Titulo).width;
         let filete = base + l.len(7.0);
         draw_line(x, filete, x + ancho, filete, l.len(3.0), fade(tinta, a));
         let fin = l.to_screen(720.0, 0.0).x;
-        let ciudad = CIUDADES[i];
+        let ciudad = nombre(CIUDADES[i]);
         fuentes::derecha(ciudad, fin, base, l.len(18.0), Cara::Cuerpo, fade(TINTA, a));
         // La linea de puntos del programa, del nombre a la ciudad.
-        let desde = x + fuentes::medir(nombre, tam, Cara::Titulo).width + l.len(12.0);
+        let desde = x + ancho + l.len(12.0);
         let hasta = fin - fuentes::medir(ciudad, l.len(18.0), Cara::Cuerpo).width - l.len(12.0);
         let mut px = desde;
         while px < hasta {
@@ -510,7 +489,7 @@ fn programa(l: &Layout, s: f32) {
 
 /// El intertitulo: la franja de tinta de abajo con el titulo y sus dos lineas,
 /// que entran un poco despues que la lamina para que se mire primero el dibujo.
-fn intertitulo(l: &Layout, textos: &[&str; 3], s: f32) {
+fn intertitulo(l: &Layout, textos: &[Texto; 3], s: f32) {
     rect(l, 0.0, PIE, VISTA_W, VISTA_H - PIE, fade(TINTA, 0.94));
     linea(l, (0.0, PIE), (VISTA_W, PIE), 2.0, ORO);
     linea(
@@ -523,7 +502,7 @@ fn intertitulo(l: &Layout, textos: &[&str; 3], s: f32) {
     let a = ((s - 0.35) / 0.4).clamp(0.0, 1.0);
     let cx = l.to_screen(VISTA_W * 0.5, 0.0).x;
     let y = |u: f32| l.to_screen(0.0, u).y;
-    let [titulo, una, otra] = textos;
+    let [titulo, una, otra] = textos.map(tx);
     let claro = fade(draw::TITLE, a);
     fuentes::centrado(
         titulo,

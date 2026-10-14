@@ -25,6 +25,7 @@ mod escenarios;
 mod fuentes;
 mod guardado;
 mod hot;
+mod idioma;
 mod jefes;
 mod libro;
 mod mando;
@@ -50,6 +51,7 @@ use bullet_renderer::BulletRenderer;
 use cartela::{Cartela, Fundido};
 use guardado::Guardado;
 use hot::HotReload;
+use idioma::{Texto, nombre, tx, txf};
 use music::Tema;
 use opciones::{Carta, Orden, VOLUMEN_MAX};
 use particulas::Particulas;
@@ -358,6 +360,7 @@ async fn run_game() {
         let volumen = |v: u8| f32::from(v) / f32::from(VOLUMEN_MAX);
         audio.volumenes(volumen(op.musica) * agachada, volumen(op.efectos));
         trazo::poner(op.hervor);
+        idioma::poner(op.idioma);
         zumo.sacudir = op.sacudida;
         #[cfg(not(target_arch = "wasm32"))]
         if op.pantalla_completa != pantalla_puesta {
@@ -514,11 +517,11 @@ async fn run_game() {
         if !capturando && is_key_pressed(KeyCode::T) {
             progreso.opciones.hervor = !progreso.opciones.hervor;
             progreso.guardar();
-            let msg = if progreso.opciones.hervor {
-                "trazo vivo"
+            let msg = tx(if progreso.opciones.hervor {
+                Texto::TrazoVivo
             } else {
-                "trazo quieto"
-            };
+                Texto::TrazoQuieto
+            });
             aviso = Some((msg.to_owned(), false, 120));
         }
         // En la tienda. Va antes que la pista por lo mismo que la pista va
@@ -574,8 +577,12 @@ async fn run_game() {
                     paseo = Some((k, nuevo_paseo(def, &progreso)));
                     intento = progreso.marcas.empezar(&def.nombre);
                     cartela = Some(
-                        Cartela::prologo(&def.nombre, &def.subtitulo, Tema::de(jefe, 0).titulo())
-                            .con_lema(prologo::lema_del_paseo(jefe)),
+                        Cartela::prologo(
+                            nombre(&def.nombre),
+                            nombre(&def.subtitulo),
+                            nombre(Tema::de(jefe, 0).titulo()),
+                        )
+                        .con_lema(prologo::lema_del_paseo(jefe)),
                     );
                 } else {
                     escena = Escena::Combate;
@@ -613,11 +620,7 @@ async fn run_game() {
             if repaso {
                 escena = Escena::Pista;
                 let n = p.fichas_cogidas();
-                aviso = Some((
-                    format!("{n} de {} fichas del paseo son tuyas", p.fichas.len()),
-                    false,
-                    180,
-                ));
+                aviso = Some((txf(Texto::FichasTuyas, &[&n, &p.fichas.len()]), false, 180));
             } else {
                 escena = Escena::Combate;
                 (world, recorder, cartela) =
@@ -700,7 +703,7 @@ async fn run_game() {
         {
             p.saltar();
             intento.trampa = true;
-            aviso = Some(("paseo saltado".to_owned(), false, 120));
+            aviso = Some((tx(Texto::PaseoSaltado).to_owned(), false, 120));
         }
         if libre && is_key_pressed(KeyCode::F3) && escena == Escena::Combate && !world.is_over() {
             world.saltar_el_baile();
@@ -711,7 +714,7 @@ async fn run_game() {
             // vaciado.
             audio.play(Sfx::Fase, 1.0);
             zumo.golpe_gordo();
-            aviso = Some(("baile saltado".to_owned(), false, 120));
+            aviso = Some((tx(Texto::BaileSaltado).to_owned(), false, 120));
         }
         if is_key_pressed(KeyCode::F2) {
             aviso = Some(match guardar_replay(&recorder) {
@@ -813,7 +816,7 @@ async fn run_game() {
             // lo que convierte el final de una cartela en el principio de un
             // combate.
             cartela = c.es_de_entrada().then(|| match escena {
-                Escena::Paseo => Cartela::grito("¡EN MARCHA!"),
+                Escena::Paseo => Cartela::grito(tx(Texto::EnMarcha)),
                 _ => Cartela::a_bailar(),
             });
         }
@@ -831,7 +834,10 @@ async fn run_game() {
                 chispas.reaccionar(&eventos, &world);
                 zumo.reaccionar(&eventos);
                 if eventos.phase_changed && !world.boss.defeated {
-                    cartela = Some(Cartela::figura(world.boss.phase_name(), world.boss.phase));
+                    cartela = Some(Cartela::figura(
+                        nombre(world.boss.phase_name()),
+                        world.boss.phase,
+                    ));
                 }
             }
             (Escena::Paseo, _) => {
@@ -941,7 +947,7 @@ async fn run_game() {
             draw::particulas(&chispas, &camara);
             calle::encima(p, &layout, &n);
             if let Some(t) = intento.tarjeta.as_ref() {
-                libro::tarjeta_de_paseo(t, &p.def.nombre, &lamina, &n);
+                libro::tarjeta_de_paseo(t, nombre(&p.def.nombre), &lamina, &n);
             }
         } else {
             let mostrado = match (escena, attract.as_ref()) {
@@ -1023,9 +1029,9 @@ fn empezar_baile(jefe: usize, equipo: Equipo) -> (World, Recorder, Option<Cartel
     let world = World::empezar_con(SEED, Mode::Flight, jefe, equipo);
     let recorder = Recorder::for_world(&world);
     let cartela = Cartela::entrada(
-        &world.boss.name,
-        world.boss.phase_name(),
-        Tema::de(world.baile, 0).titulo(),
+        nombre(&world.boss.name),
+        nombre(world.boss.phase_name()),
+        nombre(Tema::de(world.baile, 0).titulo()),
     )
     .con_lema(prologo::lema_del_baile(world.baile));
     (world, recorder, Some(cartela))

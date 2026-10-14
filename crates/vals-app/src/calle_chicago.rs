@@ -34,6 +34,7 @@ use crate::calle::{HUESO, ROSA, camara, con_tinta};
 use crate::draw::{Layout, fade};
 use crate::escenarios::{Instrumento, arco, circulo, linea, musico, rect, tri};
 use crate::fuentes::{self, Cara};
+use crate::idioma::{Texto, tx};
 use crate::paleta::{LUZ, ORO, TINTA};
 
 // La noche del club: verde botella, no azul de Prusia. Y un horizonte que
@@ -644,7 +645,14 @@ fn teatro(l: &Layout, x: f32, t: f32, pulso: f32) {
     // La marquesina: el cartel en la cara, bombillas arriba y abajo.
     let (mx, my, mw, mh) = (x + 110.0, 300.0, 300.0, 50.0);
     caja(l, mx, my, mw, mh, color_u8!(246, 232, 196, 255), 3.0);
-    rotulo(l, "ESTA NOCHE", mx + mw * 0.5, my + 21.0, 15.0, TINTA);
+    rotulo(
+        l,
+        tx(Texto::EstaNoche),
+        mx + mw * 0.5,
+        my + 21.0,
+        15.0,
+        TINTA,
+    );
     rotulo(l, "CHARLESTON", mx + mw * 0.5, my + 43.0, 20.0, ROJO);
     bombillas(l, (mx, my - 6.0), (mx + mw, my - 6.0), 22, t, 3.0);
     bombillas(

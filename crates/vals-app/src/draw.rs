@@ -11,6 +11,7 @@ use crate::bailarines;
 use crate::bullet_renderer::BulletRenderer;
 use crate::cartela;
 use crate::fuentes::{self, Cara};
+use crate::idioma::{Texto, nombre, tx, txf};
 use crate::jefes;
 use crate::libro;
 use crate::music::Tema;
@@ -308,8 +309,8 @@ fn draw_hud(world: &World, l: &Layout) {
     if !world.boss.defeated {
         let etiqueta = format!(
             "{}  -  {}  ({}/{})",
-            world.boss.name,
-            world.boss.phase_name(),
+            nombre(&world.boss.name),
+            nombre(world.boss.phase_name()),
             world.boss.phase + 1,
             world.boss.phase_count()
         );
@@ -331,7 +332,7 @@ fn draw_hud(world: &World, l: &Layout) {
 
         // Y debajo, que vals suena. "Cada jefe es un baile" se entiende mejor
         // si el baile tiene nombre y autor.
-        let baile = Tema::de(world.baile, world.boss.phase).titulo();
+        let baile = nombre(Tema::de(world.baile, world.boss.phase).titulo());
         con_sombra(
             |dx, c| {
                 fuentes::derecha(
@@ -360,7 +361,7 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, n: &Nombres) {
     let cola = if intentos == 0 {
         String::new()
     } else {
-        format!("   ({intentos} intentos)")
+        txf(Texto::MenuIntentos, &[&intentos])
     };
 
     // La primera linea es como se entra; el resto, los controles. Van
@@ -368,21 +369,12 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, n: &Nombres) {
     // segundo una chuleta. Antes eran dos (volando o con salto), pero desde la
     // ultima version el modo lo trae cada baile y no se elige aqui.
     let lineas: Vec<String> = vec![
-        format!("{}   entrar a la pista{cola}", n.aceptar),
-        format!(
-            "{} mover    {} disparar    {} dash",
-            n.mover, n.disparar, n.dash
-        ),
-        format!(
-            "{} parry    {} saltar    {} focus",
-            n.parry, n.saltar, n.focus
-        ),
-        "Parriar las balas ROSAS llena la barra SUPER;".to_owned(),
-        format!("llena, {} limpia la pantalla y hace mucho dano.", n.super_),
-        format!(
-            "{} pausa y opciones    {} reintentar",
-            n.pausa, n.reintentar
-        ),
+        txf(Texto::MenuEntrar, &[&n.aceptar, &cola]),
+        txf(Texto::MenuMover, &[&n.mover, &n.disparar, &n.dash]),
+        txf(Texto::MenuParry, &[&n.parry, &n.saltar, &n.focus]),
+        tx(Texto::MenuRosas).to_owned(),
+        txf(Texto::MenuSuper, &[&n.super_]),
+        txf(Texto::MenuPausa, &[&n.pausa, &n.reintentar]),
     ];
 
     let o = l.to_screen(0.0, 0.0);
@@ -445,7 +437,7 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, n: &Nombres) {
     con_sombra(
         |dx, c| {
             fuentes::centrado(
-                "cuatro bailes, cuatro jefes",
+                tx(Texto::Subtitulo),
                 cx + dx,
                 ry + 34.0 * u + dx,
                 20.0 * u,
@@ -518,7 +510,8 @@ fn sello_de_victoria(l: &Layout, world: &World, con_tarjeta: bool, n: &Nombres) 
     let (tinta, _) = paleta::del_baile(world.baile);
     let cx = o.x + w * 0.5;
     let mut y = o.y + h * if con_tarjeta { 0.17 } else { 0.36 };
-    let ancho = fuentes::medir("¡BRAVO!", 72.0, Cara::Titulo).width;
+    let bravo = tx(Texto::Bravo);
+    let ancho = fuentes::medir(bravo, 72.0, Cara::Titulo).width;
     let (rw, rh) = (ancho * 0.5 + 40.0, 50.0);
     draw_rectangle(
         cx - rw,
@@ -538,13 +531,13 @@ fn sello_de_victoria(l: &Layout, world: &World, con_tarjeta: bool, n: &Nombres) 
         );
     }
     con_sombra(
-        |dx, c| fuentes::centrado("¡BRAVO!", cx + dx, y + 20.0 + dx, 72.0, Cara::Titulo, c),
+        |dx, c| fuentes::centrado(bravo, cx + dx, y + 20.0 + dx, 72.0, Cara::Titulo, c),
         tinta,
     );
     y += rh + 48.0;
-    let nombre = format!("{}, bailado entero", world.boss.name);
+    let entero = txf(Texto::BailadoEntero, &[&nombre(&world.boss.name)]);
     con_sombra(
-        |dx, c| fuentes::centrado(&nombre, cx + dx, y + dx, 24.0, Cara::Cuerpo, c),
+        |dx, c| fuentes::centrado(&entero, cx + dx, y + dx, 24.0, Cara::Cuerpo, c),
         TITLE,
     );
     // La tarjeta lleva su propia ayuda, con los botones del mando.
@@ -552,10 +545,7 @@ fn sello_de_victoria(l: &Layout, world: &World, con_tarjeta: bool, n: &Nombres) 
         return;
     }
     y += 44.0;
-    let ayuda = format!(
-        "{} otra vez    {} volver a la pista",
-        n.reintentar, n.aceptar
-    );
+    let ayuda = txf(Texto::VictoriaAyuda, &[&n.reintentar, &n.aceptar]);
     con_sombra(
         |dx, c| fuentes::centrado(&ayuda, cx + dx, y + dx, 19.0, Cara::Cuerpo, c),
         TEXT,
@@ -634,7 +624,8 @@ fn sello_de_derrota(l: &Layout, world: &World, n: &Nombres) {
     let mut y = o.y + h * 0.30;
 
     // El sello: el titulo con una orla alrededor, como un cuno de tinta.
-    let ancho = fuentes::medir("SE ACABO", 64.0, Cara::Titulo).width;
+    let fin = tx(Texto::SeAcabo);
+    let ancho = fuentes::medir(fin, 64.0, Cara::Titulo).width;
     let (rw, rh) = (ancho * 0.5 + 34.0, 44.0);
     for (grosor, alfa) in [(4.0, 1.0), (1.5, 0.6)] {
         let d = if grosor > 2.0 { 0.0 } else { 7.0 };
@@ -647,13 +638,13 @@ fn sello_de_derrota(l: &Layout, world: &World, n: &Nombres) {
             fade(DEFEAT, alfa),
         );
     }
-    fuentes::centrado("SE ACABO", cx, y + 16.0, 64.0, Cara::Titulo, DEFEAT);
+    fuentes::centrado(fin, cx, y + 16.0, 64.0, Cara::Titulo, DEFEAT);
     y += rh + 46.0;
 
     // Donde caiste.
     let quien = format!(
         "{}  ({}/{})",
-        world.boss.phase_name(),
+        nombre(world.boss.phase_name()),
         world.boss.phase + 1,
         world.boss.phase_count()
     );
@@ -676,7 +667,7 @@ fn sello_de_derrota(l: &Layout, world: &World, n: &Nombres) {
     y += 26.0;
     let pct = (hecho * 100.0).round() as u32;
     fuentes::centrado(
-        &format!("llegaste al {pct}% del baile"),
+        &txf(Texto::LlegasteBaile, &[&pct]),
         cx,
         y,
         17.0,
@@ -686,8 +677,8 @@ fn sello_de_derrota(l: &Layout, world: &World, n: &Nombres) {
     y += 40.0;
 
     for linea in [
-        format!("{} o {}  reintentar este baile", n.aceptar, n.reintentar),
-        format!("{}  volver a la pista", n.atras),
+        txf(Texto::ReintentarBaile, &[&n.aceptar, &n.reintentar]),
+        txf(Texto::VolverPista, &[&n.atras]),
     ] {
         fuentes::centrado(&linea, cx, y, 19.0, Cara::Cuerpo, TEXT);
         y += 25.0;
@@ -914,12 +905,12 @@ fn cartel_del_baile(world: &World, alpha: f32, cx: f32, y0: f32, ancho: f32, alt
 
     // El nombre, encogido hasta que quepa: "EL CHARLESTON" no mide lo que
     // "EL VALS".
-    let nombre = world.boss.name.to_uppercase();
+    let titulo = nombre(&world.boss.name).to_uppercase();
     let mut tam = 40.0;
-    while tam > 18.0 && fuentes::medir(&nombre, tam, Cara::Titulo).width > ancho - 24.0 {
+    while tam > 18.0 && fuentes::medir(&titulo, tam, Cara::Titulo).width > ancho - 24.0 {
         tam -= 2.0;
     }
-    fuentes::centrado(&nombre, cx, y0 + 52.0, tam, Cara::Titulo, TINTA);
+    fuentes::centrado(&titulo, cx, y0 + 52.0, tam, Cara::Titulo, TINTA);
 
     // El escenario del cartel: un campo plano de la tinta del baile, y la
     // bailarina encima en silueta. Es el recurso de Toulouse-Lautrec: color
@@ -949,7 +940,7 @@ fn cartel_del_baile(world: &World, alpha: f32, cx: f32, y0: f32, ancho: f32, alt
 
     // La pieza, partida por el guion si no cabe: "El Danubio azul" arriba y
     // "Johann Strauss II, 1866" debajo.
-    let pieza = Tema::de(world.baile, world.boss.phase).titulo();
+    let pieza = nombre(Tema::de(world.baile, world.boss.phase).titulo());
     let mut y = sy + sh + 28.0;
     for trozo in pieza.split(" - ") {
         fuentes::centrado(trozo, cx, y, 15.0, Cara::Cuerpo, TEXT_PAPEL_FUERTE);
@@ -966,7 +957,14 @@ fn programa(world: &World, cx: f32, y0: f32, ancho: f32, alto: f32) {
     let h = alto * 0.78;
     orla(x0, y0, ancho, h);
 
-    fuentes::centrado("PROGRAMA", cx, y0 + 46.0, 28.0, Cara::Titulo, TINTA);
+    fuentes::centrado(
+        tx(Texto::Programa),
+        cx,
+        y0 + 46.0,
+        28.0,
+        Cara::Titulo,
+        TINTA,
+    );
     draw_line(
         x0 + 30.0,
         y0 + 60.0,
@@ -985,7 +983,7 @@ fn programa(world: &World, cx: f32, y0: f32, ancho: f32, alto: f32) {
             std::cmp::Ordering::Greater => (fade(TEXT_PAPEL, 0.7), false),
         };
         fuentes::centrado(&cartela::ordinal(i), cx, y, 12.0, Cara::Cuerpo, color);
-        let nombre = b.figura(i);
+        let nombre = nombre(b.figura(i));
         // Los nombres largos ("La rueda y el grand ecart") se encogen para
         // caber en la orla en vez de salirse del programa.
         let ancho_22 = fuentes::medir(nombre, 22.0, Cara::Titulo).width;
@@ -1519,9 +1517,9 @@ pub(crate) fn cartas(o: Vec2, vidas: u32, acabado: bool, jugadora: &player::Play
 
     // La etiqueta se queda: en las primeras partidas de verdad nadie supo para
     // que servia la barra hasta que dijo "SUPER".
-    let tx = x0 + 64.0 + 5.0 * (cw + 5.0) + 4.0;
+    let x_super = x0 + 64.0 + 5.0 * (cw + 5.0) + 4.0;
     con_sombra(
-        |dx, c| fuentes::texto("SUPER", tx + dx, y + 21.0 + dx, 15.0, Cara::Cuerpo, c),
+        |dx, c| fuentes::texto("SUPER", x_super + dx, y + 21.0 + dx, 15.0, Cara::Cuerpo, c),
         if lleno { METER_FULL } else { TEXT },
     );
     if lleno {
@@ -1530,8 +1528,8 @@ pub(crate) fn cartas(o: Vec2, vidas: u32, acabado: bool, jugadora: &player::Play
         con_sombra(
             |dx, c| {
                 fuentes::texto(
-                    "ESPACIO",
-                    tx + 50.0 + dx,
+                    tx(Texto::Espacio),
+                    x_super + 50.0 + dx,
                     y + 21.0 + dx,
                     19.0,
                     Cara::Cuerpo,
@@ -1717,9 +1715,18 @@ pub fn debug_overlay(world: &World, stats: &FrameStats, steps: u32, chispas: usi
     // Con los nombres de lo que se este usando. Esta es la linea que esta
     // puesta todo el rato, asi que es la que de verdad se lee: tenerla en
     // teclado mientras el menu decia otra cosa era peor que no tener ninguna.
-    let help = format!(
-        "{} disparar  {} saltar  {} dash  {} parry  {} super  {} focus  {} pausa  {} reintentar  M mudo  F1  F3 pasar",
-        n.disparar, n.saltar, n.dash, n.parry, n.super_, n.focus, n.pausa, n.reintentar
+    let help = txf(
+        Texto::Ayuda,
+        &[
+            &n.disparar,
+            &n.saltar,
+            &n.dash,
+            &n.parry,
+            &n.super_,
+            &n.focus,
+            &n.pausa,
+            &n.reintentar,
+        ],
     );
     fuentes::texto(
         &help,

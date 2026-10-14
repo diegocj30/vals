@@ -31,6 +31,7 @@ use crate::calle_montmartre;
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{Instrumento, arco, circulo, linea, musico, rect, tri};
 use crate::fuentes::{self, Cara};
+use crate::idioma::{Texto, nombre, tx, txf};
 use crate::modista;
 use crate::paleta::{self, LUZ, ORO, PAPEL, TINTA};
 use crate::protagonista;
@@ -187,8 +188,8 @@ pub fn encima(p: &Paseo, l: &Layout, n: &Nombres) {
     // El nombre del paseo arriba a la derecha, con sombra de tinta, como el
     // del baile en el combate.
     for (texto, y, tam, cara) in [
-        (p.def.nombre.as_str(), 34.0, 19.0, Cara::Titulo),
-        (p.def.subtitulo.as_str(), 52.0, 14.0, Cara::Cuerpo),
+        (nombre(&p.def.nombre), 34.0, 19.0, Cara::Titulo),
+        (nombre(&p.def.subtitulo), 52.0, 14.0, Cara::Cuerpo),
     ] {
         fuentes::derecha(
             texto,
@@ -205,10 +206,7 @@ pub fn encima(p: &Paseo, l: &Layout, n: &Nombres) {
     // explica no existe. Se dice los primeros segundos.
     let k = 1.0 - ((p.tick as f32 - 420.0) / 60.0).clamp(0.0, 1.0);
     if k > 0.0 {
-        let aviso = format!(
-            "{} te planta  -  plantada, {} apunta arriba",
-            n.focus, n.arriba
-        );
+        let aviso = txf(Texto::Plantar, &[&n.focus, &n.arriba]);
         let y = l.to_screen(0.0, VISTA_H).y - 16.0;
         fuentes::derecha(
             &aviso,
@@ -1227,7 +1225,8 @@ fn ko(p: &Paseo, l: &Layout, n: &Nombres) {
     let mut y = o.y + h * 0.30;
 
     let tam = 64.0;
-    let ancho = fuentes::medir("SE ACABO", tam, Cara::Titulo).width;
+    let fin = tx(Texto::SeAcabo);
+    let ancho = fuentes::medir(fin, tam, Cara::Titulo).width;
     let (rw, rh) = (ancho * 0.5 + 34.0, 44.0);
     for (grosor, alfa, d) in [(4.0, 1.0, 0.0), (1.5, 0.6, 7.0)] {
         draw_rectangle_lines(
@@ -1239,9 +1238,9 @@ fn ko(p: &Paseo, l: &Layout, n: &Nombres) {
             fade(DEFEAT, alfa),
         );
     }
-    fuentes::centrado("SE ACABO", cx, y + 16.0, tam, Cara::Titulo, DEFEAT);
+    fuentes::centrado(fin, cx, y + 16.0, tam, Cara::Titulo, DEFEAT);
     y += rh + 46.0;
-    fuentes::centrado("te quedaste en la calle", cx, y, 22.0, Cara::Cuerpo, TEXTO);
+    fuentes::centrado(tx(Texto::EnLaCalle), cx, y, 22.0, Cara::Cuerpo, TEXTO);
     y += 30.0;
 
     let hecho = p.progreso();
@@ -1252,12 +1251,12 @@ fn ko(p: &Paseo, l: &Layout, n: &Nombres) {
     draw_rectangle_lines(x0, y, barra, 9.0, 1.5, fade(TEXTO_TENUE, 0.9));
     y += 26.0;
     let pct = (hecho * 100.0).round() as u32;
-    let dicho = format!("llegaste al {pct}% del camino a la puerta");
+    let dicho = txf(Texto::LlegasteCamino, &[&pct]);
     fuentes::centrado(&dicho, cx, y, 17.0, Cara::Cuerpo, TEXTO_TENUE);
     y += 40.0;
     for linea in [
-        format!("{} o {}  reintentar el paseo", n.aceptar, n.reintentar),
-        format!("{}  volver a la pista", n.atras),
+        txf(Texto::ReintentarPaseo, &[&n.aceptar, &n.reintentar]),
+        txf(Texto::VolverPista, &[&n.atras]),
     ] {
         fuentes::centrado(&linea, cx, y, 19.0, Cara::Cuerpo, TEXTO);
         y += 25.0;

@@ -22,6 +22,7 @@
 use macroquad::prelude::{KeyCode, get_last_key_pressed, is_key_down, is_key_pressed};
 use vals_core::InputFrame;
 
+use crate::idioma::{Texto, tx, txf};
 use crate::mando::{self, Mando, boton};
 
 /// Con que se esta jugando.
@@ -153,31 +154,46 @@ impl Juego {
 
     /// Como se llama en pantalla.
     pub fn nombre(self) -> &'static str {
-        TEXTOS.juego[self as usize]
+        tx(match self {
+            Juego::Disparar => Texto::Disparar,
+            Juego::Saltar => Texto::Saltar,
+            Juego::Dash => Texto::Dash,
+            Juego::Parry => Texto::Parry,
+            Juego::Super => Texto::Super,
+            Juego::Focus => Texto::Focus,
+        })
     }
 }
 
-/// Los textos de este modulo, juntos para traducirlos de una vez.
-struct Textos {
-    juego: [&'static str; 6],
-    mover_teclado: &'static str,
-    mover_mando: &'static str,
-    arriba_teclado: &'static str,
-    arriba_mando: &'static str,
-    /// "{tecla} o ARRIBA": el salto del teclado tambien sale con arriba.
-    saltar_o_arriba: &'static str,
-    nada: &'static str,
-}
+/// Lo que se ensena de una accion sin tecla. No pasa con lo de serie.
+const NADA: &str = "-";
 
-const TEXTOS: Textos = Textos {
-    juego: ["Disparar", "Saltar", "Dash", "Parry", "Super", "Focus"],
-    mover_teclado: "flechas",
-    mover_mando: "stick o cruceta",
-    arriba_teclado: "ARRIBA",
-    arriba_mando: "stick arriba",
-    saltar_o_arriba: "ARRIBA o {}",
-    nada: "-",
-};
+/// El nombre en pantalla de una tecla o un boton, en el idioma de ahora. Los
+/// de `TECLAS` son tambien los del guardado, asi que no se tocan: se traducen
+/// aqui, al ensenarlos, y los de `mando::NOMBRES` con ellos. Los que no estan
+/// se dicen igual en los dos.
+fn en_pantalla(n: &'static str) -> &'static str {
+    let t = match n {
+        "ESPACIO" => Texto::Espacio,
+        "SHIFT DCHO" => Texto::ShiftDcho,
+        "CTRL DCHO" => Texto::CtrlDcho,
+        "INTRO" => Texto::Intro,
+        "BORRAR" => Texto::Borrar,
+        "ARRIBA" => Texto::Arriba,
+        "ABAJO" => Texto::Abajo,
+        "IZQUIERDA" => Texto::Izquierda,
+        "DERECHA" => Texto::Derecha,
+        "circulo" => Texto::Circulo,
+        "cuadrado" => Texto::Cuadrado,
+        "triangulo" => Texto::Triangulo,
+        "arriba" => Texto::CrucetaArriba,
+        "abajo" => Texto::CrucetaAbajo,
+        "izquierda" => Texto::CrucetaIzquierda,
+        "derecha" => Texto::CrucetaDerecha,
+        _ => return n,
+    };
+    tx(t)
+}
 
 /// Las teclas que se pueden dar a una accion de juego, con su nombre en
 /// pantalla y en el guardado.
@@ -259,7 +275,7 @@ pub fn bit_boton(nuevos: u32) -> Option<u64> {
 /// El nombre en pantalla de una tecla cualquiera, de las asignables o de las
 /// fijas de los menus.
 fn nombre_tecla(k: KeyCode) -> &'static str {
-    match k {
+    en_pantalla(match k {
         KeyCode::Escape => "ESC",
         KeyCode::Backspace => "BORRAR",
         KeyCode::R => "R",
@@ -270,14 +286,19 @@ fn nombre_tecla(k: KeyCode) -> &'static str {
         KeyCode::Left => "IZQUIERDA",
         KeyCode::Right => "DERECHA",
         _ => TECLAS.iter().find(|(t, _)| *t == k).map_or("?", |(_, n)| n),
-    }
+    })
 }
 
 /// El nombre de un boton crudo en este mando. Si `bit` lleva varios, el
 /// primero.
 fn nombre_boton(bit: u32, playstation: bool) -> &'static str {
     let (ps, xbox) = mando::NOMBRES[bit.trailing_zeros() as usize % mando::NOMBRES.len()];
-    if playstation { ps } else { xbox }
+    match (playstation, ps) {
+        // La "X" de PlayStation es la cruz; la de Xbox y la del teclado, una X.
+        (true, "X") => tx(Texto::Cruz),
+        (true, _) => en_pantalla(ps),
+        _ => en_pantalla(xbox),
+    }
 }
 
 /// Las acciones de juego, cada una con sus teclas y sus botones.
@@ -409,12 +430,12 @@ impl Controles {
                     .iter()
                     .enumerate()
                     .find(|(i, _)| m & (1 << i) != 0)
-                    .map_or(TEXTOS.nada, |(_, (_, n))| n)
+                    .map_or(NADA, |(_, (_, n))| en_pantalla(n))
             }
             Dispositivo::Mando => {
                 let m = self.mando[j as usize] as u32;
                 if m == 0 {
-                    TEXTOS.nada
+                    NADA
                 } else {
                     nombre_boton(m, playstation)
                 }
@@ -526,19 +547,19 @@ impl Nombres {
             pasear: accion(Accion::Pasear),
             libro: accion(Accion::Libro),
             historia: accion(Accion::Historia),
-            mover: if teclado {
-                TEXTOS.mover_teclado
+            mover: tx(if teclado {
+                Texto::Flechas
             } else {
-                TEXTOS.mover_mando
-            },
-            arriba: if teclado {
-                TEXTOS.arriba_teclado
+                Texto::StickOCruceta
+            }),
+            arriba: tx(if teclado {
+                Texto::Arriba
             } else {
-                TEXTOS.arriba_mando
-            },
+                Texto::StickArriba
+            }),
             disparar: juego(Juego::Disparar),
             saltar: if teclado {
-                TEXTOS.saltar_o_arriba.replace("{}", juego(Juego::Saltar))
+                txf(Texto::ArribaO, &[&juego(Juego::Saltar)])
             } else {
                 juego(Juego::Saltar).to_owned()
             },

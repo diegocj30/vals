@@ -73,8 +73,18 @@ pub struct Guardado {
 }
 
 impl Guardado {
+    /// Sin guardado —la primera vez—, el idioma sale del navegador o del
+    /// sistema. Con guardado, del guardado: uno de antes de que hubiera idioma
+    /// se queda en espanol, que es en lo que se jugaba.
     pub fn cargar() -> Self {
-        Self::desde_texto(&leer().unwrap_or_default())
+        match leer() {
+            Some(texto) => Self::desde_texto(&texto),
+            None => {
+                let mut g = Self::default();
+                g.opciones.idioma = crate::idioma::de_primeras();
+                g
+            }
+        }
     }
 
     pub fn guardar(&self) {
@@ -416,6 +426,21 @@ mod tests {
         let viejo = Guardado::desde_texto("VALS1;El Vals;tiro:Abanico");
         assert_eq!(viejo.opciones, Opciones::default());
         assert_eq!(viejo.a_texto(), "VALS1;El Vals;tiro:Abanico");
+    }
+
+    #[test]
+    fn el_idioma_se_guarda_y_lo_de_antes_es_espanol() {
+        use crate::idioma::Idioma;
+        // Un guardado de antes del idioma, en espanol, que es en lo que se
+        // jugaba; y el espanol, de serie, no se escribe.
+        let viejo = Guardado::desde_texto("VALS1;El Vals");
+        assert_eq!(viejo.opciones.idioma, Idioma::Es);
+        assert_eq!(viejo.a_texto(), "VALS1;El Vals");
+        let mut g = viejo;
+        g.opciones.idioma = Idioma::En;
+        let texto = g.a_texto();
+        assert_eq!(texto, "VALS1;El Vals;opcion:idioma=en");
+        assert_eq!(Guardado::desde_texto(&texto), g);
     }
 
     #[test]

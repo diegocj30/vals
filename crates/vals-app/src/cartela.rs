@@ -18,6 +18,7 @@ use macroquad::prelude::*;
 
 use crate::draw::Layout;
 use crate::fuentes::{self, Cara};
+use crate::idioma::{Texto, tx};
 
 // Todo esto va en **segundos de reloj**, no en ticks. Es presentacion: tiene
 // que durar lo mismo a 60 que a 144 Hz, y sobre todo tiene que seguir corriendo
@@ -56,18 +57,18 @@ const TELON_ORO: Color = color_u8!(198, 158, 84, 220);
 const PLIEGUES: usize = 5;
 
 /// Como se llama cada figura en el programa.
-const ORDINALES: [&str; 4] = [
-    "FIGURA PRIMERA",
-    "FIGURA SEGUNDA",
-    "FIGURA TERCERA",
-    "FIGURA CUARTA",
+const ORDINALES: [Texto; 4] = [
+    Texto::Figura1,
+    Texto::Figura2,
+    Texto::Figura3,
+    Texto::Figura4,
 ];
 
 /// El ordinal de una figura. Si algun dia un jefe tiene mas de cuatro, se queda
 /// sin ordinal en vez de reventar: una cartela es presentacion, y la
 /// presentacion nunca debe tumbar el juego.
 pub(crate) fn ordinal(numero: usize) -> String {
-    ORDINALES.get(numero).unwrap_or(&"").to_string()
+    ORDINALES.get(numero).map_or("", |t| tx(*t)).to_owned()
 }
 
 /// Una cartela en pantalla.
@@ -125,7 +126,7 @@ impl Cartela {
     /// prologo.
     pub fn prologo(paseo: &str, subtitulo: &str, pieza: &str) -> Self {
         Self {
-            orden: "PROLOGO".to_owned(),
+            orden: tx(Texto::Prologo).to_owned(),
             ..Self::entrada(paseo, subtitulo, pieza)
         }
     }
@@ -141,7 +142,7 @@ impl Cartela {
     /// El grito de salida, al acabar la cartela de entrada. Corto, grande y sin
     /// parar el mundo: el combate ya ha empezado.
     pub fn a_bailar() -> Self {
-        Self::grito("¡A BAILAR!")
+        Self::grito(tx(Texto::ABailar))
     }
 
     /// Un grito cualquiera. El paseo no se baila, se anda.

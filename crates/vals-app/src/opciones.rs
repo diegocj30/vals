@@ -21,6 +21,7 @@ use crate::acciones::{
 };
 use crate::draw::fade;
 use crate::fuentes::{self, Cara};
+use crate::idioma::{Idioma, Texto, tx, txf};
 use crate::mando::boton;
 use crate::paleta::{ORO, PAPEL, TINTA, TINTA_TENUE};
 
@@ -39,6 +40,8 @@ pub struct Opciones {
     /// Solo en nativo: en web la pantalla completa la da el navegador.
     pub pantalla_completa: bool,
     pub controles: Controles,
+    /// El de la primera vez lo elige `guardado` (ver `idioma::de_primeras`).
+    pub idioma: Idioma,
 }
 
 pub const VOLUMEN_MAX: u8 = 10;
@@ -52,6 +55,7 @@ impl Default for Opciones {
             sacudida: true,
             pantalla_completa: false,
             controles: Controles::default(),
+            idioma: Idioma::Es,
         }
     }
 }
@@ -79,6 +83,9 @@ impl Opciones {
         if self.pantalla_completa != serie.pantalla_completa {
             out.push(format!("pantalla={}", si_no(self.pantalla_completa)));
         }
+        if self.idioma != serie.idioma {
+            out.push(format!("idioma={}", self.idioma.clave()));
+        }
         out.extend(self.controles.a_texto());
         out
     }
@@ -101,6 +108,7 @@ impl Opciones {
             "hervor" => self.hervor = si_no.unwrap_or(self.hervor),
             "sacudida" => self.sacudida = si_no.unwrap_or(self.sacudida),
             "pantalla" => self.pantalla_completa = si_no.unwrap_or(self.pantalla_completa),
+            "idioma" => self.idioma = Idioma::por_clave(valor).unwrap_or(self.idioma),
             _ => {
                 self.controles.leer(clave, valor);
             }
@@ -158,6 +166,7 @@ enum Fila {
     Reintentar,
     Mapa,
     Opciones,
+    Idioma,
     Musica,
     Efectos,
     Hervor,
@@ -169,69 +178,6 @@ enum Fila {
     Volver,
 }
 
-/// Los textos de la tarjeta, juntos para traducirlos de una vez.
-struct Textos {
-    entreacto: &'static str,
-    opciones: &'static str,
-    teclado: &'static str,
-    mando: &'static str,
-    seguir: &'static str,
-    reintentar: &'static str,
-    mapa: &'static str,
-    ir_a_opciones: &'static str,
-    musica: &'static str,
-    efectos: &'static str,
-    hervor: &'static str,
-    sacudida: &'static str,
-    pantalla_completa: &'static str,
-    controles_teclado: &'static str,
-    controles_mando: &'static str,
-    restaurar: &'static str,
-    volver: &'static str,
-    si: &'static str,
-    no: &'static str,
-    /// "{aceptar} elegir    {atras} volver"
-    pie: &'static str,
-    /// "{mover} cambiar", solo en las filas que se cambian asi.
-    pie_cambiar: &'static str,
-    /// "pulsa la tecla nueva para {accion}"
-    pulsa_tecla: &'static str,
-    pulsa_boton: &'static str,
-    /// "{pausa} deja la que estaba"
-    cancelar: &'static str,
-    no_se_puede: &'static str,
-    restaurado: &'static str,
-}
-
-const TEXTOS: Textos = Textos {
-    entreacto: "ENTREACTO",
-    opciones: "OPCIONES",
-    teclado: "EL TECLADO",
-    mando: "EL MANDO",
-    seguir: "Seguir",
-    reintentar: "Reintentar",
-    mapa: "Volver a la pista",
-    ir_a_opciones: "Opciones",
-    musica: "Musica",
-    efectos: "Efectos",
-    hervor: "Trazo vivo",
-    sacudida: "Sacudida",
-    pantalla_completa: "Pantalla completa",
-    controles_teclado: "Controles del teclado",
-    controles_mando: "Controles del mando",
-    restaurar: "Restaurar los de serie",
-    volver: "Volver",
-    si: "si",
-    no: "no",
-    pie: "{a} elegir    {b} volver",
-    pie_cambiar: "    {} cambiar",
-    pulsa_tecla: "pulsa la tecla nueva para {}",
-    pulsa_boton: "pulsa el boton nuevo para {}",
-    cancelar: "{} deja la que estaba",
-    no_se_puede: "esa no: es de moverse, pausar o reintentar",
-    restaurado: "vuelven los de serie",
-};
-
 /// La tarjeta: el entreacto o, desde el titulo, las opciones a secas.
 pub struct Carta {
     pantalla: Pantalla,
@@ -241,7 +187,7 @@ pub struct Carta {
     desde_titulo: bool,
     /// Esperando la tecla o el boton nuevo para una accion.
     esperando: Option<Juego>,
-    aviso: Option<(&'static str, f64)>,
+    aviso: Option<(Texto, f64)>,
 }
 
 impl Carta {
@@ -276,7 +222,15 @@ impl Carta {
         match self.pantalla {
             Pantalla::Entreacto => vec![Fila::Seguir, Fila::Reintentar, Fila::Mapa, Fila::Opciones],
             Pantalla::Opciones => {
-                let mut v = vec![Fila::Musica, Fila::Efectos, Fila::Hervor, Fila::Sacudida];
+                // El idioma, lo primero: quien no entiende el que hay lo
+                // busca sin poder leer nada mas.
+                let mut v = vec![
+                    Fila::Idioma,
+                    Fila::Musica,
+                    Fila::Efectos,
+                    Fila::Hervor,
+                    Fila::Sacudida,
+                ];
                 if cfg!(not(target_arch = "wasm32")) {
                     v.push(Fila::PantallaCompleta);
                 }
@@ -379,6 +333,7 @@ impl Carta {
         match fila {
             Fila::Musica => volumen(&mut op.musica),
             Fila::Efectos => volumen(&mut op.efectos),
+            Fila::Idioma => op.idioma = op.idioma.otro(),
             Fila::Hervor => op.hervor = !op.hervor,
             Fila::Sacudida => op.sacudida = !op.sacudida,
             Fila::PantallaCompleta => op.pantalla_completa = !op.pantalla_completa,
@@ -392,7 +347,7 @@ impl Carta {
             Fila::Restaurar => {
                 if let Pantalla::Controles(d) = self.pantalla {
                     op.controles.restaurar(d);
-                    self.aviso = Some((TEXTOS.restaurado, get_time()));
+                    self.aviso = Some((Texto::Restaurado, get_time()));
                 }
             }
             Fila::Volver => return Some(self.atras()),
@@ -429,7 +384,7 @@ impl Carta {
                 Some(Orden::Tic)
             }
             None if otra => {
-                self.aviso = Some((TEXTOS.no_se_puede, get_time()));
+                self.aviso = Some((Texto::NoSePuede, get_time()));
                 None
             }
             None => None,
@@ -468,11 +423,12 @@ impl Carta {
         }
 
         let titulo = match self.pantalla {
-            Pantalla::Entreacto => TEXTOS.entreacto,
-            Pantalla::Opciones => TEXTOS.opciones,
-            Pantalla::Controles(Dispositivo::Teclado) => TEXTOS.teclado,
-            Pantalla::Controles(Dispositivo::Mando) => TEXTOS.mando,
+            Pantalla::Entreacto => Texto::Entreacto,
+            Pantalla::Opciones => Texto::Opciones,
+            Pantalla::Controles(Dispositivo::Teclado) => Texto::ElTeclado,
+            Pantalla::Controles(Dispositivo::Mando) => Texto::ElMando,
         };
+        let titulo = tx(titulo);
         let ty = y0 + 62.0 * u;
         fuentes::centrado(titulo, cx, ty, 40.0 * u, Cara::Titulo, TINTA);
         let ry = ty + 16.0 * u;
@@ -528,24 +484,24 @@ impl Carta {
         let pie = match (self.esperando, self.pantalla) {
             (Some(j), Pantalla::Controles(d)) => {
                 let pide = match d {
-                    Dispositivo::Teclado => TEXTOS.pulsa_tecla,
-                    Dispositivo::Mando => TEXTOS.pulsa_boton,
+                    Dispositivo::Teclado => Texto::PulsaTecla,
+                    Dispositivo::Mando => Texto::PulsaBoton,
                 };
                 format!(
                     "{}    {}",
-                    pide.replace("{}", &j.nombre().to_lowercase()),
-                    TEXTOS.cancelar.replace("{}", n.pausa)
+                    txf(pide, &[&j.nombre().to_lowercase()]),
+                    txf(Texto::Cancelar, &[&n.pausa])
                 )
             }
             _ => {
-                let mut p = TEXTOS.pie.replace("{a}", n.aceptar).replace("{b}", n.atras);
+                let mut p = txf(Texto::Pie, &[&n.aceptar, &n.atras]);
                 if self.pantalla == Pantalla::Opciones
                     && matches!(
                         filas[self.cursor.min(filas.len() - 1)],
-                        Fila::Musica | Fila::Efectos
+                        Fila::Musica | Fila::Efectos | Fila::Idioma
                     )
                 {
-                    p.push_str(&TEXTOS.pie_cambiar.replace("{}", n.mover));
+                    p.push_str(&txf(Texto::PieCambiar, &[&n.mover]));
                 }
                 p
             }
@@ -560,12 +516,13 @@ impl Carta {
             fade(TINTA, 0.5),
         );
         let py = y0 + h - 26.0 * u;
-        fuentes::centrado(&pie, cx, py, 17.0 * u, Cara::Cuerpo, TINTA_TENUE);
+        let ancho = w - 60.0 * u;
+        fuentes::encajado(&pie, cx, py, 17.0 * u, ancho, Cara::Cuerpo, TINTA_TENUE);
         if let Some((aviso, cuando)) = self.aviso {
             let k = 1.0 - (((get_time() - cuando) as f32 - 1.6) / 0.4).clamp(0.0, 1.0);
             if k > 0.0 {
                 fuentes::centrado(
-                    aviso,
+                    tx(aviso),
                     cx,
                     py - 24.0 * u,
                     16.0 * u,
@@ -584,32 +541,33 @@ impl Carta {
         n: &Nombres,
         playstation: bool,
     ) -> (&'static str, Option<String>) {
-        let si_no = |b: bool| Some(if b { TEXTOS.si } else { TEXTOS.no }.to_owned());
-        match f {
-            Fila::Seguir => (TEXTOS.seguir, Some(n.pausa.to_owned())),
-            Fila::Reintentar => (TEXTOS.reintentar, Some(n.reintentar.to_owned())),
-            Fila::Mapa => (TEXTOS.mapa, None),
-            Fila::Opciones => (TEXTOS.ir_a_opciones, None),
+        let si_no = |b: bool| Some(tx(if b { Texto::Si } else { Texto::No }).to_owned());
+        let (texto, valor) = match f {
+            Fila::Seguir => (Texto::FilaSeguir, Some(n.pausa.to_owned())),
+            Fila::Reintentar => (Texto::FilaReintentar, Some(n.reintentar.to_owned())),
+            Fila::Mapa => (Texto::FilaMapa, None),
+            Fila::Opciones => (Texto::FilaOpciones, None),
+            Fila::Idioma => (Texto::FilaIdioma, Some(op.idioma.nombre().to_owned())),
             // El volumen se dibuja aparte, en rayas.
-            Fila::Musica => (TEXTOS.musica, None),
-            Fila::Efectos => (TEXTOS.efectos, None),
-            Fila::Hervor => (TEXTOS.hervor, si_no(op.hervor)),
-            Fila::Sacudida => (TEXTOS.sacudida, si_no(op.sacudida)),
-            Fila::PantallaCompleta => (TEXTOS.pantalla_completa, si_no(op.pantalla_completa)),
-            Fila::Controles(Dispositivo::Teclado) => (TEXTOS.controles_teclado, None),
-            Fila::Controles(Dispositivo::Mando) => (TEXTOS.controles_mando, None),
+            Fila::Musica => (Texto::Musica, None),
+            Fila::Efectos => (Texto::Efectos, None),
+            Fila::Hervor => (Texto::Hervor, si_no(op.hervor)),
+            Fila::Sacudida => (Texto::Sacudida, si_no(op.sacudida)),
+            Fila::PantallaCompleta => (Texto::PantallaCompleta, si_no(op.pantalla_completa)),
+            Fila::Controles(Dispositivo::Teclado) => (Texto::ControlesTeclado, None),
+            Fila::Controles(Dispositivo::Mando) => (Texto::ControlesMando, None),
+            // Las acciones ya traen su nombre traducido.
             Fila::Accion(j) => {
                 let Pantalla::Controles(d) = self.pantalla else {
                     return (j.nombre(), None);
                 };
-                (
-                    j.nombre(),
-                    Some(op.controles.nombre(d, j, playstation).to_owned()),
-                )
+                let tecla = op.controles.nombre(d, j, playstation);
+                return (j.nombre(), Some(tecla.to_owned()));
             }
-            Fila::Restaurar => (TEXTOS.restaurar, None),
-            Fila::Volver => (TEXTOS.volver, None),
-        }
+            Fila::Restaurar => (Texto::Restaurar, None),
+            Fila::Volver => (Texto::Volver, None),
+        };
+        (tx(texto), valor)
     }
 }
 

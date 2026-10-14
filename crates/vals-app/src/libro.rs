@@ -29,62 +29,57 @@ use crate::acciones::Nombres;
 use crate::draw::{Layout, fade, paspartu};
 use crate::fuentes::{self, Cara};
 use crate::guardado::Guardado;
+use crate::idioma::{Texto, nombre, tx};
 use crate::jefes;
 use crate::paleta::{self, PAPEL, TINTA, TINTA_TENUE};
 
-/// Todo lo que se lee en pantalla, junto, para traducirlo de una vez.
+/// Todo lo que se lee en pantalla, junto: los textos estan en `idioma`, y
+/// aqui los que llevan algo de logica (plurales, huecos).
 mod textos {
     use vals_core::nota::Nota;
 
-    pub const TIEMPO: &str = "Tiempo";
-    pub const GOLPES: &str = "Golpes";
-    pub const PARRIES: &str = "Parries";
-    pub const SUPERS: &str = "Supers";
-    pub const FICHAS: &str = "Fichas";
-    pub const RECORD: &str = "nuevo record";
-    pub const TARJETA: &str = "TARJETA DE BAILE";
-    pub const HASTA_LA_PUERTA: &str = "hasta la puerta";
-    pub const LIBRO: &str = "El libro de baile";
-    pub const TEMPORADA: &str = "la temporada, apuntada a pluma";
-    pub const LOS_BAILES: &str = "LOS BAILES";
-    pub const LOS_PASEOS: &str = "LOS PASEOS";
-    pub const SIN_BAILAR: &str = "sin bailar todavia";
-    pub const SIN_ANDAR: &str = "sin andar todavia";
-    pub const SIN_CAIDAS: &str = "ni un golpe, de momento";
+    use crate::idioma::{Texto, tx, txf};
 
     pub fn volver(ok: &str, otra: &str) -> String {
-        format!("{ok}  volver a la pista       {otra}  otra vez")
+        txf(Texto::TarjetaVolver, &[&ok, &otra])
     }
     pub fn seguir(ok: &str) -> String {
-        format!("{ok}  seguir")
+        txf(Texto::Seguir, &[&ok])
     }
     pub fn intentos(n: u32) -> String {
-        format!("{n} intento{}", if n == 1 { "" } else { "s" })
+        txf(
+            if n == 1 {
+                Texto::Intento
+            } else {
+                Texto::Intentos
+            },
+            &[&n],
+        )
     }
     pub fn mejor(t: &str) -> String {
-        format!("mejor {t}")
+        txf(Texto::Mejor, &[&t])
     }
     pub fn donde_caes(figura: &str, n: u32) -> String {
-        format!("donde mas caes: {figura} ({n})")
+        txf(Texto::DondeCaes, &[&figura, &n])
     }
     pub fn jugado(t: &str) -> String {
-        format!("en la pista: {t}")
+        txf(Texto::Jugado, &[&t])
     }
     pub fn cerrar(atras: &str) -> String {
-        format!("{atras}  cerrar el libro")
+        txf(Texto::CerrarLibro, &[&atras])
     }
     pub fn abrir(tecla: &str) -> String {
-        format!("{tecla}  el libro de baile")
+        txf(Texto::AbrirLibro, &[&tecla])
     }
     /// Lo que hace el publico con cada nota.
     pub fn publico(n: Nota) -> &'static str {
-        match n {
-            Nota::APlus => "¡ovacion!",
-            Nota::A => "¡que lo repitan!",
-            Nota::B => "aplausos",
-            Nota::C => "palmas de cortesia",
-            Nota::D => "algun silbido",
-        }
+        tx(match n {
+            Nota::APlus => Texto::Ovacion,
+            Nota::A => Texto::Repitan,
+            Nota::B => Texto::Aplausos,
+            Nota::C => Texto::Palmas,
+            Nota::D => Texto::Silbidos,
+        })
     }
 }
 
@@ -444,15 +439,15 @@ pub fn tarjeta_de_baile(t: &Tarjeta, l: &Layout, teclas: &Nombres) {
     let m = &t.marcador;
     let mut tiempo = reloj(m.ticks);
     if t.record {
-        tiempo = format!("{}  {tiempo}", textos::RECORD);
+        tiempo = format!("{}  {tiempo}", tx(Texto::Record));
     }
     let filas = [
-        (textos::TIEMPO, tiempo),
-        (textos::GOLPES, m.golpes.to_string()),
-        (textos::PARRIES, m.parries.to_string()),
-        (textos::SUPERS, m.supers.to_string()),
+        (tx(Texto::Tiempo), tiempo),
+        (tx(Texto::Golpes), m.golpes.to_string()),
+        (tx(Texto::Parries), m.parries.to_string()),
+        (tx(Texto::Supers), m.supers.to_string()),
     ];
-    tarjeta(l, r, textos::TARJETA, "", &filas, a);
+    tarjeta(l, r, tx(Texto::TarjetaDeBaile), "", &filas, a);
     if let Some(n) = t.nota {
         let c = l.to_screen(r.x + 345.0, r.y + 165.0);
         sello(c, l.len(52.0), n, false, jefes::tramo(edad, 1.1, 1.3));
@@ -488,15 +483,15 @@ pub fn tarjeta_de_paseo(t: &Tarjeta, nombre: &str, l: &Layout, teclas: &Nombres)
     let m = &t.marcador;
     let mut tiempo = reloj(m.ticks);
     if t.record {
-        tiempo = format!("{}  {tiempo}", textos::RECORD);
+        tiempo = format!("{}  {tiempo}", tx(Texto::Record));
     }
     let (tuyas, total) = t.fichas.unwrap_or_default();
     let filas = [
-        (textos::TIEMPO, tiempo),
-        (textos::FICHAS, format!("{tuyas} / {total}")),
-        (textos::GOLPES, m.golpes.to_string()),
+        (tx(Texto::Tiempo), tiempo),
+        (tx(Texto::FichasFila), format!("{tuyas} / {total}")),
+        (tx(Texto::Golpes), m.golpes.to_string()),
     ];
-    let y = tarjeta(l, r, nombre, textos::HASTA_LA_PUERTA, &filas, a);
+    let y = tarjeta(l, r, nombre, tx(Texto::HastaLaPuerta), &filas, a);
     if edad > LEER as f32 / TICK_HZ as f32 {
         let ok = teclas.aceptar;
         let s = l.to_screen(r.x + w * 0.5, y + 2.0);
@@ -542,10 +537,17 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
     );
 
     let s = p(320.0, 78.0);
-    fuentes::centrado(textos::LIBRO, s.x, s.y, l.len(46.0), Cara::Titulo, TINTA);
+    fuentes::centrado(
+        tx(Texto::ElLibro),
+        s.x,
+        s.y,
+        l.len(46.0),
+        Cara::Titulo,
+        TINTA,
+    );
     let s = p(320.0, 104.0);
     fuentes::centrado(
-        textos::TEMPORADA,
+        tx(Texto::Temporada),
         s.x,
         s.y,
         l.len(15.0),
@@ -556,13 +558,17 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
     let seccion = |y: f32, titulo: &str| {
         let s = p(320.0, y);
         fuentes::centrado(titulo, s.x, s.y, l.len(19.0), Cara::Titulo, TINTA);
-        for (x0, x1) in [(50.0, 250.0), (390.0, 590.0)] {
+        // Los filetes, hasta el titulo y no mas: "THE PROMENADES" no mide lo
+        // que "LOS BAILES".
+        let media = fuentes::medir(titulo, l.len(19.0), Cara::Titulo).width / l.len(1.0) * 0.5;
+        let hueco = (media + 14.0).max(70.0);
+        for (x0, x1) in [(50.0, 320.0 - hueco), (320.0 + hueco, 590.0)] {
             let (i, d) = (p(x0, y - 6.0), p(x1, y - 6.0));
             draw_line(i.x, i.y, d.x, d.y, l.len(1.0), TINTA);
         }
     };
 
-    seccion(150.0, textos::LOS_BAILES);
+    seccion(150.0, tx(Texto::LosBailes));
     let vacia = Marca::default();
     for (i, def) in bailes.iter().enumerate() {
         let y = 176.0 + i as f32 * 92.0;
@@ -575,8 +581,15 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
         let (tinta, _) = paleta::del_baile(i);
         let s = p(124.0, y + 26.0);
         // El nombre, con un filete en la tinta de su baile debajo.
-        fuentes::texto(&def.name, s.x, s.y, l.len(27.0), Cara::Titulo, TINTA);
-        let ancho = fuentes::medir(&def.name, l.len(27.0), Cara::Titulo).width;
+        fuentes::texto(
+            nombre(&def.name),
+            s.x,
+            s.y,
+            l.len(27.0),
+            Cara::Titulo,
+            TINTA,
+        );
+        let ancho = fuentes::medir(nombre(&def.name), l.len(27.0), Cara::Titulo).width;
         draw_line(
             s.x,
             s.y + l.len(5.0),
@@ -593,16 +606,16 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
                 textos::intentos(m.intentos)
             ),
             None if m.intentos > 0 => textos::intentos(m.intentos),
-            None => textos::SIN_BAILAR.to_owned(),
+            None => tx(Texto::SinBailar).to_owned(),
         };
         let s = p(124.0, y + 50.0);
         fuentes::texto(&resumen, s.x, s.y, l.len(16.0), Cara::Cuerpo, TINTA);
         let caes = match m.peor_figura() {
             Some((f, n)) => {
-                let figura = def.phases.get(f).map_or("", |ph| ph.name.as_str());
+                let figura = def.phases.get(f).map_or("", |ph| nombre(&ph.name));
                 textos::donde_caes(figura, n)
             }
-            None if m.intentos > 0 => textos::SIN_CAIDAS.to_owned(),
+            None if m.intentos > 0 => tx(Texto::SinCaidas).to_owned(),
             None => String::new(),
         };
         let s = p(124.0, y + 70.0);
@@ -611,12 +624,19 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
     }
 
     let y0 = 176.0 + bailes.len() as f32 * 92.0 + 22.0;
-    seccion(y0, textos::LOS_PASEOS);
+    seccion(y0, tx(Texto::LosPaseos));
     for (i, def) in paseos.iter().enumerate() {
         let y = y0 + 34.0 + i as f32 * 40.0;
         let m = g.marcas.por_nombre.get(&def.nombre).unwrap_or(&vacia);
         let s = p(60.0, y);
-        fuentes::texto(&def.nombre, s.x, s.y, l.len(18.0), Cara::Cuerpo, TINTA);
+        fuentes::texto(
+            nombre(&def.nombre),
+            s.x,
+            s.y,
+            l.len(18.0),
+            Cara::Cuerpo,
+            TINTA,
+        );
         let tuyas = (0..def.fichas.len())
             .filter(|k| g.tiene_ficha(&def.nombre, *k))
             .count();
@@ -624,12 +644,12 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
             Some(t) => format!(
                 "{}   ·   {} {tuyas}/{}   ·   {}",
                 textos::mejor(&reloj(t)),
-                textos::FICHAS.to_lowercase(),
+                tx(Texto::FichasFila).to_lowercase(),
                 def.fichas.len(),
                 textos::intentos(m.intentos)
             ),
             None if m.intentos > 0 => textos::intentos(m.intentos),
-            None => textos::SIN_ANDAR.to_owned(),
+            None => tx(Texto::SinAndar).to_owned(),
         };
         let s = p(580.0, y);
         fuentes::derecha(&detalle, s.x, s.y, l.len(14.0), Cara::Cuerpo, TINTA_TENUE);

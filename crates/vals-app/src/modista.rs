@@ -20,6 +20,7 @@ use crate::audio::Sfx;
 use crate::draw::{Layout, fade, paspartu};
 use crate::fuentes::{self, Cara};
 use crate::guardado::Guardado;
+use crate::idioma::{Texto, tx, txf};
 use crate::paleta::{LUZ, ORO, PAPEL, TINTA, TINTA_TENUE};
 use crate::protagonista;
 use vals_core::{ARENA_H, ARENA_W};
@@ -77,33 +78,33 @@ impl Articulo {
     }
 
     fn nombre(self) -> &'static str {
-        match self {
-            Articulo::Tiro(Tiro::Aguja) => "La aguja",
-            Articulo::Tiro(Tiro::Abanico) => "El abanico",
-            Articulo::Tiro(Tiro::Castanuela) => "La castanuela",
-            Articulo::Tiro(Tiro::Serpentina) => "La serpentina",
-            Articulo::Amuleto(Amuleto::Ninguno) => "Sin amuleto",
-            Articulo::Amuleto(Amuleto::Relicario) => "El relicario",
-            Articulo::Amuleto(Amuleto::Guante) => "El guante",
-            Articulo::Amuleto(Amuleto::Corse) => "El corse",
-        }
+        tx(match self {
+            Articulo::Tiro(Tiro::Aguja) => Texto::Aguja,
+            Articulo::Tiro(Tiro::Abanico) => Texto::Abanico,
+            Articulo::Tiro(Tiro::Castanuela) => Texto::Castanuela,
+            Articulo::Tiro(Tiro::Serpentina) => Texto::Serpentina,
+            Articulo::Amuleto(Amuleto::Ninguno) => Texto::SinAmuleto,
+            Articulo::Amuleto(Amuleto::Relicario) => Texto::Relicario,
+            Articulo::Amuleto(Amuleto::Guante) => Texto::Guante,
+            Articulo::Amuleto(Amuleto::Corse) => Texto::Corse,
+        })
     }
 
     /// Lo que hace, en dos lineas y sin adornos: si pega la mitad, dice la
     /// mitad. Una tienda que exagera obliga a comprar para enterarse.
     fn lineas(self) -> [&'static str; 2] {
+        use Texto::*;
         match self {
-            Articulo::Tiro(Tiro::Aguja) => ["Dos chorros rectos.", "La de siempre."],
-            Articulo::Tiro(Tiro::Abanico) => ["Tres a la vez, en abanico.", "De lejos entra una."],
-            Articulo::Tiro(Tiro::Castanuela) => ["Pega mas fuerte, pero", "no llega lejos."],
-            Articulo::Tiro(Tiro::Serpentina) => ["Busca sola al blanco,", "y pega la mitad."],
-            Articulo::Amuleto(Amuleto::Ninguno) => ["Nada colgado.", "El cuello libre."],
-            Articulo::Amuleto(Amuleto::Relicario) => {
-                ["Una vida mas, en el", "baile y en la calle."]
-            }
-            Articulo::Amuleto(Amuleto::Guante) => ["El parry se queda", "abierto casi el doble."],
-            Articulo::Amuleto(Amuleto::Corse) => ["Un talle mas estrecho:", "te da menos."],
+            Articulo::Tiro(Tiro::Aguja) => [AgujaA, AgujaB],
+            Articulo::Tiro(Tiro::Abanico) => [AbanicoA, AbanicoB],
+            Articulo::Tiro(Tiro::Castanuela) => [CastanuelaA, CastanuelaB],
+            Articulo::Tiro(Tiro::Serpentina) => [SerpentinaA, SerpentinaB],
+            Articulo::Amuleto(Amuleto::Ninguno) => [SinAmuletoA, SinAmuletoB],
+            Articulo::Amuleto(Amuleto::Relicario) => [RelicarioA, RelicarioB],
+            Articulo::Amuleto(Amuleto::Guante) => [GuanteA, GuanteB],
+            Articulo::Amuleto(Amuleto::Corse) => [CorseA, CorseB],
         }
+        .map(tx)
     }
 }
 
@@ -208,15 +209,11 @@ impl Modista {
         }
         let a = CATALOGO[self.col][self.fila];
         let (dicho, sfx) = match pedir(g, a) {
-            Pedido::YaPuesto => (format!("{} ya lo llevas puesto", a.nombre()), Sfx::Graze),
-            Pedido::Puesto => (format!("Te pones {}", minuscula(a.nombre())), Sfx::Empezar),
-            Pedido::Comprado => (format!("{}, para ti", a.nombre()), Sfx::Victoria),
+            Pedido::YaPuesto => (txf(Texto::YaPuesto, &[&a.nombre()]), Sfx::Graze),
+            Pedido::Puesto => (txf(Texto::TePones, &[&minuscula(a.nombre())]), Sfx::Empezar),
+            Pedido::Comprado => (txf(Texto::ParaTi, &[&a.nombre()]), Sfx::Victoria),
             Pedido::Falta(n) => (
-                format!(
-                    "Te {} {n} ficha{}",
-                    if n == 1 { "falta" } else { "faltan" },
-                    plural(n)
-                ),
+                txf(plural(n, Texto::TeFalta, Texto::TeFaltan), &[&n]),
                 Sfx::Derrota,
             ),
         };
@@ -272,7 +269,11 @@ impl Modista {
         }
 
         // El catalogo, a dos columnas.
-        for (c, titulo) in ["LOS TIROS", "LOS AMULETOS"].iter().enumerate() {
+        for (c, titulo) in [Texto::LosTiros, Texto::LosAmuletos]
+            .map(tx)
+            .iter()
+            .enumerate()
+        {
             let x = 24.0 + c as f32 * 304.0;
             let s = p(x + 144.0, 372.0);
             fuentes::centrado(titulo, s.x, s.y, l.len(20.0), Cara::Titulo, ORO);
@@ -289,11 +290,11 @@ impl Modista {
         let b = p(40.0, y - 6.0);
         ficha(b, l.len(11.0), t * 2.0);
         let n = saldo(g);
-        let bolsillo = format!("{n} ficha{} en el bolsillo", plural(n));
+        let bolsillo = txf(plural(n, Texto::Bolsillo, Texto::Bolsillos), &[&n]);
         let s = p(58.0, y);
         fuentes::texto(&bolsillo, s.x, s.y, l.len(19.0), Cara::Cuerpo, PAPEL);
         let (ok, atras) = (teclas.aceptar, teclas.atras);
-        let ayuda = format!("{ok} comprar o ponerse    {atras} salir");
+        let ayuda = txf(Texto::AyudaModista, &[&ok, &atras]);
         let s = p(616.0, y);
         fuentes::derecha(
             &ayuda,
@@ -316,8 +317,9 @@ const FACHADA_LUZ: Color = color_u8!(46, 78, 64, 255);
 const CARMIN: Color = color_u8!(176, 44, 58, 255);
 const CRISTAL: Color = color_u8!(40, 28, 26, 255);
 
-fn plural(n: u32) -> &'static str {
-    if n == 1 { "" } else { "s" }
+/// El texto en singular o en plural, segun `n`.
+fn plural(n: u32, uno: Texto, varios: Texto) -> Texto {
+    if n == 1 { uno } else { varios }
 }
 
 fn minuscula(s: &str) -> String {
@@ -351,7 +353,7 @@ fn rotulo(l: &Layout) {
     let c = p(320.0, 86.0);
     for (dx, color) in [(l.len(2.0), CARMIN), (0.0, ORO)] {
         fuentes::centrado(
-            "LA MODISTA",
+            tx(Texto::RotuloModista),
             c.x + dx,
             c.y + dx,
             l.len(56.0),
@@ -361,7 +363,7 @@ fn rotulo(l: &Layout) {
     }
     let c = p(320.0, 110.0);
     fuentes::centrado(
-        "ALTA COSTURA  -  SE ADMITEN FICHAS DE BAILE",
+        tx(Texto::AltaCostura),
         c.x,
         c.y,
         l.len(13.0),
@@ -440,11 +442,11 @@ fn escaparate(l: &Layout, t: f32, elegido: Articulo, g: &Guardado) {
     icono(elegido, p(390.0, 262.0) + vec2(0.0, flota), l.len(34.0), t);
     let precio = elegido.precio();
     let cartel = if lo_lleva(g, elegido) {
-        "puesto".to_owned()
+        tx(Texto::Puesto).to_owned()
     } else if lo_tiene(g, elegido) {
-        "es tuyo".to_owned()
+        tx(Texto::EsTuyo).to_owned()
     } else {
-        format!("{precio} ficha{}", plural(precio))
+        txf(plural(precio, Texto::Ficha, Texto::Fichas), &[&precio])
     };
     let c = p(390.0, 318.0);
     fuentes::centrado(&cartel, c.x, c.y, l.len(14.0), Cara::Cuerpo, TINTA);
@@ -559,11 +561,11 @@ fn etiqueta(l: &Layout, x: f32, y: f32, a: Articulo, g: &Guardado, elegida: bool
     icono(a, c, l.len(18.0), if elegida { t } else { 0.0 });
 
     // El nombre y lo que hace.
-    let tx = s.x + l.len(76.0);
+    let x_texto = s.x + l.len(76.0);
     let tinta = if alcanza { TINTA } else { CARMIN };
     fuentes::texto(
         a.nombre(),
-        tx,
+        x_texto,
         s.y + l.len(24.0),
         l.len(19.0),
         Cara::Cuerpo,
@@ -571,15 +573,15 @@ fn etiqueta(l: &Layout, x: f32, y: f32, a: Articulo, g: &Guardado, elegida: bool
     );
     for (i, linea) in a.lineas().iter().enumerate() {
         let y = s.y + l.len(44.0 + 16.0 * i as f32);
-        fuentes::texto(linea, tx, y, l.len(14.0), Cara::Cuerpo, TINTA_TENUE);
+        fuentes::texto(linea, x_texto, y, l.len(14.0), Cara::Cuerpo, TINTA_TENUE);
     }
 
     // Arriba a la derecha: el sello si es tuyo, el precio si no.
     let d = s + vec2(sw - l.len(10.0), l.len(22.0));
     if puesto {
-        sello(l, d, "PUESTO", CARMIN);
+        sello(l, d, tx(Texto::SelloPuesto), CARMIN);
     } else if tuyo {
-        sello(l, d, "TUYO", TINTA_TENUE);
+        sello(l, d, tx(Texto::SelloTuyo), TINTA_TENUE);
     } else {
         let n = a.precio().to_string();
         fuentes::derecha(&n, d.x, d.y + l.len(2.0), l.len(22.0), Cara::Cuerpo, tinta);

@@ -19,6 +19,7 @@ use vals_core::{ARENA_H, ARENA_W};
 
 use crate::draw::{Layout, METER_FULL, TEXT_DIM, TITLE, fade, paspartu};
 use crate::fuentes::{self, Cara};
+use crate::idioma::{Texto, nombre, tx, txf};
 use crate::libro;
 use crate::modista;
 use crate::paleta::{self, LUZ, ORO, PAPEL, PARED, TARIMA, TINTA, TINTA_TENUE, VETA};
@@ -648,7 +649,7 @@ fn tienda(l: &Layout, t: f32, cerca: bool) {
     modista::ficha(lp.p(44.0, -36.0), 6.0 * k, t * 0.04);
 
     // La placa, como la de un baile.
-    placa(s, "La modista", false);
+    placa(s, tx(Texto::PlacaModista), false);
 }
 
 /// La placa de papel con un nombre debajo de un sitio del mapa. Devuelve su
@@ -727,13 +728,13 @@ fn dibujar_nodo(
     // lee igual sobre la tarima oscura que sobre cualquier monumento. Un baile
     // cerrado no dice lo dificil que es —eso se descubre bailandolo—, solo que
     // esta cerrado.
-    let Rect { x, y, w, h } = placa(s, &nodo.nombre, cerrado);
+    let Rect { x, y, w, h } = placa(s, nombre(&nodo.nombre), cerrado);
     modo(vec2(x - 13.0, y + h * 0.5), nodo.suelo, cerrado);
 
     if nodo.vencido {
         escarapela(vec2(x + w, y + h * 0.5), 9.0, tinta);
         fuentes::centrado(
-            "bailado",
+            tx(Texto::Bailado),
             s.x,
             y + h + 16.0,
             14.0,
@@ -744,7 +745,7 @@ fn dibujar_nodo(
         // baile volver a por mas. Debajo de la placa y no a su lado, que ahi
         // la tapaba el monumento de delante.
         if let Some(n) = nota {
-            let ancho = fuentes::medir("bailado", 14.0, Cara::Cuerpo).width;
+            let ancho = fuentes::medir(tx(Texto::Bailado), 14.0, Cara::Cuerpo).width;
             libro::sello(
                 vec2(s.x + ancho * 0.5 + 16.0, y + h + 11.0),
                 12.0,
@@ -896,7 +897,7 @@ pub fn pista(
     // --- Cartel de arriba y ayuda de abajo ---
     let cx = l.to_screen(ARENA_W * 0.5, 0.0).x;
     fuentes::centrado(
-        "LA PISTA",
+        tx(Texto::LaPista),
         cx,
         o.y + 44.0,
         40.0,
@@ -905,7 +906,7 @@ pub fn pista(
     );
 
     let hechos = p.nodos.iter().filter(|n| n.vencido).count();
-    let cuenta = format!("{hechos} / {} bailes", p.nodos.len());
+    let cuenta = txf(Texto::CuentaBailes, &[&hechos, &p.nodos.len()]);
     fuentes::centrado(&cuenta, cx, o.y + 66.0, 15.0, Cara::Cuerpo, TEXT_DIM);
 
     // El bolsillo, arriba a la derecha: la ficha dando vueltas y cuantas hay.
@@ -919,28 +920,24 @@ pub fn pista(
     let [ok, dash, mover, atras] = teclas;
     let aviso = match p.nodo_cerca() {
         Some(i) if p.abierto(i) => {
-            let donde = if p.nodos[i].suelo {
-                "en el suelo"
+            let donde = tx(if p.nodos[i].suelo {
+                Texto::EnElSuelo
             } else {
-                "volando"
-            };
-            let bailar = format!("{ok}    bailar {}, {donde}", p.nodos[i].nombre);
+                Texto::Volando
+            });
+            let baile = nombre(&p.nodos[i].nombre);
+            let bailar = txf(Texto::Bailar, &[&ok, &baile, &donde]);
             // Si su paseo ya se anduvo, se puede volver a el a por fichas.
             match fichas.paseos.get(i).copied().flatten() {
-                Some((tuyas, total)) => {
-                    format!("{bailar}     {dash}    pasear ({tuyas}/{total} fichas)")
-                }
+                Some((tuyas, total)) => txf(Texto::Pasear, &[&bailar, &dash, &tuyas, &total]),
                 None => bailar,
             }
         }
         // Un baile cerrado dice **por que** lo esta. "Bloqueado" a secas manda
         // a probar cosas al azar; decir que falta el nivel de antes no.
-        Some(i) => format!(
-            "{} todavia no: antes hay que sacar lo anterior",
-            p.nodos[i].nombre
-        ),
-        None if p.en_la_modista() => format!("{ok}    entrar a la modista"),
-        None => format!("{mover} andar    {atras} menu"),
+        Some(i) => txf(Texto::TodaviaNo, &[&nombre(&p.nodos[i].nombre)]),
+        None if p.en_la_modista() => txf(Texto::EntrarModista, &[&ok]),
+        None => txf(Texto::Andar, &[&mover, &atras]),
     };
     let color = if p.nodo_cerca().is_some_and(|i| p.abierto(i)) || p.en_la_modista() {
         // Late, para que se vea que ahi hay algo que hacer.
@@ -949,7 +946,8 @@ pub fn pista(
     } else {
         TEXT_DIM
     };
-    fuentes::centrado(&aviso, cx, pie_y, 19.0, Cara::Cuerpo, color);
+    let ancho = l.len(ARENA_W) - 40.0;
+    fuentes::encajado(&aviso, cx, pie_y, 19.0, ancho, Cara::Cuerpo, color);
     paspartu(l);
 }
 
