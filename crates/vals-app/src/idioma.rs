@@ -447,27 +447,32 @@ textos! {
     // --- El prologo ---
     Siguiente: "siguiente", "next";
     SaltarHistoria: "saltar", "skip";
+    // La historia, contada para que se entienda a la primera: quien es ella,
+    // que pasa, que roban, adonde huyen y que tiene que hacer. Una idea por
+    // lamina y nada que haya que deducir.
     Lamina1: "EL GRAN SALON", "THE GRAND BALLROOM";
-    Lamina1A: "Hacia 1900, un salon de baile viaja en tren de ciudad en ciudad.",
-        "Circa 1900, a ballroom travels by train from city to city.";
-    Lamina1B: "Esta noche estrena bailarina.", "Tonight, a new dancer makes her debut.";
+    Lamina1A: "Hacia 1900. Esta noche hay gran baile en el salon,",
+        "Circa 1900. Tonight is the night of the grand ball,";
+    Lamina1B: "y ella va a bailar por primera vez.",
+        "and she is about to dance for the very first time.";
     Lamina2: "A MEDIANOCHE", "AT THE STROKE OF MIDNIGHT";
-    Lamina2A: "Al dar las doce, las cosas del salon se despiertan...",
-        "As the clock strikes twelve, the ballroom's things awaken...";
-    Lamina2B: "...y se ponen a bailar solas.", "...and begin to dance on their own.";
-    Lamina3: "Y SE LLEVAN LA MUSICA", "AND THEY RUN OFF WITH THE MUSIC";
-    Lamina3A: "La caja de musica, el bandoneon, el gramofono y las coristas",
-        "The music box, the bandoneon, the gramophone and the chorus girls";
-    Lamina3B: "se escapan cada uno a su ciudad. El salon se queda mudo.",
-        "each flee to a city of their own. The ballroom falls silent.";
-    Lamina4: "SIN MUSICA NO HAY BAILE", "NO MUSIC, NO DANCE";
-    Lamina4A: "Asi que ella va a buscarla: calle a calle y baile a baile.",
-        "So she sets out to win it back: street by street, dance by dance.";
-    Lamina4B: "Las fichas del camino, a la modista, que cose lo que haga falta.",
-        "Dance tokens found on the way go to the Dressmaker, who sews what is needed.";
+    Lamina2A: "Al dar las doce, cuatro cosas del salon cobran vida:",
+        "As the clock strikes twelve, four things in the ballroom come alive:";
+    Lamina2B: "una caja de musica, un bandoneon, un gramofono y una fila de coristas.",
+        "a music box, a bandoneon, a gramophone and a line of chorus girls.";
+    Lamina3: "Y ROBAN LA MUSICA", "AND THEY STEAL THE MUSIC";
+    Lamina3A: "Cada uno se lleva la musica de su baile y huye a su ciudad:",
+        "Each one takes the music of its dance and flees to its own city:";
+    Lamina3B: "Viena, Buenos Aires, Chicago y Paris. El salon se queda en silencio.",
+        "Vienna, Buenos Aires, Chicago and Paris. The ballroom falls silent.";
+    Lamina4: "EL RETO", "THE CHALLENGE";
+    Lamina4A: "Ella sale tras ellos, de ciudad en ciudad.",
+        "She sets off after them, from city to city.";
+    Lamina4B: "Para recuperar cada musica tendra que ganarles bailando.",
+        "To win each song back, she will have to out-dance its thief.";
     Lamina5: "PROGRAMA DE LA NOCHE", "TONIGHT'S PROGRAMME";
-    Lamina5A: "Solo devuelven la musica a quien les baile mejor que ellos.",
-        "They will give the music back only to one who out-dances them.";
+    Lamina5A: "Cuatro ciudades, cuatro bailes, cuatro rivales.",
+        "Four cities, four dances, four rivals.";
     Lamina5B: "Que empiece la funcion.", "Let the show begin.";
     LemaVals: "Se llevo el vals a Viena, y gira sin que nadie le de cuerda.",
         "It took the waltz to Vienna, and spins with no one to wind it.";

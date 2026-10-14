@@ -19,12 +19,12 @@ gamepad, nothing to install.
 
 ## The story
 
-Around 1900, the Grand Salon travels by train from city to city. One night, as
-the clock strikes twelve, its belongings come to life and run off with the
-music, each to its own city. The dancer with the scarlet ribbon sets out to
-bring it back: street by street through the promenades, and dance by dance
-against each object, which only gives the music back to whoever dances it
-better. It is told in a five-plate prologue that can be replayed from the menu
+Circa 1900, on the night of the grand ball, four things in the ballroom come
+alive at midnight: a music box, a bandoneon, a gramophone and a line of chorus
+girls. Each one steals the music of its dance and flees to its own city:
+Vienna, Buenos Aires, Chicago and Paris. The dancer with the scarlet bow sets
+off after them, street by street through the promenades, and to win each song
+back she has to out-dance its thief. It is told in a five-plate prologue that can be replayed from the menu
 with `X` (Square).
 
 ## Every boss is a dance

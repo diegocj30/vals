@@ -16,11 +16,12 @@ sin instalar nada.
 
 ## La historia
 
-Hacia 1900, el Gran Salon viaja en tren de ciudad en ciudad. Una noche, al dar
-las doce, sus cosas cobran vida y se escapan con la musica, cada una a su
-ciudad. La bailarina del lazo escarlata sale a buscarla: calle a calle por los
-paseos, y baile a baile contra cada objeto, que solo devuelve la musica a quien
-le baile mejor. Se cuenta en un prologo de cinco laminas que se vuelve a ver
+Hacia 1900, la noche del gran baile, cuatro cosas del salon cobran vida a
+medianoche: una caja de musica, un bandoneon, un gramofono y una fila de
+coristas. Cada una roba la musica de su baile y huye a su ciudad: Viena, Buenos
+Aires, Chicago y Paris. La bailarina del lazo escarlata sale tras ellas, calle a
+calle por los paseos, y para recuperar cada musica tiene que ganar a su ladron
+bailando. Se cuenta en un prologo de cinco laminas que se vuelve a ver
 desde el menu con `X` (cuadrado).
 
 ## Cada jefe es un baile
