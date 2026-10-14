@@ -652,22 +652,70 @@ fn icono(a: Articulo, c: Vec2, r: f32, t: f32) {
             draw_circle(eje.x, eje.y, g * 1.6, ORO);
         }
         Articulo::Tiro(Tiro::Castanuela) => {
-            // Dos conchas de madera con su cordon.
-            let golpe = (t * 8.0).sin().abs() * 0.12;
-            for (dx, dy) in [(-0.28 - golpe, 0.1), (0.28 + golpe, -0.05)] {
-                let e = q(dx, dy);
-                draw_ellipse(e.x, e.y, r * 0.48 + g, r * 0.58 + g, 0.0, TINTA);
-                draw_ellipse(
-                    e.x,
-                    e.y,
-                    r * 0.48,
-                    r * 0.58,
-                    0.0,
-                    color_u8!(132, 70, 40, 255),
+            // Una sola castanuela de frente: la concha en pera, la de detras
+            // asomando por la raja de abajo, y arriba el cordon con su borla.
+            // Antes eran dos conchas redondas lado a lado, y se leian como lo
+            // que no eran: una sola forma, con la raja y el cordon, no deja
+            // otra lectura.
+            let golpe = (t * 8.0).sin().abs() * 0.08;
+            // La pera: mas estrecha arriba, donde va el cordon.
+            let borde = |y0: f32| -> Vec<Vec2> {
+                (0..24)
+                    .map(|i| {
+                        let a = std::f32::consts::TAU * i as f32 / 24.0;
+                        let ancho = 0.3 + 0.34 * (1.0 - a.cos()) * 0.5;
+                        q(a.sin() * ancho, y0 - a.cos() * 0.66)
+                    })
+                    .collect()
+            };
+            // Cada concha con su canto de madera clara por dentro de la tinta:
+            // sobre el fondo oscuro del escaparate, la tinta sola no separa
+            // una concha de la otra, y el canto es lo que dibuja la raja.
+            let concha = |pts: &[Vec2], canto: Color, color: Color| {
+                let centro = pts.iter().copied().sum::<Vec2>() / pts.len() as f32;
+                let dentro: Vec<Vec2> = pts.iter().map(|p| centro.lerp(*p, 0.86)).collect();
+                for (capa, c) in [(pts, canto), (&dentro[..], color)] {
+                    for (i, a) in capa.iter().enumerate() {
+                        draw_triangle(centro, *a, capa[(i + 1) % capa.len()], c);
+                    }
+                }
+                for (i, a) in pts.iter().enumerate() {
+                    let b = pts[(i + 1) % pts.len()];
+                    draw_line(a.x, a.y, b.x, b.y, g * 1.4, TINTA);
+                    draw_circle(a.x, a.y, g * 0.7, TINTA);
+                }
+            };
+            // La de detras baja al golpear: la raja se abre y se cierra.
+            let canto = color_u8!(206, 140, 86, 255);
+            concha(&borde(0.3 + golpe), canto, color_u8!(96, 48, 26, 255));
+            concha(&borde(0.12), canto, color_u8!(140, 76, 42, 255));
+            // El brillo de la madera, en arco.
+            for i in 0..5 {
+                let a = 3.6 + 0.22 * i as f32;
+                let (p0, p1) = (
+                    q(a.cos() * 0.32, 0.12 + a.sin() * 0.42),
+                    q((a + 0.2).cos() * 0.32, 0.12 + (a + 0.2).sin() * 0.42),
                 );
-                draw_circle(e.x - r * 0.1, e.y - r * 0.15, r * 0.1, fade(WHITE, 0.35));
+                draw_line(p0.x, p0.y, p1.x, p1.y, g * 0.8, fade(WHITE, 0.45));
             }
-            linea(q(-0.2, -0.55), q(0.2, -0.6), g * 0.5, protagonista::LAZO);
+            // El cordon: un lazo que sale de la oreja, el nudo y la borla roja
+            // colgando a un lado, fuera de la concha para que se vea entera.
+            let lazo = q(0.0, -0.78);
+            draw_circle_lines(lazo.x, lazo.y, r * 0.18, g * 2.2, TINTA);
+            draw_circle_lines(lazo.x, lazo.y, r * 0.18, g, protagonista::LAZO);
+            let (nudo, cabeza) = (q(0.0, -0.58), q(0.62, -0.42));
+            linea(nudo, cabeza, g * 0.9, protagonista::LAZO);
+            let hilos = [-0.09, -0.03, 0.03, 0.09].map(|dx| q(0.62 + dx, 0.2));
+            for h in hilos {
+                draw_line(cabeza.x, cabeza.y, h.x, h.y, g * 2.6, TINTA);
+            }
+            for h in hilos {
+                draw_line(cabeza.x, cabeza.y, h.x, h.y, g * 0.9, protagonista::LAZO);
+            }
+            for p in [nudo, cabeza] {
+                draw_circle(p.x, p.y, g * 2.0, TINTA);
+                draw_circle(p.x, p.y, g * 1.1, protagonista::LAZO);
+            }
         }
         Articulo::Tiro(Tiro::Serpentina) => {
             // Una cinta de papel rizandose en dos colores.
