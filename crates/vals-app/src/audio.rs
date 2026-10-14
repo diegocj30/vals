@@ -187,7 +187,9 @@ fn tonica_desde(t: Tema, desde: i32) -> i32 {
     desde + (music::triada_tonica(t)[0] - desde).rem_euclid(12)
 }
 
-/// Lo que dura un tiempo del tema, en segundos.
+/// Lo que dura un tiempo del tema, en segundos. Solo lo usa la mezcla de
+/// `--exportar-sonidos`, que en la web no existe.
+#[cfg(not(target_arch = "wasm32"))]
 fn negra(t: Tema) -> f32 {
     music::compas(t).0 / vals_core::TICK_HZ as f32
 }
