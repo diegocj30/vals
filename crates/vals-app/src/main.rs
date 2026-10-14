@@ -547,11 +547,16 @@ async fn run_game() {
         // se leeria otra vez aqui en el mismo frame. Hoy no se notaria porque
         // se entra lejos de todo, pero deja de ser verdad en cuanto un baile
         // este cerca de la entrada.
-        let entrar = aceptar;
+        //
+        // Y nunca con la pulsacion que acaba de sacarte a la pista: al ganar,
+        // aceptar vuelve a la pista, y en el mismo frame se leia otra vez aqui
+        // con la bailarina delante del baile, que volvia a empezar.
+        let recien_salido = salir || atras;
+        let entrar = aceptar && !recien_salido;
         // Volver a pasear: la X (cuadrado con mando) delante de un baile cuyo
         // paseo ya se anduvo. Es un boton aparte y no una pregunta al entrar
         // porque lo normal al volver a un baile es bailarlo.
-        let pasear = libre && entrada.pulsado(Accion::Pasear);
+        let pasear = libre && !recien_salido && entrada.pulsado(Accion::Pasear);
         if escena == Escena::Pista && entrar && pista.en_la_modista() {
             audio.play(Sfx::Empezar, 1.0);
             escena = Escena::Modista;
