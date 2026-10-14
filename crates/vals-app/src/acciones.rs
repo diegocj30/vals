@@ -687,7 +687,7 @@ mod tests {
         assert_eq!(Nombres::de(Teclado, false, &c).reintentar, "R");
         assert_eq!(Nombres::de(Mando, false, &c).reintentar, "Back");
         assert_eq!(Nombres::de(Mando, true, &c).pausa, "Options");
-        assert_eq!(Nombres::de(Mando, true, &c).parry, "circulo");
+        assert_eq!(Nombres::de(Mando, true, &c).parry, "círculo");
         assert_eq!(Nombres::de(Teclado, true, &c).parry, "C");
     }
 

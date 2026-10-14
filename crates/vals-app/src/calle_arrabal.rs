@@ -34,6 +34,7 @@ use crate::calle::{HUESO, ROSA, VENTANA, acera, camara, con_tinta, draw_rect_lin
 use crate::draw::{Layout, fade};
 use crate::escenarios::{Instrumento, arco, circulo, linea, musico, rect, tri};
 use crate::fuentes::{self, Cara};
+use crate::idioma::nombre;
 use crate::paleta::{LUZ, ORO, TINTA};
 
 /// El agua del Riachuelo: verde de aceite, mas turbia que el canal de Viena.
@@ -949,7 +950,7 @@ fn puerta(p: &Paseo, l: &Layout, alpha: f32, pulso: f32, (carmin, negro): (Color
         );
     }
     let s = l.to_screen(cx, sy + sh * 0.5 + 9.0);
-    let nombre = p.def.jefe.to_uppercase();
+    let nombre = nombre(&p.def.jefe).to_uppercase();
     fuentes::centrado(&nombre, s.x, s.y, l.len(26.0), Cara::Titulo, ORO);
 
     // La guirnalda de bombillas, de punta a punta, encendidas a compas: una

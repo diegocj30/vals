@@ -8,16 +8,20 @@
 //!   traduccion tampoco: la macro pide los dos. Los huecos que se rellenan van
 //!   como `{}` y se rellenan en orden con `txf`.
 //! - **`nombre`**: los nombres que vienen de los datos —bailes y figuras de
-//!   los RON de los jefes, paseos, piezas de musica—, buscados por su nombre en
-//!   espanol. Ese nombre es tambien la clave del guardado, y por eso no se
-//!   toca: se traduce al ensenarlo, no al guardarlo.
+//!   los RON de los jefes, paseos, piezas de musica—, buscados por su clave.
+//!   Esa clave es tambien la del guardado (y el texto de los RON entra en el
+//!   replay dorado), y por eso no se toca: se traduce al ensenarlo, no al
+//!   guardarlo. Hasta en espanol: la clave va sin tildes, como el codigo, y
+//!   `en_espanol` le pone las suyas.
 //!
 //! El idioma de ahora es un global, como las fuentes: lo leen cincuenta
 //! funciones de dibujo, y pasarlo por todas no explicaria nada que no se sepa
 //! ya (macroquad es de un solo hilo). Se pone desde las opciones cada frame.
 //!
-//! Como el resto del juego, los textos van **sin tildes ni enes**: asi se
-//! escribian ya, y las dos fuentes no se prueban con ellas.
+//! El codigo va sin tildes ni enes, pero lo que se lee en pantalla no: el
+//! espanol de la tabla lleva su ortografia entera (tildes, enes, aperturas de
+//! interrogacion y exclamacion). Las dos fuentes traen esos glifos, y
+//! `fuentes` mide y dibuja por caracteres, no por bytes.
 //!
 //! Anadir un texto: una linea en `textos!` con la clave, el espanol y el
 //! ingles, y `tx(Texto::Clave)` donde se dibuje. El test de abajo comprueba
@@ -54,7 +58,7 @@ impl Idioma {
     /// quien no entiende el otro.
     pub fn nombre(self) -> &'static str {
         match self {
-            Idioma::Es => "Espanol",
+            Idioma::Es => "Español",
             Idioma::En => "English",
         }
     }
@@ -111,9 +115,65 @@ fn rellenar(plantilla: &str, args: &[&dyn Display]) -> String {
 /// sale tal cual: un baile nuevo se ve en espanol antes que no verse.
 pub fn nombre(es: &str) -> &str {
     match actual() {
-        Idioma::Es => es,
+        Idioma::Es => en_espanol(es).unwrap_or(es),
         Idioma::En => en_ingles(es).unwrap_or(es),
     }
+}
+
+/// Los nombres de los datos, de la clave al espanol de pantalla. Casi todos
+/// salen igual; estan todos para que el test pueda pedir que no falte
+/// ninguno, y un baile nuevo no se quede sin sus tildes sin que nadie lo vea.
+fn en_espanol(clave: &str) -> Option<&'static str> {
+    Some(match clave {
+        // Los bailes y sus figuras (assets/patterns).
+        "El Vals" => "El Vals",
+        "El paso de cambio" => "El paso de cambio",
+        "El giro natural" => "El giro natural",
+        "El giro inverso" => "El giro inverso",
+        "El fleckerl" => "El fleckerl",
+        "El Tango" => "El Tango",
+        "La caminata" => "La caminata",
+        "Los ochos" => "Los ochos",
+        "El molinete" => "El molinete",
+        "El Charleston" => "El Charleston",
+        "El basico" => "El básico",
+        "Bee's knees" => "Bee's knees",
+        "El cambio de lado" => "El cambio de lado",
+        "El Cancan" => "El Cancán",
+        "El battement" => "El battement",
+        "El port d'armes" => "El port d'armes",
+        "La rueda y el grand ecart" => "La rueda y el grand écart",
+        // Los paseos (assets/paseos).
+        "El paseo de Viena" => "El paseo de Viena",
+        "Camino del baile" => "Camino del baile",
+        "El paseo del arrabal" => "El paseo del arrabal",
+        "Por la Vuelta de Rocha" => "Por la Vuelta de Rocha",
+        "El paseo de Chicago" => "El paseo de Chicago",
+        "Por encima de la ciudad" => "Por encima de la ciudad",
+        "El paseo de Montmartre" => "El paseo de Montmartre",
+        "Cuesta arriba, hasta el molino" => "Cuesta arriba, hasta el molino",
+        // Las piezas (music.rs).
+        "la sala" => "la sala",
+        "El Danubio azul - Johann Strauss II, 1866" => "El Danubio azul - Johann Strauss II, 1866",
+        "El Danubio azul, reflejado" => "El Danubio azul, reflejado",
+        "Sobre las olas - Juventino Rosas, 1888" => "Sobre las olas - Juventino Rosas, 1888",
+        "El Danubio azul, coda" => "El Danubio azul, coda",
+        "La Cumparsita - Matos Rodriguez, 1916" => "La Cumparsita - Matos Rodríguez, 1916",
+        "La Cumparsita, segunda parte" => "La Cumparsita, segunda parte",
+        "La Cumparsita, quebrada" => "La Cumparsita, quebrada",
+        "Maple Leaf Rag - Scott Joplin, 1899" => "Maple Leaf Rag - Scott Joplin, 1899",
+        "Maple Leaf Rag, segunda parte" => "Maple Leaf Rag, segunda parte",
+        "Maple Leaf Rag, al galope" => "Maple Leaf Rag, al galope",
+        "El galop infernal - Offenbach, 1858" => "El galop infernal - Offenbach, 1858",
+        "El galop infernal, segunda parte" => "El galop infernal, segunda parte",
+        "El galop infernal, desbocado" => "El galop infernal, desbocado",
+        // Las ciudades del prologo.
+        "VIENA" => "VIENA",
+        "BUENOS AIRES" => "BUENOS AIRES",
+        "CHICAGO" => "CHICAGO",
+        "PARIS" => "PARÍS",
+        _ => return None,
+    })
 }
 
 /// Los nombres de los datos, del espanol al ingles. El vocabulario de baile
@@ -261,7 +321,7 @@ textos! {
     MenuMover: "{} mover    {} disparar    {} dash", "{} move    {} shoot    {} dash";
     MenuParry: "{} parry    {} saltar    {} focus", "{} parry    {} jump    {} focus";
     MenuRosas: "Parriar las balas ROSAS llena la barra SUPER;", "Parrying PINK bullets fills the SUPER meter;";
-    MenuSuper: "llena, {} limpia la pantalla y hace mucho dano.", "when full, {} clears the screen and hits hard.";
+    MenuSuper: "llena, {} limpia la pantalla y hace mucho daño.", "when full, {} clears the screen and hits hard.";
     MenuPausa: "{} pausa y opciones    {} reintentar", "{} pause and options    {} retry";
     LaHistoria: "la historia", "the story";
     AbrirLibro: "{}  el libro de baile", "{}  the dance card";
@@ -274,7 +334,7 @@ textos! {
     Figura2: "FIGURA SEGUNDA", "SECOND FIGURE";
     Figura3: "FIGURA TERCERA", "THIRD FIGURE";
     Figura4: "FIGURA CUARTA", "FOURTH FIGURE";
-    Prologo: "PROLOGO", "PROLOGUE";
+    Prologo: "PRÓLOGO", "PROLOGUE";
     Ayuda: "{} disparar  {} saltar  {} dash  {} parry  {} super  {} focus  {} pausa  {} reintentar  M mudo  F1  F3 pasar",
         "{} shoot  {} jump  {} dash  {} parry  {} super  {} focus  {} pause  {} retry  M mute  F1  F3 skip";
     Bravo: "¡BRAVO!", "BRAVO!";
@@ -286,7 +346,7 @@ textos! {
     SuperCancan: "¡ALLEZ HOP!", "ALLEZ HOP!";
     BailadoEntero: "{}, bailado entero", "{}, danced to the end";
     VictoriaAyuda: "{} otra vez    {} volver a la pista", "{} again    {} back to the dance floor";
-    SeAcabo: "SE ACABO", "CURTAINS";
+    SeAcabo: "SE ACABÓ", "CURTAINS";
     LlegasteBaile: "llegaste al {}% del baile", "you made it {}% through the dance";
     ReintentarBaile: "{} o {}  reintentar este baile", "{} or {}  retry this dance";
     VolverPista: "{}  volver a la pista", "{}  back to the dance floor";
@@ -313,9 +373,9 @@ textos! {
     Volando: "volando", "in the air";
     Bailar: "{}    bailar {}, {}", "{}    dance {}, {}";
     Pasear: "{}     {}    pasear ({}/{} fichas)", "{}     {}    promenade ({}/{} tokens)";
-    TodaviaNo: "{} todavia no: antes hay que sacar lo anterior", "{} not yet: win the dances before it first";
+    TodaviaNo: "{} todavía no: antes hay que sacar lo anterior", "{} not yet: win the dances before it first";
     EntrarModista: "{}    entrar a la modista", "{}    visit the Dressmaker";
-    Andar: "{} andar    {} menu", "{} walk    {} menu";
+    Andar: "{} andar    {} menú", "{} walk    {} menu";
 
     // --- La modista ---
     PlacaModista: "La modista", "The Dressmaker";
@@ -325,27 +385,27 @@ textos! {
     LosAmuletos: "LOS AMULETOS", "THE CHARMS";
     Aguja: "La aguja", "The Needle";
     Abanico: "El abanico", "The Fan";
-    Castanuela: "La castanuela", "The Castanet";
+    Castanuela: "La castañuela", "The Castanet";
     Serpentina: "La serpentina", "The Streamer";
     SinAmuleto: "Sin amuleto", "No Charm";
     Relicario: "El relicario", "The Locket";
     Guante: "El guante", "The Glove";
-    Corse: "El corse", "The Corset";
+    Corse: "El corsé", "The Corset";
     AgujaA: "Dos chorros rectos.", "Two straight streams.";
     AgujaB: "La de siempre.", "The usual.";
     AbanicoA: "Tres a la vez, en abanico.", "Three at once, fanned out.";
     AbanicoB: "De lejos entra una.", "From afar, one lands.";
-    CastanuelaA: "Pega mas fuerte, pero", "Hits harder, but";
+    CastanuelaA: "Pega más fuerte, pero", "Hits harder, but";
     CastanuelaB: "no llega lejos.", "doesn't reach far.";
     SerpentinaA: "Busca sola al blanco,", "Finds the target itself,";
     SerpentinaB: "y pega la mitad.", "and hits for half.";
     SinAmuletoA: "Nada colgado.", "Nothing hanging.";
     SinAmuletoB: "El cuello libre.", "A bare neck.";
-    RelicarioA: "Una vida mas, en el", "One more life, on the";
+    RelicarioA: "Una vida más, en el", "One more life, on the";
     RelicarioB: "baile y en la calle.", "floor and in the street.";
     GuanteA: "El parry se queda", "The parry stays open";
     GuanteB: "abierto casi el doble.", "almost twice as long.";
-    CorseA: "Un talle mas estrecho:", "A slimmer waist:";
+    CorseA: "Un talle más estrecho:", "A slimmer waist:";
     CorseB: "te da menos.", "harder to hit.";
     YaPuesto: "{} ya lo llevas puesto", "{}: you're already wearing it";
     TePones: "Te pones {}", "You put on {}";
@@ -368,29 +428,29 @@ textos! {
     Parries: "Parries", "Parries";
     Supers: "Supers", "Supers";
     FichasFila: "Fichas", "Tokens";
-    Record: "nuevo record", "new record";
+    Record: "nuevo récord", "new record";
     TarjetaDeBaile: "TARJETA DE BAILE", "DANCE CARD";
     HastaLaPuerta: "hasta la puerta", "to the door";
     ElLibro: "El libro de baile", "The Dance Card";
     Temporada: "la temporada, apuntada a pluma", "the season, written down in ink";
     LosBailes: "LOS BAILES", "THE DANCES";
     LosPaseos: "LOS PASEOS", "THE PROMENADES";
-    SinBailar: "sin bailar todavia", "not danced yet";
-    SinAndar: "sin andar todavia", "not walked yet";
+    SinBailar: "sin bailar todavía", "not danced yet";
+    SinAndar: "sin andar todavía", "not walked yet";
     SinCaidas: "ni un golpe, de momento", "not a single hit, so far";
     TarjetaVolver: "{}  volver a la pista       {}  otra vez", "{}  back to the dance floor       {}  again";
     Seguir: "{}  seguir", "{}  continue";
     Intento: "{} intento", "{} attempt";
     Intentos: "{} intentos", "{} attempts";
     Mejor: "mejor {}", "best {}";
-    DondeCaes: "donde mas caes: {} ({})", "where you fall most: {} ({})";
+    DondeCaes: "donde más caes: {} ({})", "where you fall most: {} ({})";
     Jugado: "en la pista: {}", "on the floor: {}";
     CerrarLibro: "{}  cerrar el libro", "{}  close the dance card";
-    Ovacion: "¡ovacion!", "standing ovation!";
+    Ovacion: "¡ovación!", "standing ovation!";
     Repitan: "¡que lo repitan!", "encore!";
     Aplausos: "aplausos", "applause";
-    Palmas: "palmas de cortesia", "polite clapping";
-    Silbidos: "algun silbido", "some booing";
+    Palmas: "palmas de cortesía", "polite clapping";
+    Silbidos: "algún silbido", "some booing";
 
     // --- El entreacto y las opciones ---
     Entreacto: "ENTREACTO", "INTERMISSION";
@@ -402,7 +462,7 @@ textos! {
     FilaMapa: "Volver a la pista", "Back to the dance floor";
     FilaOpciones: "Opciones", "Options";
     FilaIdioma: "Idioma / Language", "Idioma / Language";
-    Musica: "Musica", "Music";
+    Musica: "Música", "Music";
     Efectos: "Efectos", "Sound effects";
     Hervor: "Trazo vivo", "Living line";
     Sacudida: "Sacudida", "Screen shake";
@@ -411,12 +471,12 @@ textos! {
     ControlesMando: "Controles del mando", "Gamepad controls";
     Restaurar: "Restaurar los de serie", "Restore defaults";
     Volver: "Volver", "Back";
-    Si: "si", "on";
+    Si: "sí", "on";
     No: "no", "off";
     Pie: "{} elegir    {} volver", "{} select    {} back";
     PieCambiar: "    {} cambiar", "    {} change";
     PulsaTecla: "pulsa la tecla nueva para {}", "press the new key for {}";
-    PulsaBoton: "pulsa el boton nuevo para {}", "press the new button for {}";
+    PulsaBoton: "pulsa el botón nuevo para {}", "press the new button for {}";
     Cancelar: "{} deja la que estaba", "{} keeps the old one";
     NoSePuede: "esa no: es de moverse, pausar o reintentar", "not that one: it moves, pauses or retries";
     Restaurado: "vuelven los de serie", "defaults restored";
@@ -442,9 +502,9 @@ textos! {
     Izquierda: "IZQUIERDA", "LEFT";
     Derecha: "DERECHA", "RIGHT";
     Cruz: "X", "cross";
-    Circulo: "circulo", "circle";
+    Circulo: "círculo", "circle";
     Cuadrado: "cuadrado", "square";
-    Triangulo: "triangulo", "triangle";
+    Triangulo: "triángulo", "triangle";
     CrucetaArriba: "arriba", "up";
     CrucetaAbajo: "abajo", "down";
     CrucetaIzquierda: "izquierda", "left";
@@ -456,43 +516,43 @@ textos! {
     // La historia, contada para que se entienda a la primera: quien es ella,
     // que pasa, que roban, adonde huyen y que tiene que hacer. Una idea por
     // lamina y nada que haya que deducir.
-    Lamina1: "EL GRAN SALON", "THE GRAND BALLROOM";
-    Lamina1A: "Hacia 1900. Esta noche hay gran baile en el salon,",
+    Lamina1: "EL GRAN SALÓN", "THE GRAND BALLROOM";
+    Lamina1A: "Hacia 1900. Esta noche hay gran baile en el salón,",
         "Circa 1900. Tonight is the night of the grand ball,";
     Lamina1B: "y ella va a bailar por primera vez.",
         "and she is about to dance for the very first time.";
     Lamina2: "A MEDIANOCHE", "AT THE STROKE OF MIDNIGHT";
-    Lamina2A: "Al dar las doce, cuatro cosas del salon cobran vida:",
+    Lamina2A: "Al dar las doce, cuatro cosas del salón cobran vida:",
         "As the clock strikes twelve, four things in the ballroom come alive:";
-    Lamina2B: "una caja de musica, un bandoneon, un gramofono y una fila de coristas.",
+    Lamina2B: "una caja de música, un bandoneón, un gramófono y una fila de coristas.",
         "a music box, a bandoneon, a gramophone and a line of chorus girls.";
-    Lamina3: "Y ROBAN LA MUSICA", "AND THEY STEAL THE MUSIC";
-    Lamina3A: "Cada uno se lleva la musica de su baile y huye a su ciudad:",
+    Lamina3: "Y ROBAN LA MÚSICA", "AND THEY STEAL THE MUSIC";
+    Lamina3A: "Cada uno se lleva la música de su baile y huye a su ciudad:",
         "Each one takes the music of its dance and flees to its own city:";
-    Lamina3B: "Viena, Buenos Aires, Chicago y Paris. El salon se queda en silencio.",
+    Lamina3B: "Viena, Buenos Aires, Chicago y París. El salón se queda en silencio.",
         "Vienna, Buenos Aires, Chicago and Paris. The ballroom falls silent.";
     Lamina4: "EL RETO", "THE CHALLENGE";
     Lamina4A: "Ella sale tras ellos, de ciudad en ciudad.",
         "She sets off after them, from city to city.";
-    Lamina4B: "Para recuperar cada musica tendra que ganarles bailando.",
+    Lamina4B: "Para recuperar cada música tendrá que ganarles bailando.",
         "To win each song back, she will have to out-dance its thief.";
     Lamina5: "PROGRAMA DE LA NOCHE", "TONIGHT'S PROGRAMME";
     Lamina5A: "Cuatro ciudades, cuatro bailes, cuatro rivales.",
         "Four cities, four dances, four rivals.";
-    Lamina5B: "Que empiece la funcion.", "Let the show begin.";
-    LemaVals: "Se llevo el vals a Viena, y gira sin que nadie le de cuerda.",
+    Lamina5B: "Que empiece la función.", "Let the show begin.";
+    LemaVals: "Se llevó el vals a Viena, y gira sin que nadie le dé cuerda.",
         "It took the waltz to Vienna, and spins with no one to wind it.";
-    LemaTango: "Se llevo el tango al arrabal, y no lo suelta ni un compas.",
+    LemaTango: "Se llevó el tango al arrabal, y no lo suelta ni un compás.",
         "It took the tango to the arrabal, and won't let go of a single bar.";
-    LemaCharleston: "Se llevo el jazz a Chicago, y lo pone una y otra vez.",
+    LemaCharleston: "Se llevó el jazz a Chicago, y lo pone una y otra vez.",
         "It took the jazz to Chicago, and plays it over and over again.";
-    LemaCancan: "Se llevaron el galop a Paris, y patean sin parar.",
+    LemaCancan: "Se llevaron el galop a París, y patean sin parar.",
         "They took the galop to Paris, and kick without end.";
-    LemaViena: "Las calles de Viena todavia silban el vals que se llevaron.",
+    LemaViena: "Las calles de Viena todavía silban el vals que se llevaron.",
         "The streets of Vienna still whistle the stolen waltz.";
-    LemaArrabal: "En La Boca hasta los compadritos buscan al bandoneon.",
+    LemaArrabal: "En La Boca hasta los compadritos buscan al bandoneón.",
         "In La Boca, even the compadritos are out hunting the bandoneon.";
-    LemaChicago: "En Chicago la musica suena por los tejados: hay que subir.",
+    LemaChicago: "En Chicago la música suena por los tejados: hay que subir.",
         "In Chicago the music plays over the rooftops: up you go.";
     LemaMontmartre: "Cuesta arriba, hasta el molino rojo donde patean las coristas.",
         "Uphill, to the red mill where the chorus girls kick.";
@@ -513,8 +573,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn cada_nombre_de_los_datos_tiene_traduccion() {
+    /// Todas las claves de los datos que salen en pantalla.
+    fn nombres_de_los_datos() -> Vec<String> {
         let mut nombres = Vec::new();
         for b in BossDef::default_bosses() {
             nombres.push(b.name.clone());
@@ -524,8 +584,37 @@ mod tests {
             nombres.extend([p.nombre, p.subtitulo]);
         }
         nombres.extend(crate::music::TEMAS.iter().map(|t| t.titulo().to_owned()));
-        for n in nombres {
+        nombres.extend(["VIENA", "BUENOS AIRES", "CHICAGO", "PARIS"].map(String::from));
+        nombres
+    }
+
+    #[test]
+    fn cada_nombre_de_los_datos_tiene_traduccion() {
+        for n in nombres_de_los_datos() {
             assert!(en_ingles(&n).is_some_and(|en| !en.is_empty()), "{n}");
+            assert!(en_espanol(&n).is_some_and(|es| !es.is_empty()), "{n}");
+        }
+    }
+
+    /// Las faltas de siempre al escribir sin tildes: si una vuelve a colarse en
+    /// el espanol de pantalla, salta. Por palabras enteras, que "mas" esta mal
+    /// y "mascara" no.
+    #[test]
+    fn el_espanol_de_pantalla_lleva_sus_tildes() {
+        const FALTAS: &str = "musica salon funcion castanuela bandoneon gramofono tendra mas \
+            dano ano todavia algun boton circulo triangulo record prologo corse basico cancan \
+            paris ecart compas ovacion menu espanol rodriguez cortesia";
+        let mut textos: Vec<&str> = Texto::TODOS.iter().map(|t| t.en(Idioma::Es)).collect();
+        textos.push(Idioma::Es.nombre());
+        textos.extend(nombres_de_los_datos().iter().filter_map(|n| en_espanol(n)));
+        for t in textos {
+            let minus = t.to_lowercase();
+            for p in minus.split(|c: char| !c.is_alphabetic()) {
+                assert!(
+                    !FALTAS.split_whitespace().any(|f| f == p),
+                    "\"{p}\" sin tilde en \"{t}\""
+                );
+            }
         }
     }
 

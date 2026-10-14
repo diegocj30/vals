@@ -767,7 +767,7 @@ fn puerta(p: &Paseo, l: &Layout, alpha: f32, t: f32, (tinta, ropa): (Color, Colo
     rect(l, cx - 70.0, 150.0, 140.0, 36.0, ropa);
     draw_rect_lines(l, cx - 70.0, 150.0, 140.0, 36.0, 3.0);
     let s = l.to_screen(cx, 177.0);
-    let nombre = p.def.jefe.to_uppercase();
+    let nombre = nombre(&p.def.jefe).to_uppercase();
     fuentes::centrado(&nombre, s.x, s.y, l.len(24.0), Cara::Titulo, TINTA);
 
     // La luz se sale a la acera segun se abre, y al llegar lo inunda: es lo

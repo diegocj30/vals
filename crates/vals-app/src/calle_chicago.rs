@@ -34,7 +34,7 @@ use crate::calle::{HUESO, ROSA, camara, con_tinta};
 use crate::draw::{Layout, fade};
 use crate::escenarios::{Instrumento, arco, circulo, linea, musico, rect, tri};
 use crate::fuentes::{self, Cara};
-use crate::idioma::{Texto, tx};
+use crate::idioma::{Texto, nombre, tx};
 use crate::paleta::{LUZ, ORO, TINTA};
 
 // La noche del club: verde botella, no azul de Prusia. Y un horizonte que
@@ -1274,7 +1274,7 @@ fn puerta(p: &Paseo, l: &Layout, alpha: f32, t: f32, pulso: f32) {
     // La marquesina con el nombre del baile.
     let (mx, my, mw, mh) = (cx - 130.0, 236.0, 260.0, 46.0);
     caja(l, mx, my, mw, mh, color_u8!(246, 232, 196, 255), 3.0);
-    let nombre = p.def.jefe.to_uppercase();
+    let nombre = nombre(&p.def.jefe).to_uppercase();
     rotulo(l, &nombre, cx, my + 33.0, 24.0, TINTA);
     bombillas(l, (mx, my - 6.0), (mx + mw, my - 6.0), 20, t, 3.0);
     bombillas(
