@@ -55,7 +55,7 @@
 
           var bits = CONECTADO;
           // Solo para poner los nombres correctos en pantalla.
-          if (/playstation|dualshock|dualsense|sony|wireless controller/i.test(p.id || "")) {
+          if (/playstation|dualshock|dualsense|sony|wireless controller|ps[345]|054c/i.test(p.id || "")) {
             bits |= PLAYSTATION;
           }
           for (var b = 0; b < BOTONES; b++) {

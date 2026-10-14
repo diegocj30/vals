@@ -91,7 +91,13 @@ pub const NOMBRES: [(&str, &str); 17] = [
 /// PS4 en Windows entra por DirectInput y aun asi se llama a si mismo
 /// "Wireless Controller".
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-fn es_de_playstation(nombre: &str) -> bool {
+fn es_de_playstation(nombre: &str, fabricante: Option<u16>) -> bool {
+    // El fabricante es lo fiable: Sony es el 054C en USB y Bluetooth. El
+    // nombre depende del sistema y del driver: con SDL un DualShock 4 se
+    // llama "PS4 Controller", que no decia ninguna de las pistas de antes.
+    if fabricante == Some(SONY) {
+        return true;
+    }
     let n = nombre.to_ascii_lowercase();
     [
         "playstation",
@@ -99,10 +105,16 @@ fn es_de_playstation(nombre: &str) -> bool {
         "dualsense",
         "sony",
         "wireless controller",
+        "ps3",
+        "ps4",
+        "ps5",
     ]
     .iter()
     .any(|pista| n.contains(pista))
 }
+
+/// El identificador USB de Sony.
+const SONY: u16 = 0x054C;
 
 /// Lo lejos que hay que empujar el stick para que cuente.
 ///
@@ -242,7 +254,7 @@ impl Mando {
         };
 
         let mut bits = CONECTADO;
-        if es_de_playstation(pad.name()) {
+        if es_de_playstation(pad.name(), pad.vendor_id()) {
             bits |= PLAYSTATION;
         }
         for (i, b) in ORDEN.iter().enumerate() {
@@ -302,11 +314,14 @@ mod tests {
     fn se_reconoce_un_mando_de_playstation_por_el_nombre() {
         // El de PS4 en Windows entra por DirectInput y se llama a si mismo
         // "Wireless Controller", que es el caso que hay que acertar.
-        assert!(es_de_playstation("Wireless Controller"));
-        assert!(es_de_playstation("Sony DualShock 4"));
-        assert!(es_de_playstation("DualSense Wireless Controller"));
-        assert!(!es_de_playstation("Xbox 360 Controller"));
-        assert!(!es_de_playstation("Xbox Series X Controller"));
+        assert!(es_de_playstation("Wireless Controller", None));
+        assert!(es_de_playstation("Sony DualShock 4", None));
+        assert!(es_de_playstation("DualSense Wireless Controller", None));
+        // Asi lo llama SDL en Windows, y con su fabricante.
+        assert!(es_de_playstation("PS4 Controller", None));
+        assert!(es_de_playstation("Gamepad", Some(0x054C)));
+        assert!(!es_de_playstation("Xbox 360 Controller", Some(0x045E)));
+        assert!(!es_de_playstation("Xbox Series X Controller", None));
     }
 
     #[test]
