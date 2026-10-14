@@ -715,10 +715,6 @@ async fn run_game() {
             world.saltar_el_baile();
             intento.trampa = true;
             recorder = Recorder::for_world(&world);
-            // El sonido se pide a mano: los eventos del mundo se recogen
-            // dentro del bucle de simulacion, y el proximo tick ya los habra
-            // vaciado.
-            audio.play(Sfx::Fase, 1.0);
             zumo.golpe_gordo();
             aviso = Some((tx(Texto::BaileSaltado).to_owned(), false, 120));
         }
@@ -785,8 +781,9 @@ async fn run_game() {
                         }
                         if p.caidos > 0 {
                             let (_, ropa) = paleta::del_baile(pista.nodos[nodo_actual].jefe);
+                            // Sin sonido: con veinte por calle, un sonido por
+                            // cada uno era excesivo.
                             chispas.estallido(golpe, ropa);
-                            audio.play(Sfx::Fase, 0.55);
                         }
                     }
                 }
@@ -853,8 +850,8 @@ async fn run_game() {
         //
         // Va despues de la simulacion y antes de los sonidos a proposito: en
         // el tick que cambia de figura, el tema nuevo ya esta puesto cuando
-        // suena el arpegio de la fase, asi que este sale en SU tono y cae
-        // justo en el primer tiempo del tema que empieza.
+        // suena lo que toque, asi que los efectos en tono (la ficha, la
+        // victoria) salen en el tono del tema que empieza.
         if hubo_interaccion {
             audio.poner_musica(match escena {
                 Escena::Combate => Tema::de(world.baile, world.boss.phase),

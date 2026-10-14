@@ -119,7 +119,6 @@ pub enum Sfx {
     Parry,
     Graze,
     Impacto,
-    Fase,
     Muerte,
     Super,
     Victoria,
@@ -133,12 +132,11 @@ pub enum Sfx {
     Ficha,
 }
 
-const TODOS: [Sfx; 15] = [
+const TODOS: [Sfx; 14] = [
     Sfx::Disparo,
     Sfx::Parry,
     Sfx::Graze,
     Sfx::Impacto,
-    Sfx::Fase,
     Sfx::Muerte,
     Sfx::Super,
     Sfx::Victoria,
@@ -153,7 +151,7 @@ const TODOS: [Sfx; 15] = [
 
 /// Los efectos que suenan **dentro** de la musica, y no por encima de ella.
 ///
-/// Son los tres que son notas y no ruidos, y por eso los unicos que pueden
+/// Son los dos que son notas y no ruidos, y por eso los unicos que pueden
 /// desafinar: una ficha en si y mi sobre un tango en la menor rompe la frase
 /// aunque suene bajito. Se sintetizan una vez por tema, en su tonalidad y con
 /// el seno de su melodia, y al sonar se coge el del tema que esta puesto.
@@ -162,7 +160,7 @@ const TODOS: [Sfx; 15] = [
 /// impacto son ruidos y chasquidos, sin tono que chocar; el parry y el super
 /// son barridos, que el oido toma por gesto y no por nota; y la muerte TIENE
 /// que sonar mal, que es lo que la distingue de pasar de figura.
-const TEMATICOS: [Sfx; 3] = [Sfx::Fase, Sfx::Ficha, Sfx::Victoria];
+const TEMATICOS: [Sfx; 2] = [Sfx::Ficha, Sfx::Victoria];
 
 /// Una nota de celesta: el seno de la melodia y su octava, que se apaga
 /// enseguida.
@@ -239,34 +237,6 @@ impl Sfx {
             // Casi un susurro: pasa muchas veces seguidas.
             Sfx::Graze => vec![Voz::new(Sine, 2200.0, 2600.0, 0.03, 0.06, 4.0)],
             Sfx::Impacto => vec![Voz::new(Noise, 1.0, 1.0, 0.045, 0.11, 5.0)],
-            // Pasar de figura es una buena noticia y tiene que sonar a eso:
-            // un arpegio que SUBE por la triada de la tonica y se queda en
-            // ella, en semicorcheas del tema. Antes era un barrido de sierra
-            // hacia abajo, casi el gesto de perder una vida; luego unas
-            // campanillas en sol, una octava mas arriba, que desafinaban con
-            // todo lo que no estuviera en sol. Ahora la muerte es lo unico que
-            // baja y raspa.
-            //
-            // Suena en el mismo frame en que entra el tema de la figura nueva
-            // (ver el orden en `main`), asi que la primera nota cae en su
-            // primer tiempo y las demas en su rejilla: es un adorno del tema,
-            // no un aviso encima de el.
-            Sfx::Fase => {
-                let raiz = tonica_desde(t, 19);
-                let semi = negra(t) / 4.0;
-                [raiz, raiz + tercera, raiz + 7, raiz + 12]
-                    .iter()
-                    .enumerate()
-                    .flat_map(|(i, s)| {
-                        let (dur, vol, decay) = if i == 3 {
-                            (0.55, VOL_EN_TONO * 1.15, 1.4)
-                        } else {
-                            (0.2, VOL_EN_TONO, 2.4)
-                        };
-                        celesta(*s, dur, vol, decay, i as f32 * semi)
-                    })
-                    .collect()
-            }
             Sfx::Muerte => vec![
                 Voz::new(Noise, 1.0, 1.0, 0.45, 0.28, 2.0),
                 Voz::new(Square, 320.0, 50.0, 0.50, 0.26, 1.4),
@@ -540,12 +510,8 @@ impl Audio {
         if ev.boss_hit {
             self.play(Sfx::Impacto, 1.0);
         }
-        if ev.phase_changed {
-            self.play(Sfx::Fase, 1.0);
-        }
-        if ev.boss_down {
-            self.play(Sfx::Fase, 1.3);
-        }
+        // Pasar de figura no suena: ya cambia la musica, y un aviso encima era
+        // redundante. La caida del jefe tiene su propio sonido.
         if ev.super_fired {
             self.play(Sfx::Super, 1.0);
         }
@@ -606,7 +572,7 @@ pub fn exportar_sonidos(dir: &std::path::Path) -> std::io::Result<Vec<std::path:
     let mut hechos = Vec::new();
     for (i, t) in TEMAS.into_iter().enumerate() {
         let nombre = fichero(t);
-        for (sfx, que) in TEMATICOS.into_iter().zip(["fase", "ficha", "victoria"]) {
+        for (sfx, que) in TEMATICOS.into_iter().zip(["ficha", "victoria"]) {
             let ruta = dir.join(format!("{i:02} {nombre} - {que}.wav"));
             std::fs::write(&ruta, wav_sfx(sfx, t))?;
             hechos.push(ruta);
@@ -638,7 +604,6 @@ fn mezcla(t: Tema) -> Vec<i16> {
             }
         }
     };
-    encima(&mut m, Sfx::Fase, 0.0);
     encima(&mut m, Sfx::Ficha, compas + negra(t));
     encima(&mut m, Sfx::Ficha, compas * 2.0 + negra(t) * 1.5);
     encima(&mut m, Sfx::Victoria, compas * 3.0);
@@ -905,7 +870,7 @@ mod tests {
         assert_eq!(render(&muerte), render(&muerte));
         // Y las variantes en tono, igual: misma receta, mismas muestras.
         for t in TEMAS {
-            assert_eq!(wav_sfx(Sfx::Fase, t), wav_sfx(Sfx::Fase, t), "{t:?}");
+            assert_eq!(wav_sfx(Sfx::Ficha, t), wav_sfx(Sfx::Ficha, t), "{t:?}");
         }
     }
 
@@ -925,36 +890,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn la_fase_sube_y_acaba_en_la_tonica_y_la_muerte_baja() {
-        // Pasar de figura no puede confundirse con que te den: la fase sube
-        // nota a nota y se queda en casa; la muerte es la que baja.
-        for t in TEMAS {
-            let notas: Vec<f32> = Sfx::Fase
-                .receta(t)
-                .iter()
-                .filter(|v| v.vol >= VOL_EN_TONO)
-                .map(|v| v.f0)
-                .collect();
-            assert_eq!(notas.len(), 4, "{t:?}");
-            assert!(notas.windows(2).all(|p| p[1] > p[0]), "{t:?}: no sube");
-            let ultima = *notas.last().unwrap();
-            let tonica = music::frecuencia(music::triada_tonica(t)[0]);
-            let octavas = (ultima / tonica).log2();
-            assert!(
-                (octavas - octavas.round()).abs() < 0.01,
-                "{t:?}: no acaba en la tonica"
-            );
-        }
-        assert!(
-            Sfx::Muerte
-                .receta(Tema::Sala)
-                .iter()
-                .any(|v| matches!(v.wave, Wave::Square) && v.f1 < v.f0 * 0.5),
-            "la muerte ya no baja raspando"
-        );
     }
 
     #[test]
