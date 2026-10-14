@@ -182,16 +182,28 @@ fn parse_mode() -> Arranque {
 #[macroquad::main(window_conf)]
 async fn main() {
     // `--exportar-musica <carpeta>`: escribe los temas como .wav y sale.
+    // `--exportar-sonidos <carpeta>`: lo mismo con los efectos que van en el
+    // tono de cada tema, y una mezcla de cada tema con ellos encima.
     #[cfg(not(target_arch = "wasm32"))]
     {
         let args: Vec<String> = std::env::args().collect();
-        if let Some(i) = args.iter().position(|a| a == "--exportar-musica") {
-            let dir = args.get(i + 1).map_or("musica", String::as_str);
-            match audio::exportar_musica(std::path::Path::new(dir)) {
-                Ok(hechos) => hechos.iter().for_each(|r| println!("{}", r.display())),
-                Err(e) => eprintln!("no se pudo exportar la musica: {e}"),
+        let exportar = [
+            (
+                "--exportar-musica",
+                "musica",
+                audio::exportar_musica as fn(&_) -> _,
+            ),
+            ("--exportar-sonidos", "sonidos", audio::exportar_sonidos),
+        ];
+        for (bandera, defecto, que) in exportar {
+            if let Some(i) = args.iter().position(|a| a == bandera) {
+                let dir = args.get(i + 1).map_or(defecto, String::as_str);
+                match que(std::path::Path::new(dir)) {
+                    Ok(hechos) => hechos.iter().for_each(|r| println!("{}", r.display())),
+                    Err(e) => eprintln!("no se pudo exportar: {e}"),
+                }
+                return;
             }
-            return;
         }
     }
     // Antes de dibujar nada: las tres formas de arrancar escriben texto.
@@ -339,18 +351,6 @@ async fn run_game() {
         }
 
         hubo_interaccion |= entrada.algo() || entrada.mando.crudo() != 0;
-        if hubo_interaccion {
-            // La musica se busca por (jefe, figura). La pista tiene la suya
-            // propia: dejar sonando el vals en el mapa decia que el vals era
-            // el juego, y el vals es UN jefe del juego.
-            audio.poner_musica(match escena {
-                Escena::Combate => Tema::de(world.baile, world.boss.phase),
-                // En la calle suena la primera figura de su baile: el vals se
-                // oye desde fuera, y al entrar sigue sonando sin cortarse.
-                Escena::Paseo => Tema::de(pista.nodos[nodo_actual].jefe, 0),
-                _ => Tema::Sala,
-            });
-        }
         // Las opciones se aplican cada frame: son cuatro asignaciones, y asi
         // no hay que acordarse de aplicarlas en cada sitio que las cambia.
         let op = progreso.opciones;
@@ -821,6 +821,23 @@ async fn run_game() {
             });
         }
         stats.push_sim((get_time() - t0) as f32);
+        // La musica se busca por (jefe, figura). La pista tiene la suya
+        // propia: dejar sonando el vals en el mapa decia que el vals era el
+        // juego, y el vals es UN jefe del juego.
+        //
+        // Va despues de la simulacion y antes de los sonidos a proposito: en
+        // el tick que cambia de figura, el tema nuevo ya esta puesto cuando
+        // suena el arpegio de la fase, asi que este sale en SU tono y cae
+        // justo en el primer tiempo del tema que empieza.
+        if hubo_interaccion {
+            audio.poner_musica(match escena {
+                Escena::Combate => Tema::de(world.baile, world.boss.phase),
+                // En la calle suena la primera figura de su baile: el vals se
+                // oye desde fuera, y al entrar sigue sonando sin cortarse.
+                Escena::Paseo => Tema::de(pista.nodos[nodo_actual].jefe, 0),
+                _ => Tema::Sala,
+            });
+        }
         // En el menu no suena nada ni sacude nada: el atractor es un fondo, no
         // una partida. Las chispas si, porque son lo que lo hace parecer vivo.
         match (escena, attract.as_ref()) {

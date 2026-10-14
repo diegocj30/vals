@@ -760,7 +760,7 @@ fn reflejar_acorde(a: Acorde) -> Acorde {
 // ---------------------------------------------------------------------------
 
 /// Frecuencia de una nota en semitonos sobre La2 (110 Hz).
-fn frecuencia(semitonos: i32) -> f32 {
+pub(crate) fn frecuencia(semitonos: i32) -> f32 {
     // 2^(n/12), sin `powf`: se hace con multiplicaciones para no depender de
     // la libm, igual que el resto del proyecto.
     let mut f = 110.0f32;
@@ -813,6 +813,24 @@ fn unidades_por_compas(p: &Partitura) -> u32 {
 pub fn compas(t: Tema) -> (f32, usize) {
     let p = partitura(t);
     (60.0 * vals_core::TICK_HZ as f32 / p.bpm, p.tiempos)
+}
+
+/// La triada de la tonica de un tema, en semitonos sobre La2: tonica,
+/// tercera y quinta.
+///
+/// Es lo que necesitan los efectos que suenan **dentro** de la musica (la
+/// fase, la ficha, la victoria) para sonar en el tono de lo que se oye. El
+/// modo no esta apuntado en ninguna parte y no hace falta: lo dice el primer
+/// acorde sobre la tonica que toca la pieza, ya reflejado si es el espejo.
+pub fn triada_tonica(t: Tema) -> [i32; 3] {
+    let p = partitura(t);
+    let menor = p
+        .acordes
+        .iter()
+        .map(|a| if p.espejo { reflejar_acorde(*a) } else { *a })
+        .find(|a| a.raiz == 0)
+        .is_some_and(|a| a.triada == Triada::Menor);
+    [p.tonica, p.tonica + if menor { 3 } else { 4 }, p.tonica + 7]
 }
 
 /// Duracion del bucle completo.
@@ -1282,6 +1300,22 @@ mod tests {
         assert!(coda.bpm > base.bpm);
         assert!(coda.tonica > base.tonica);
         assert!(!coda.espejo);
+    }
+
+    #[test]
+    fn el_modo_de_cada_tema_sale_de_su_armonia() {
+        // Los efectos en el tono del tema se apoyan en esto: si un tango
+        // saliera en mayor, la ficha sonaria con la tercera equivocada.
+        for t in TEMAS {
+            let menor = matches!(
+                t,
+                Tema::Sala | Tema::Espejo | Tema::Caminata | Tema::Corte | Tema::Quebrada
+            );
+            let [r, iii, v] = triada_tonica(t);
+            assert_eq!(r, partitura(t).tonica, "{t:?}");
+            assert_eq!(iii - r, if menor { 3 } else { 4 }, "{t:?}");
+            assert_eq!(v - r, 7, "{t:?}");
+        }
     }
 
     #[test]

@@ -151,7 +151,59 @@ const TODOS: [Sfx; 15] = [
     Sfx::Ficha,
 ];
 
+/// Los efectos que suenan **dentro** de la musica, y no por encima de ella.
+///
+/// Son los tres que son notas y no ruidos, y por eso los unicos que pueden
+/// desafinar: una ficha en si y mi sobre un tango en la menor rompe la frase
+/// aunque suene bajito. Se sintetizan una vez por tema, en su tonalidad y con
+/// el seno de su melodia, y al sonar se coge el del tema que esta puesto.
+///
+/// El resto se queda como estaba a proposito. El disparo, el roce y el
+/// impacto son ruidos y chasquidos, sin tono que chocar; el parry y el super
+/// son barridos, que el oido toma por gesto y no por nota; y la muerte TIENE
+/// que sonar mal, que es lo que la distingue de pasar de figura.
+const TEMATICOS: [Sfx; 3] = [Sfx::Fase, Sfx::Ficha, Sfx::Victoria];
+
+/// Una nota de celesta: el seno de la melodia y su octava, que se apaga
+/// enseguida.
+///
+/// La octava es el macillo, el "ting" que la separa de la melodia; sin ella
+/// seria la melodia tocando una nota de mas, y con mas armonicos ya no seria
+/// la misma banda. Del mismo seno y la misma caida que las notas cortas de la
+/// melodia (`music::tema`), solo que mas arriba.
+fn celesta(semitonos: i32, dur: f32, vol: f32, decay: f32, cuando: f32) -> [Voz; 2] {
+    let f = music::frecuencia(semitonos);
+    [
+        Voz::nota(Wave::Sine, f, dur, vol, decay).tras(cuando),
+        Voz::nota(Wave::Sine, f * 2.0, dur * 0.5, vol * 0.25, 5.0).tras(cuando),
+    ]
+}
+
+/// La tonica del tema, en la octava que empieza en `desde` (semitonos sobre
+/// La2). Asi cada efecto vive en un registro fijo sea cual sea el tono: si
+/// solo se transportara, la ficha del tango (la, arriba del todo) chillaria y
+/// la del charleston (fa) se perderia en la melodia.
+fn tonica_desde(t: Tema, desde: i32) -> i32 {
+    desde + (music::triada_tonica(t)[0] - desde).rem_euclid(12)
+}
+
+/// Lo que dura un tiempo del tema, en segundos.
+fn negra(t: Tema) -> f32 {
+    music::compas(t).0 / vals_core::TICK_HZ as f32
+}
+
+/// Volumen de cada nota de los efectos en tono. Por debajo de lo que suena
+/// una nota de la melodia una vez aplicados los dos masters: la musica va a
+/// 0,34 y los efectos a 0,6, asi que 0,11 aqui son unos 0,066 al oido, frente
+/// a los 0,075 de la melodia. Asoman por encima del acompanamiento y no tapan
+/// la frase.
+const VOL_EN_TONO: f32 = 0.11;
+
 impl Sfx {
+    fn tematico(self) -> bool {
+        TEMATICOS.contains(&self)
+    }
+
     /// Lo que suena cuando cae el jefe del baile `baile`.
     pub fn caida(baile: usize) -> Self {
         [
@@ -166,13 +218,16 @@ impl Sfx {
         TODOS.iter().position(|s| *s == self).unwrap_or(0)
     }
 
-    /// La receta de cada sonido.
+    /// La receta de cada sonido, en el tono del tema `t`. Los que no son
+    /// `TEMATICOS` no lo miran.
     ///
     /// Devuelve un `Vec` y no un slice estatico porque `Voz::new` es una
     /// llamada a `const fn`, y Rust no promociona esas a `'static`. Da igual:
     /// esto se construye una vez al cargar, no en el bucle de juego.
-    fn receta(self) -> Vec<Voz> {
+    fn receta(self, t: Tema) -> Vec<Voz> {
         use Wave::*;
+        let [r, iii, _] = music::triada_tonica(t);
+        let tercera = iii - r;
         match self {
             // Suena quince veces por segundo: corto y bajito o es insufrible.
             Sfx::Disparo => vec![Voz::new(Square, 780.0, 520.0, 0.055, 0.10, 3.0)],
@@ -185,17 +240,33 @@ impl Sfx {
             Sfx::Graze => vec![Voz::new(Sine, 2200.0, 2600.0, 0.03, 0.06, 4.0)],
             Sfx::Impacto => vec![Voz::new(Noise, 1.0, 1.0, 0.045, 0.11, 5.0)],
             // Pasar de figura es una buena noticia y tiene que sonar a eso:
-            // un arpegio de campanillas que SUBE (sol, si, re, sol). Antes era
-            // un barrido de sierra hacia abajo, casi el mismo gesto que el de
-            // perder una vida, y quien lo oia por primera vez preguntaba que
-            // le habia dado. Ahora la muerte es lo unico que baja y raspa.
-            Sfx::Fase => vec![
-                Voz::new(Sine, 784.0, 784.0, 0.16, 0.22, 2.4),
-                Voz::new(Sine, 988.0, 988.0, 0.16, 0.22, 2.4).tras(0.07),
-                Voz::new(Sine, 1175.0, 1175.0, 0.16, 0.22, 2.4).tras(0.14),
-                Voz::new(Sine, 1568.0, 1568.0, 0.45, 0.26, 1.6).tras(0.21),
-                Voz::new(Sine, 3136.0, 3136.0, 0.35, 0.06, 2.0).tras(0.21),
-            ],
+            // un arpegio que SUBE por la triada de la tonica y se queda en
+            // ella, en semicorcheas del tema. Antes era un barrido de sierra
+            // hacia abajo, casi el gesto de perder una vida; luego unas
+            // campanillas en sol, una octava mas arriba, que desafinaban con
+            // todo lo que no estuviera en sol. Ahora la muerte es lo unico que
+            // baja y raspa.
+            //
+            // Suena en el mismo frame en que entra el tema de la figura nueva
+            // (ver el orden en `main`), asi que la primera nota cae en su
+            // primer tiempo y las demas en su rejilla: es un adorno del tema,
+            // no un aviso encima de el.
+            Sfx::Fase => {
+                let raiz = tonica_desde(t, 19);
+                let semi = negra(t) / 4.0;
+                [raiz, raiz + tercera, raiz + 7, raiz + 12]
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(i, s)| {
+                        let (dur, vol, decay) = if i == 3 {
+                            (0.55, VOL_EN_TONO * 1.15, 1.4)
+                        } else {
+                            (0.2, VOL_EN_TONO, 2.4)
+                        };
+                        celesta(*s, dur, vol, decay, i as f32 * semi)
+                    })
+                    .collect()
+            }
             Sfx::Muerte => vec![
                 Voz::new(Noise, 1.0, 1.0, 0.45, 0.28, 2.0),
                 Voz::new(Square, 320.0, 50.0, 0.50, 0.26, 1.4),
@@ -204,12 +275,19 @@ impl Sfx {
                 Voz::new(Sine, 220.0, 1400.0, 0.55, 0.32, 0.8),
                 Voz::new(Noise, 1.0, 1.0, 0.30, 0.10, 2.5),
             ],
-            // Tres notas ascendentes: do, mi, la.
-            Sfx::Victoria => vec![
-                Voz::new(Sine, 523.0, 523.0, 0.18, 0.30, 2.0),
-                Voz::new(Sine, 659.0, 659.0, 0.18, 0.30, 2.0).tras(0.14),
-                Voz::new(Sine, 880.0, 880.0, 0.40, 0.32, 1.4).tras(0.28),
-            ],
+            // Tres notas que suben y acaban en casa: tercera, quinta y
+            // tonica del tema que estaba sonando. Era do, mi, la, que es la
+            // menor y solo cuadraba con la sala; la forma es la misma.
+            Sfx::Victoria => {
+                let arriba = tonica_desde(t, 27);
+                let v = VOL_EN_TONO * 1.4;
+                [
+                    celesta(arriba - 12 + tercera, 0.18, v, 2.0, 0.0),
+                    celesta(arriba - 5, 0.18, v, 2.0, 0.14),
+                    celesta(arriba, 0.45, v * 1.1, 1.4, 0.28),
+                ]
+                .concat()
+            }
             Sfx::Derrota => vec![
                 Voz::new(Saw, 200.0, 70.0, 0.90, 0.28, 1.2),
                 Voz::new(Sine, 100.0, 40.0, 0.90, 0.20, 1.2),
@@ -261,19 +339,26 @@ impl Sfx {
                 }
                 v
             }
-            // Si y mi, la segunda encima de la primera: el tintineo de una
-            // moneda de toda la vida, en seno para que sea laton y no lata.
-            Sfx::Ficha => vec![
-                Voz::new(Sine, 988.0, 988.0, 0.08, 0.22, 3.0),
-                Voz::new(Sine, 1319.0, 1319.0, 0.30, 0.24, 2.2).tras(0.07),
-            ],
+            // Dominante y tonica, la segunda encima de la primera: el
+            // tintineo de una moneda de toda la vida (era si y mi, que es lo
+            // mismo en mi), pero en el tono del tema y en celesta.
+            Sfx::Ficha => {
+                let arriba = tonica_desde(t, 32);
+                [
+                    celesta(arriba - 5, 0.08, VOL_EN_TONO, 3.0, 0.0),
+                    celesta(arriba, 0.3, VOL_EN_TONO * 1.1, 2.2, 0.07),
+                ]
+                .concat()
+            }
         }
     }
 }
 
 /// Los sonidos ya cargados.
 pub struct Audio {
-    sonidos: Vec<Option<Sound>>,
+    /// Por sonido, sus variantes: una por tema si es de los `TEMATICOS`, y
+    /// una sola si no.
+    sonidos: Vec<Vec<Option<Sound>>>,
     /// Un tema por baile.
     musica: Vec<Option<Sound>>,
     /// Cual esta sonando ahora.
@@ -292,17 +377,31 @@ impl Audio {
     /// audio es un incordio, no un motivo para no poder jugar.
     pub async fn load() -> Self {
         let mut sonidos = Vec::with_capacity(TODOS.len());
+        let mut bytes_en_tono = 0usize;
         for sfx in TODOS {
-            let bytes = render_wav(&sfx.receta());
-            match load_sound_from_bytes(&bytes).await {
-                Ok(s) => sonidos.push(Some(s)),
-                Err(e) => {
-                    println!("[audio] no se pudo cargar un sonido: {e}");
-                    sonidos.push(None);
+            let temas: &[Tema] = if sfx.tematico() {
+                &TEMAS
+            } else {
+                &[Tema::Sala]
+            };
+            let mut variantes = Vec::with_capacity(temas.len());
+            for t in temas {
+                let bytes = wav_sfx(sfx, *t);
+                if sfx.tematico() {
+                    bytes_en_tono += bytes.len();
+                }
+                match load_sound_from_bytes(&bytes).await {
+                    Ok(s) => variantes.push(Some(s)),
+                    Err(e) => {
+                        println!("[audio] no se pudo cargar un sonido: {e}");
+                        variantes.push(None);
+                    }
                 }
             }
+            sonidos.push(variantes);
         }
-        let cargados = sonidos.iter().filter(|s| s.is_some()).count();
+        let cargados = sonidos.iter().flatten().filter(|s| s.is_some()).count();
+        let total = sonidos.iter().map(Vec::len).sum::<usize>();
 
         let mut musica = Vec::with_capacity(TEMAS.len());
         let mut bytes_musica = 0usize;
@@ -322,10 +421,11 @@ impl Audio {
         }
         let temas = musica.iter().filter(|s| s.is_some()).count();
         println!(
-            "[audio] {cargados}/{} sonidos y {temas}/{} temas sintetizados ({:.1} MB de musica)",
-            TODOS.len(),
+            "[audio] {cargados}/{total} sonidos y {temas}/{} temas sintetizados \
+             ({:.1} MB de musica, {:.2} MB de efectos en tono)",
             TEMAS.len(),
-            bytes_musica as f32 / (1024.0 * 1024.0)
+            bytes_musica as f32 / (1024.0 * 1024.0),
+            bytes_en_tono as f32 / (1024.0 * 1024.0)
         );
 
         Self {
@@ -404,7 +504,13 @@ impl Audio {
         if self.muted {
             return;
         }
-        if let Some(Some(s)) = self.sonidos.get(sfx.indice()) {
+        // Los efectos en tono cogen la variante del tema puesto. Antes de que
+        // suene ninguno (o si el sonido no tiene variantes) vale la primera,
+        // que es la de la sala.
+        let tema = self.sonando.unwrap_or(0);
+        if let Some(v) = self.sonidos.get(sfx.indice())
+            && let Some(Some(s)) = v.get(tema).or(v.first())
+        {
             play_sound(
                 s,
                 PlaySoundParams {
@@ -467,18 +573,7 @@ pub fn exportar_musica(dir: &std::path::Path) -> std::io::Result<Vec<std::path::
     std::fs::create_dir_all(dir)?;
     let mut hechos = Vec::with_capacity(TEMAS.len());
     for (i, b) in TEMAS.into_iter().enumerate() {
-        let limpio: String = b
-            .titulo()
-            .chars()
-            .map(|c| {
-                if c.is_alphanumeric() || c == ' ' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect();
-        let ruta = dir.join(format!("{i:02} {limpio}.wav"));
+        let ruta = dir.join(format!("{i:02} {}.wav", fichero(b)));
         let muestras = render_len_a(&music::tema(b), music::duracion(b), SAMPLE_RATE_MUSICA);
         std::fs::write(&ruta, wav_a(&muestras, SAMPLE_RATE_MUSICA))?;
         hechos.push(ruta);
@@ -486,29 +581,106 @@ pub fn exportar_musica(dir: &std::path::Path) -> std::io::Result<Vec<std::path::
     Ok(hechos)
 }
 
-fn render_wav(voces: &[Voz]) -> Vec<u8> {
-    wav(&render(voces))
+/// El titulo de un tema sin lo que un sistema de ficheros no traga.
+#[cfg(not(target_arch = "wasm32"))]
+fn fichero(t: Tema) -> String {
+    t.titulo()
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == ' ' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+/// Escribe cada efecto en tono de cada tema, tal cual lo carga el juego, y
+/// una mezcla por tema para juzgarlos donde suenan: los primeros compases
+/// con la fase en el uno (como al entrar la figura), dos fichas sueltas y la
+/// victoria al final, cada cosa con el master con que suena en el juego.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn exportar_sonidos(dir: &std::path::Path) -> std::io::Result<Vec<std::path::PathBuf>> {
+    std::fs::create_dir_all(dir)?;
+    let mut hechos = Vec::new();
+    for (i, t) in TEMAS.into_iter().enumerate() {
+        let nombre = fichero(t);
+        for (sfx, que) in TEMATICOS.into_iter().zip(["fase", "ficha", "victoria"]) {
+            let ruta = dir.join(format!("{i:02} {nombre} - {que}.wav"));
+            std::fs::write(&ruta, wav_sfx(sfx, t))?;
+            hechos.push(ruta);
+        }
+        let ruta = dir.join(format!("{i:02} {nombre} - mezcla.wav"));
+        std::fs::write(&ruta, wav_a(&mezcla(t), SAMPLE_RATE_MUSICA))?;
+        hechos.push(ruta);
+    }
+    Ok(hechos)
+}
+
+/// Cinco compases del tema con los efectos en tono encima, normalizado al
+/// final: lo que importa es la proporcion entre musica y efectos, que es la
+/// del juego, no el volumen absoluto.
+#[cfg(not(target_arch = "wasm32"))]
+fn mezcla(t: Tema) -> Vec<i16> {
+    let r = SAMPLE_RATE_MUSICA;
+    let compas = negra(t) * music::compas(t).1 as f32;
+    let largo = (compas * 5.0).min(music::duracion(t));
+    let mut m: Vec<f32> = render_len_a(&music::tema(t), largo, r)
+        .iter()
+        .map(|x| *x as f32 * MASTER_MUSICA)
+        .collect();
+    let encima = |m: &mut Vec<f32>, sfx: Sfx, cuando: f32| {
+        let i0 = (cuando * r as f32) as usize;
+        for (k, x) in render_a(&sfx.receta(t), r).iter().enumerate() {
+            if let Some(y) = m.get_mut(i0 + k) {
+                *y += *x as f32 * MASTER;
+            }
+        }
+    };
+    encima(&mut m, Sfx::Fase, 0.0);
+    encima(&mut m, Sfx::Ficha, compas + negra(t));
+    encima(&mut m, Sfx::Ficha, compas * 2.0 + negra(t) * 1.5);
+    encima(&mut m, Sfx::Victoria, compas * 3.0);
+    let pico = m.iter().fold(1.0f32, |a, x| a.max(x.abs()));
+    m.iter()
+        .map(|x| (x / pico * 0.9 * i16::MAX as f32) as i16)
+        .collect()
+}
+
+/// Un efecto ya empaquetado. Los de tono van a la frecuencia de la musica,
+/// como ella: son senos por debajo de 3 kHz, no pierden nada, y catorce
+/// variantes de cada uno ocupan la mitad.
+fn wav_sfx(sfx: Sfx, t: Tema) -> Vec<u8> {
+    let rate = if sfx.tematico() {
+        SAMPLE_RATE_MUSICA
+    } else {
+        SAMPLE_RATE
+    };
+    wav_a(&render_a(&sfx.receta(t), rate), rate)
 }
 
 /// Mezcla las voces en muestras de 16 bits.
+#[cfg(test)]
 fn render(voces: &[Voz]) -> Vec<i16> {
+    render_a(voces, SAMPLE_RATE)
+}
+
+/// Igual, a la frecuencia de muestreo que se pida.
+fn render_a(voces: &[Voz], rate: u32) -> Vec<i16> {
     let total = voces
         .iter()
         .map(|v| v.delay + v.dur)
         .fold(0.0f32, f32::max)
         .max(0.001);
-    render_len(voces, total)
+    render_len_a(voces, total, rate)
 }
 
-/// Igual, pero con la duracion exacta del buffer.
+/// Igual, pero con la duracion exacta del buffer, y a la frecuencia de
+/// muestreo que se pida.
 ///
 /// La musica lo necesita: el bucle tiene que durar los compases justos. Si se
 /// dejara terminar en la ultima nota, el bucle daria un salto cada vuelta.
-fn render_len(voces: &[Voz], segundos: f32) -> Vec<i16> {
-    render_len_a(voces, segundos, SAMPLE_RATE)
-}
-
-/// Igual, a la frecuencia de muestreo que se pida.
 fn render_len_a(voces: &[Voz], segundos: f32, rate: u32) -> Vec<i16> {
     let n = (segundos.max(0.001) * rate as f32) as usize;
     let mut acc = vec![0.0f32; n];
@@ -563,6 +735,7 @@ fn render_len_a(voces: &[Voz], segundos: f32, rate: u32) -> Vec<i16> {
 }
 
 /// Empaqueta muestras mono de 16 bits en un WAV.
+#[cfg(test)]
 fn wav(samples: &[i16]) -> Vec<u8> {
     wav_a(samples, SAMPLE_RATE)
 }
@@ -597,6 +770,22 @@ fn wav_a(samples: &[i16], rate: u32) -> Vec<u8> {
 mod tests {
     use super::*;
 
+    /// Cada sonido con cada tema en que se carga: los de tono, con los
+    /// catorce; los demas, con la sala.
+    fn todas_las_variantes() -> Vec<(Sfx, Tema)> {
+        TODOS
+            .into_iter()
+            .flat_map(|s| {
+                let temas: &[Tema] = if s.tematico() { &TEMAS } else { &[Tema::Sala] };
+                temas.iter().map(move |t| (s, *t))
+            })
+            .collect()
+    }
+
+    fn pico(m: &[i16]) -> f32 {
+        m.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0) as f32 / i16::MAX as f32
+    }
+
     fn u32_en(b: &[u8], i: usize) -> u32 {
         u32::from_le_bytes(b[i..i + 4].try_into().unwrap())
     }
@@ -629,8 +818,8 @@ mod tests {
 
     #[test]
     fn todos_los_sonidos_producen_un_wav_plausible() {
-        for sfx in TODOS {
-            let bytes = render_wav(&sfx.receta());
+        for (sfx, t) in todas_las_variantes() {
+            let bytes = wav_sfx(sfx, t);
             assert!(bytes.len() > 44, "sonido vacio");
             assert_eq!(&bytes[0..4], b"RIFF");
             // Coherencia interna: lo que declara y lo que ocupa.
@@ -650,8 +839,8 @@ mod tests {
 
     #[test]
     fn ninguna_muestra_satura() {
-        for sfx in TODOS {
-            let s = render(&sfx.receta());
+        for (sfx, t) in todas_las_variantes() {
+            let s = render(&sfx.receta(t));
             // Se recorta a i16::MAX por construccion; esto vigila que las
             // recetas no vivan pegadas al techo, que es donde distorsiona.
             let pico = s.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
@@ -712,6 +901,81 @@ mod tests {
     fn la_sintesis_es_reproducible() {
         // El ruido usa un generador propio, asi que el mismo sonido sale igual
         // en cada arranque.
-        assert_eq!(render(&Sfx::Muerte.receta()), render(&Sfx::Muerte.receta()));
+        let muerte = Sfx::Muerte.receta(Tema::Sala);
+        assert_eq!(render(&muerte), render(&muerte));
+        // Y las variantes en tono, igual: misma receta, mismas muestras.
+        for t in TEMAS {
+            assert_eq!(wav_sfx(Sfx::Fase, t), wav_sfx(Sfx::Fase, t), "{t:?}");
+        }
+    }
+
+    #[test]
+    fn los_efectos_en_tono_tocan_la_triada_de_su_tema() {
+        // Todas las notas, la octava del macillo incluida, son tonica, tercera
+        // o quinta del tema. Una sola fuera y la ficha vuelve a desafinar.
+        for sfx in TEMATICOS {
+            for t in TEMAS {
+                let triada = music::triada_tonica(t).map(|s| s.rem_euclid(12));
+                for v in sfx.receta(t) {
+                    let f = v.frecuencia();
+                    let suya = (0..72).any(|s| {
+                        triada.contains(&(s % 12)) && (music::frecuencia(s) - f).abs() < f * 0.003
+                    });
+                    assert!(suya, "{t:?}: {f} Hz no es de la triada de la tonica");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn la_fase_sube_y_acaba_en_la_tonica_y_la_muerte_baja() {
+        // Pasar de figura no puede confundirse con que te den: la fase sube
+        // nota a nota y se queda en casa; la muerte es la que baja.
+        for t in TEMAS {
+            let notas: Vec<f32> = Sfx::Fase
+                .receta(t)
+                .iter()
+                .filter(|v| v.vol >= VOL_EN_TONO)
+                .map(|v| v.f0)
+                .collect();
+            assert_eq!(notas.len(), 4, "{t:?}");
+            assert!(notas.windows(2).all(|p| p[1] > p[0]), "{t:?}: no sube");
+            let ultima = *notas.last().unwrap();
+            let tonica = music::frecuencia(music::triada_tonica(t)[0]);
+            let octavas = (ultima / tonica).log2();
+            assert!(
+                (octavas - octavas.round()).abs() < 0.01,
+                "{t:?}: no acaba en la tonica"
+            );
+        }
+        assert!(
+            Sfx::Muerte
+                .receta(Tema::Sala)
+                .iter()
+                .any(|v| matches!(v.wave, Wave::Square) && v.f1 < v.f0 * 0.5),
+            "la muerte ya no baja raspando"
+        );
+    }
+
+    #[test]
+    fn los_efectos_en_tono_no_tapan_la_musica() {
+        // Cada uno, con su master, a menos de tres cuartos de lo que llega a
+        // sonar el tema con el suyo: tienen que asomar, no ponerse delante (la
+        // fase de antes pasaba del tema entero). Y sin chillar: ninguna
+        // fundamental por encima de 1,4 kHz.
+        for sfx in TEMATICOS {
+            for t in TEMAS {
+                let tema = render_len_a(&music::tema(t), music::duracion(t), SAMPLE_RATE_MUSICA);
+                let techo = pico(&tema) * MASTER_MUSICA * 0.75;
+                let suyo = pico(&render(&sfx.receta(t))) * MASTER;
+                assert!(
+                    suyo < techo,
+                    "{t:?}: {suyo} por encima de la musica, {techo}"
+                );
+                for v in sfx.receta(t).iter().filter(|v| v.vol >= VOL_EN_TONO) {
+                    assert!(v.f0 < 1400.0, "{t:?}: {} Hz chilla", v.f0);
+                }
+            }
+        }
     }
 }
