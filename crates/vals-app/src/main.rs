@@ -464,6 +464,10 @@ async fn run_game() {
         if is_key_pressed(KeyCode::F1) {
             show_debug = !show_debug;
         }
+        // La ovacion del super no se arrastra al intento nuevo.
+        if reintentar || salir {
+            ovacion = ovacion::Ovacion::new();
+        }
         if reintentar && escena == Escena::Combate {
             // Tras perder se reintenta **este** jefe con las vidas llenas; en
             // cualquier otro momento, partida nueva desde el principio.
