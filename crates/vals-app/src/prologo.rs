@@ -17,9 +17,17 @@
 //! Y nada de dibujo propio que ya exista: la protagonista es la de
 //! `protagonista`, los jefes los de `jefes` y las ciudades los decorados de
 //! `escenarios`. Lo unico nuevo es como se colocan en cada lamina.
+//!
+//! **El final es lo mismo con otras laminas**: ella vuelve al salon con las
+//! cuatro musicas, los cuatro tocan otra vez, baila por fin, y los creditos con
+//! lo que se lleva de la temporada. Sale solo al volver a la pista con los
+//! cuatro bailes ganados, el ultimo que sea, y desde el menu se vuelve a ver.
 
 use macroquad::prelude::*;
+use vals_core::boss::BossDef;
+use vals_core::nota::Nota;
 use vals_core::paseo::{VISTA_H, VISTA_W};
+use vals_core::pista::Pista;
 use vals_core::player::PLAYER_SPEED;
 use vals_core::{Player, World};
 
@@ -27,10 +35,14 @@ use crate::acciones::Nombres;
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{circulo, linea, rect, tri};
 use crate::fuentes::{self, Cara};
-use crate::glifos;
-use crate::idioma::{Texto, nombre, tx};
+use crate::idioma::{Texto, nombre, tx, txf};
+use crate::libro::{self, Marcas};
 use crate::music::Tema;
 use crate::paleta::{self, LUZ, ORO, PAPEL, PARED, TARIMA, TINTA, VETA};
+use crate::{cartela, glifos};
+
+/// La luz del amanecer, que entra por los ventanales al final.
+const ALBA: Color = color_u8!(255, 160, 128, 255);
 use crate::protagonista::{self, Expresion};
 use crate::{escenarios, jefes, modista, salon, skeleton};
 
@@ -45,6 +57,23 @@ const LAMINAS: [[Texto; 3]; 5] = [
     [Texto::Lamina3, Texto::Lamina3A, Texto::Lamina3B],
     [Texto::Lamina4, Texto::Lamina4A, Texto::Lamina4B],
     [Texto::Lamina5, Texto::Lamina5A, Texto::Lamina5B],
+];
+
+/// Las del final, igual que las del prologo.
+const FINAL: [[Texto; 3]; 4] = [
+    [Texto::Final1, Texto::Final1A, Texto::Final1B],
+    [Texto::Final2, Texto::Final2A, Texto::Final2B],
+    [Texto::Final3, Texto::Final3A, Texto::Final3B],
+    [Texto::Final4, Texto::Final4A, Texto::Final4B],
+];
+
+/// Los creditos de la musica, en el orden en que suena en el juego.
+const PIEZAS: [Texto; 5] = [
+    Texto::CreditoDanubio,
+    Texto::CreditoOlas,
+    Texto::CreditoCumparsita,
+    Texto::CreditoRag,
+    Texto::CreditoGalop,
 ];
 
 /// Adonde se fue cada baile, en el orden de `paleta::TINTAS`. Se traducen con
@@ -93,8 +122,45 @@ const DURA: f32 = 9.0;
 const GRACIA: f32 = 0.6;
 /// El fundido a negro de entrada y salida de cada lamina.
 const FUNDE: f32 = 0.45;
+/// La de los creditos dura mas que las otras: hay mas que leer, y es la
+/// ultima.
+const DURA_CREDITOS: f32 = DURA + 6.0;
+/// Lo que tarda en bajar el telon al final de los creditos.
+const TELON: f32 = 1.6;
 
-/// El prologo en marcha.
+/// Si al volver a la pista toca el final: los cuatro bailes ganados, en el
+/// orden que sea, y sin haberlo visto todavia.
+pub fn toca_el_final(pista: &Pista, visto: bool) -> bool {
+    pista.todo_vencido() && !visto
+}
+
+/// Lo que se ensena de la temporada en los creditos: cada baile, en el orden
+/// de los jefes, con su nota y su mejor tiempo; y el tiempo jugado.
+pub struct Resumen {
+    bailes: Vec<(String, Option<Nota>, Option<u64>)>,
+    jugado: u64,
+}
+
+impl Resumen {
+    pub fn de(marcas: &Marcas, bailes: &[BossDef]) -> Self {
+        Self {
+            bailes: bailes
+                .iter()
+                .map(|b| {
+                    let m = marcas.por_nombre.get(&b.name);
+                    (
+                        b.name.clone(),
+                        m.and_then(|m| m.nota),
+                        m.and_then(|m| m.mejor),
+                    )
+                })
+                .collect(),
+            jugado: marcas.jugado,
+        }
+    }
+}
+
+/// El prologo en marcha, o el final.
 pub struct Prologo {
     lamina: usize,
     /// Segundos dentro de la lamina.
@@ -102,6 +168,8 @@ pub struct Prologo {
     /// La bailarina, quieta: la pose y la cara salen de un `Player`, y aqui se
     /// le cambia solo la velocidad para que ande.
     ella: Player,
+    /// Con algo, esto es el final, y eso es lo que sale en sus creditos.
+    fin: Option<Resumen>,
 }
 
 impl Prologo {
@@ -110,13 +178,39 @@ impl Prologo {
             lamina: 0,
             t: 0.0,
             ella: World::new(0).player,
+            fin: None,
+        }
+    }
+
+    /// El final, con la temporada para los creditos.
+    pub fn el_final(resumen: Resumen) -> Self {
+        Self {
+            fin: Some(resumen),
+            ..Self::nuevo()
+        }
+    }
+
+    pub fn es_el_final(&self) -> bool {
+        self.fin.is_some()
+    }
+
+    fn laminas(&self) -> &'static [[Texto; 3]] {
+        if self.es_el_final() { &FINAL } else { &LAMINAS }
+    }
+
+    /// Lo que dura la lamina en curso.
+    fn dura(&self) -> f32 {
+        if self.es_el_final() && self.lamina + 1 == FINAL.len() {
+            DURA_CREDITOS
+        } else {
+            DURA
         }
     }
 
     /// Un frame. Al acabarse la lamina se pasa sola a la siguiente.
     pub fn step(&mut self, dt: f32) {
         self.t += dt;
-        if self.t >= DURA {
+        if self.t >= self.dura() {
             self.siguiente();
         }
     }
@@ -130,15 +224,15 @@ impl Prologo {
 
     /// Saltarlo entero. Sin gracia: saltar no se pulsa sin querer al entrar.
     pub fn saltar(&mut self) {
-        self.lamina = LAMINAS.len();
+        self.lamina = self.laminas().len();
     }
 
     pub fn acabado(&self) -> bool {
-        self.lamina >= LAMINAS.len()
+        self.lamina >= self.laminas().len()
     }
 
     fn siguiente(&mut self) {
-        self.lamina = (self.lamina + 1).min(LAMINAS.len());
+        self.lamina = (self.lamina + 1).min(self.laminas().len());
         self.t = 0.0;
     }
 
@@ -146,28 +240,36 @@ impl Prologo {
     /// nombres de lo que se este usando (ver `acciones::Nombres`).
     pub fn dibujar(&self, l: &Layout, teclas: &Nombres) {
         clear_background(PAPEL);
-        let Some(textos) = LAMINAS.get(self.lamina) else {
+        let Some(textos) = self.laminas().get(self.lamina) else {
             return;
         };
-        let s = self.t;
+        let (s, dura) = (self.t, self.dura());
         // Un zoom lento hacia el centro: la camara de un cine mudo no esta
         // quieta, y una lamina quieta parece una pantalla de carga.
-        let z = 1.0 + 0.045 * (s / DURA);
+        let z = 1.0 + 0.045 * (s / dura);
         let lz = l
             .sacudido(vec2(VISTA_W, VISTA_H) * 0.5 * (1.0 - z))
             .escalado(z);
-        match self.lamina {
-            0 => el_salon(&lz, s, &self.ella),
-            1 => medianoche(&lz, s),
-            2 => ciudades(&lz, s),
-            3 => ella_sola(&lz, s, &self.ella),
-            _ => programa(&lz, s),
+        match (&self.fin, self.lamina) {
+            (None, 0) => el_salon(&lz, s, &self.ella),
+            (None, 1) => medianoche(&lz, s),
+            (None, 2) => ciudades(&lz, s),
+            (None, 3) => ella_sola(&lz, s, &self.ella),
+            (None, _) => programa(&lz, s),
+            (Some(_), 0) => de_vuelta(&lz, s, &self.ella),
+            (Some(_), 1) => la_musica_vuelve(&lz, s),
+            (Some(_), 2) => su_primer_baile(&lz, s, &self.ella),
+            (Some(r), _) => creditos(&lz, s, r),
         }
         intertitulo(l, textos, s);
-        let negro = 1.0 - (s / FUNDE).min((DURA - s) / FUNDE).clamp(0.0, 1.0);
+        let negro = 1.0 - (s / FUNDE).min((dura - s) / FUNDE).clamp(0.0, 1.0);
         rect(l, 0.0, 0.0, VISTA_W, VISTA_H, fade(TINTA, negro));
         draw::paspartu_de(l, vec2(VISTA_W, VISTA_H));
         self.ayuda(l, teclas);
+        // Y la funcion acaba como en un teatro: con el telon bajado.
+        if dura == DURA_CREDITOS {
+            cartela::telon(jefes::suave((s - (dura - TELON - FUNDE)) / TELON));
+        }
     }
 
     /// Debajo de la lamina, en el papel: por donde vamos y como se pasa.
@@ -175,7 +277,7 @@ impl Prologo {
         let o = l.to_screen(0.0, 0.0);
         let y = o.y + l.len(VISTA_H) + 26.0;
         let c = paleta::TINTA_TENUE;
-        let n = format!("{} / {}", self.lamina + 1, LAMINAS.len());
+        let n = format!("{} / {}", self.lamina + 1, self.laminas().len());
         fuentes::texto(&n, o.x, y, 16.0, Cara::Cuerpo, c);
         let (siguiente, saltar) = (tx(Texto::Siguiente), tx(Texto::SaltarHistoria));
         let ayuda = glifos::rellenar(
@@ -192,21 +294,25 @@ impl Prologo {
 }
 
 /// La invitacion del menu a volver a verlo, arriba a la izquierda de la
-/// arena: discreta, que lo que se viene a hacer al menu es jugar.
-pub fn en_el_menu(l: &Layout, teclas: &Nombres) {
+/// arena: discreta, que lo que se viene a hacer al menu es jugar. Debajo, el
+/// final, si ya se ha ganado.
+pub fn en_el_menu(l: &Layout, teclas: &Nombres, hay_final: bool) {
     let o = l.to_screen(0.0, 0.0);
     let u = l.scale().clamp(0.55, 1.2);
-    let texto = glifos::rellenar(
-        "{}   {}",
-        &[&teclas.historia, &glifos::txt(tx(Texto::LaHistoria))],
-    );
-    glifos::texto(
-        &texto,
-        o.x + 22.0 * u,
-        o.y + 64.0 * u,
-        17.0 * u,
-        draw::TEXT_DIM,
-    );
+    let lineas = [
+        (&teclas.historia, Texto::LaHistoria),
+        (&teclas.el_final, Texto::ElFinal),
+    ];
+    for (i, (tecla, t)) in lineas.iter().take(1 + hay_final as usize).enumerate() {
+        let texto = glifos::rellenar("{}   {}", &[tecla, &glifos::txt(tx(*t))]);
+        glifos::texto(
+            &texto,
+            o.x + 22.0 * u,
+            o.y + (64.0 + 24.0 * i as f32) * u,
+            17.0 * u,
+            draw::TEXT_DIM,
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -437,20 +543,7 @@ fn ella_sola(l: &Layout, s: f32, ella: &Player) {
 /// y el color en un filete debajo: la Poiret es tan fina que en mostaza sobre
 /// papel no se leia.
 fn programa(l: &Layout, s: f32) {
-    rect(l, 0.0, 0.0, VISTA_W, VISTA_H, PAPEL);
-    let p = l.to_screen(24.0, 20.0);
-    let (w, h) = (l.len(VISTA_W - 48.0), l.len(PIE - 36.0));
-    draw_rectangle_lines(p.x, p.y, w, h, l.len(3.0), TINTA);
-    let d = l.len(8.0);
-    draw_rectangle_lines(p.x + d, p.y + d, w - d * 2.0, h - d * 2.0, 1.0, TINTA);
-
-    let cx = l.to_screen(VISTA_W * 0.5, 0.0).x;
-    let titulo = l.to_screen(0.0, 84.0).y;
-    fuentes::centrado("VALS", cx, titulo, l.len(52.0), Cara::Titulo, TINTA);
-    let ry = l.to_screen(0.0, 104.0).y;
-    let media = l.len(150.0);
-    draw_line(cx - media, ry, cx + media, ry, 1.5, TINTA);
-    draw_poly(cx, ry, 4, l.len(5.0), 45.0, TINTA);
+    hoja(l, 84.0);
 
     for (i, numero) in NUMEROS.iter().enumerate() {
         let titulo = nombre(numero);
@@ -495,6 +588,215 @@ fn programa(l: &Layout, s: f32) {
             px += l.len(9.0);
         }
     }
+}
+
+/// La hoja de un programa de mano: papel, doble filete y VALS en la cabecera,
+/// con la base del titulo en `y`.
+fn hoja(l: &Layout, y: f32) {
+    rect(l, 0.0, 0.0, VISTA_W, VISTA_H, PAPEL);
+    let p = l.to_screen(24.0, 20.0);
+    let (w, h) = (l.len(VISTA_W - 48.0), l.len(PIE - 36.0));
+    draw_rectangle_lines(p.x, p.y, w, h, l.len(3.0), TINTA);
+    let d = l.len(8.0);
+    draw_rectangle_lines(p.x + d, p.y + d, w - d * 2.0, h - d * 2.0, 1.0, TINTA);
+
+    let cx = l.to_screen(VISTA_W * 0.5, 0.0).x;
+    let titulo = l.to_screen(0.0, y).y;
+    fuentes::centrado("VALS", cx, titulo, l.len(52.0), Cara::Titulo, TINTA);
+    let ry = l.to_screen(0.0, y + 20.0).y;
+    let media = l.len(150.0);
+    draw_line(cx - media, ry, cx + media, ry, 1.5, TINTA);
+    draw_poly(cx, ry, 4, l.len(5.0), 45.0, TINTA);
+}
+
+// ---------------------------------------------------------------------------
+// Las laminas del final.
+// ---------------------------------------------------------------------------
+
+/// Una corchea: la cabeza, la plica y el corchete. Es la musica que vuelve.
+fn corchea(l: &Layout, x: f32, y: f32, tam: f32, c: Color) {
+    let p = l.to_screen(x, y);
+    let r = l.len(tam * 0.3);
+    draw_ellipse(p.x, p.y, r * 1.3, r, -20.0, c);
+    let (px, arriba) = (p.x + r * 1.15, p.y - l.len(tam));
+    let g = l.len(tam * 0.1).max(1.0);
+    draw_line(px, p.y, px, arriba, g, c);
+    draw_line(px, arriba, px + r * 1.4, arriba + r * 1.8, g * 1.4, c);
+}
+
+/// I. Como la primera del prologo: ella entra en el salon de Viena, pero con
+/// las cuatro musicas dando vueltas a su alrededor y los cuatro detras, en
+/// fila y pequenos. No la persiguen: vuelven con ella.
+fn de_vuelta(l: &Layout, s: f32, ella: &Player) {
+    let suelo = 300.0;
+    escenarios::dibujar(
+        &l.escalado(1.5),
+        0,
+        suelo / 1.5,
+        s * 60.0,
+        latido(Tema::PasoBase, s),
+    );
+    tarima(l, suelo);
+
+    let andar = jefes::suave(s / 3.2);
+    let x = -80.0 + (VISTA_W * 0.5 + 80.0) * andar;
+    foco(l, VISTA_W * 0.5, 405.0, 130.0, 0.4 + 0.6 * andar);
+    for baile in 0..4 {
+        let alto = 92.0;
+        let c = vec2(x - 120.0 - 84.0 * baile as f32, 405.0 - alto * 0.44);
+        jefe(l, baile, c, alto, s * 60.0, paleta::del_baile(baile));
+    }
+    let mut ella = ella.clone();
+    ella.vel.x = PLAYER_SPEED * 0.6 * (1.0 - andar);
+    let guino = (4.0..4.4).contains(&s).then_some(Expresion::Guino);
+    bailarina(l, &ella, vec2(x, 405.0), 4.6, s * 60.0, guino);
+    for i in 0..4 {
+        let a = s * 1.6 + i as f32 / 4.0 * std::f32::consts::TAU;
+        let (cx, cy) = (x + a.cos() * 80.0, 250.0 + a.sin() * 24.0);
+        corchea(l, cx, cy, 26.0, paleta::del_baile(i).0);
+    }
+}
+
+/// II. Los cuatro en fila en la tarima, como en la medianoche del prologo,
+/// pero cada uno en su sitio: se le enciende el foco, se pone a tocar y le
+/// salen corcheas de su tinta. Uno detras de otro, hasta que suenan todos.
+fn la_musica_vuelve(l: &Layout, s: f32) {
+    rect(l, 0.0, 0.0, VISTA_W, VISTA_H, PARED);
+    tarima(l, 330.0);
+    for baile in 0..4 {
+        let empieza = 0.5 + 0.6 * baile as f32;
+        let k = ((s - empieza) / 0.5).clamp(0.0, 1.0);
+        let x = 150.0 + 220.0 * baile as f32;
+        foco(l, x, 330.0, 95.0, k);
+        // Callado no se mueve, como dormido en el prologo.
+        let t = s.max(empieza) * 60.0;
+        let alto = 170.0 * (0.82 + 0.18 * jefes::boing(k));
+        let c = vec2(x, 330.0 - alto * 0.44);
+        let colores = paleta::del_baile(baile);
+        jefe(l, baile, c, alto, t, colores);
+        for j in 0..3 {
+            let sube = ((s - empieza) * 0.5 + j as f32 / 3.0).fract();
+            let y = c.y - alto * 0.55 - sube * 150.0;
+            let dx = (sube * 6.0 + j as f32 * 2.0).sin() * 22.0;
+            corchea(l, x + dx, y, 22.0, fade(colores.0, k * (1.0 - sube)));
+        }
+    }
+}
+
+/// III. Su primer baile: ella en el centro del salon, yendo y viniendo bajo
+/// el foco, con los cuatro tocando a los lados, dos y dos, como una orquesta.
+/// Y por los ventanales va entrando el amanecer.
+fn su_primer_baile(l: &Layout, s: f32, ella: &Player) {
+    let suelo = 300.0;
+    escenarios::dibujar(
+        &l.escalado(1.5),
+        0,
+        suelo / 1.5,
+        s * 60.0,
+        latido(Tema::PasoBase, s),
+    );
+    let alba = jefes::suave((s - 1.0) / (DURA - 2.0));
+    rect(l, 0.0, 0.0, VISTA_W, suelo, fade(ALBA, 0.38 * alba));
+    tarima(l, suelo);
+
+    for (baile, x) in [(0, 90.0), (1, 200.0), (2, 760.0), (3, 870.0)] {
+        let alto = 100.0;
+        let c = vec2(x, 400.0 - alto * 0.44);
+        jefe(l, baile, c, alto, s * 60.0, paleta::del_baile(baile));
+    }
+    // El vaiven: va y viene por el centro, inclinada hacia donde va, y recoge
+    // y abre los brazos al compas.
+    let w = 1.3;
+    let x = VISTA_W * 0.5 + 110.0 * (s * w).sin();
+    let mut ella = ella.clone();
+    ella.vel.x = PLAYER_SPEED * 0.45 * (s * w).cos();
+    ella.focus_t = 0.4 - 0.4 * (s * w * 2.0).cos();
+    foco(l, x, 405.0, 130.0, 1.0);
+    let cara = Some(Expresion::Normal);
+    bailarina(l, &ella, vec2(x, 405.0), 4.6, s * 60.0, cara);
+}
+
+/// IV. Los creditos, en la misma hoja que el programa del prologo: a la
+/// izquierda la musica y las tipografias, a la derecha los bailes de quien
+/// juega con su sello y su mejor tiempo, y abajo con que esta hecho.
+fn creditos(l: &Layout, s: f32, r: &Resumen) {
+    hoja(l, 70.0);
+    // Cada bloque entra un poco despues que el anterior.
+    let a = |i: f32| ((s - 0.4 - 0.4 * i) / 0.5).clamp(0.0, 1.0);
+    let tinta = |a: f32| fade(TINTA, a);
+    let tenue = |a: f32| fade(paleta::TINTA_TENUE, a);
+    let centrado = |t: &str, x: f32, y: f32, tam: f32, cara: Cara, color: Color| {
+        let p = l.to_screen(x, y);
+        fuentes::centrado(t, p.x, p.y, l.len(tam), cara, color);
+    };
+
+    let izq = 262.0;
+    centrado(
+        tx(Texto::LaMusica),
+        izq,
+        134.0,
+        21.0,
+        Cara::Titulo,
+        tinta(a(0.0)),
+    );
+    for (i, t) in PIEZAS.iter().enumerate() {
+        let y = 162.0 + 24.0 * i as f32;
+        centrado(tx(*t), izq, y, 16.0, Cara::Cuerpo, tinta(a(0.0)));
+    }
+    let tipos = tx(Texto::LasTipografias);
+    centrado(tipos, izq, 300.0, 21.0, Cara::Titulo, tinta(a(1.0)));
+    for (i, t) in [Texto::CreditoPoiret, Texto::CreditoBarlow]
+        .iter()
+        .enumerate()
+    {
+        let y = 328.0 + 24.0 * i as f32;
+        centrado(tx(*t), izq, y, 16.0, Cara::Cuerpo, tinta(a(1.0)));
+    }
+
+    let der = 698.0;
+    centrado(
+        tx(Texto::TusBailes),
+        der,
+        134.0,
+        21.0,
+        Cara::Titulo,
+        tinta(a(2.0)),
+    );
+    for (i, (baile, nota, mejor)) in r.bailes.iter().enumerate() {
+        let y = 176.0 + 44.0 * i as f32;
+        let k = a(2.0 + 0.3 * i as f32);
+        let (cuerpo, ropa) = paleta::del_baile(i);
+        jefe(
+            l,
+            i,
+            vec2(540.0, y - 6.0),
+            38.0,
+            s * 60.0,
+            (fade(cuerpo, k), fade(ropa, k)),
+        );
+        let p = l.to_screen(572.0, y + 7.0);
+        fuentes::texto(nombre(baile), p.x, p.y, l.len(22.0), Cara::Titulo, tinta(k));
+        let tiempo = mejor.map_or_else(|| "-".to_owned(), libro::reloj);
+        let p = l.to_screen(830.0, y + 7.0);
+        fuentes::derecha(&tiempo, p.x, p.y, l.len(16.0), Cara::Cuerpo, tenue(k));
+        // Y el sello de su nota, que cae despues, uno detras de otro.
+        if let Some(n) = nota {
+            let golpe = (s - 2.2 - 0.3 * i as f32) / 0.35;
+            libro::sello(l.to_screen(872.0, y), l.len(17.0), *n, false, golpe);
+        }
+    }
+    let jugado = txf(Texto::Jugado, &[&libro::horas(r.jugado)]);
+    centrado(&jugado, der, 352.0, 16.0, Cara::Cuerpo, tenue(a(3.0)));
+
+    let hecho = tx(Texto::HechoEnRust);
+    centrado(
+        hecho,
+        VISTA_W * 0.5,
+        394.0,
+        16.0,
+        Cara::Cuerpo,
+        tenue(a(4.0)),
+    );
 }
 
 /// El intertitulo: la franja de tinta de abajo con el titulo y sus dos lineas,
@@ -590,6 +892,46 @@ mod tests {
         // Y la gracia vale en cada lamina, no solo en la primera.
         p.avanzar();
         assert_eq!(p.lamina, 1);
+    }
+
+    #[test]
+    fn el_final_pasa_solo_y_se_acaba_con_los_creditos() {
+        let resumen = Resumen::de(&Marcas::default(), &BossDef::default_bosses());
+        let mut p = Prologo::el_final(resumen);
+        assert!(p.es_el_final() && !Prologo::nuevo().es_el_final());
+        let mut segundos = 0.0;
+        while !p.acabado() {
+            p.step(FRAME);
+            segundos += FRAME;
+            assert!(segundos < 60.0, "no se acaba nunca");
+        }
+        // Tres laminas y los creditos, que se leen mas despacio.
+        let esperado = (FINAL.len() - 1) as f32 * DURA + DURA_CREDITOS;
+        assert!((segundos - esperado).abs() < 0.1, "dura {segundos} s");
+        assert_eq!(p.lamina, FINAL.len());
+    }
+
+    #[test]
+    fn el_final_toca_con_los_cuatro_ganados_el_ultimo_que_sea() {
+        use vals_core::boss::Nivel;
+        let pista = || {
+            Pista::new(vec![
+                ("El Vals".into(), Nivel::Facil),
+                ("El Tango".into(), Nivel::Dificil),
+                ("El Charleston".into(), Nivel::Media),
+                ("El Cancan".into(), Nivel::Media),
+            ])
+        };
+        // Lo normal, el tango el ultimo; y si no, el que sea.
+        for orden in [[0, 2, 3, 1], [0, 3, 1, 2]] {
+            let mut p = pista();
+            for (k, i) in orden.iter().enumerate() {
+                assert!(!toca_el_final(&p, false), "con {k} ganados no");
+                p.marcar_vencido(*i);
+            }
+            assert!(toca_el_final(&p, false), "con los cuatro si");
+            assert!(!toca_el_final(&p, true), "y una vez visto, ya no");
+        }
     }
 
     #[test]

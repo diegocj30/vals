@@ -325,32 +325,37 @@ impl Fundido {
     }
 
     pub fn dibujar(&self) {
-        let k = self.cerrado();
-        if k <= 0.0 {
-            return;
-        }
-        let (w, h) = (screen_width(), screen_height());
-        let media = w * 0.5 * k;
+        telon(self.cerrado());
+    }
+}
 
-        for (x0, sentido) in [(0.0, 1.0), (w - media, -1.0)] {
-            draw_rectangle(x0, 0.0, media, h, TELON);
-            // Los pliegues: unas rayas verticales bastan para que la tela deje
-            // de ser un rectangulo. Se separan hacia el centro del escenario,
-            // que es donde cae la luz.
-            for i in 1..PLIEGUES {
-                let f = i as f32 / PLIEGUES as f32;
-                let x = if sentido > 0.0 {
-                    media * f
-                } else {
-                    w - media * f
-                };
-                let g = 1.0 + f * 2.5;
-                draw_line(x, 0.0, x, h, g, TELON_PLIEGUE);
-            }
-            // Y el borde interior, dorado, que es lo que dice "teatro".
-            let borde = if sentido > 0.0 { media } else { w - media };
-            draw_line(borde, 0.0, borde, h, 3.0, TELON_ORO);
+/// Las dos mitades del telon, cerradas `k` de 0 a 1. El final tambien lo
+/// usa: la funcion acaba con el telon bajado.
+pub fn telon(k: f32) {
+    if k <= 0.0 {
+        return;
+    }
+    let (w, h) = (screen_width(), screen_height());
+    let media = w * 0.5 * k;
+
+    for (x0, sentido) in [(0.0, 1.0), (w - media, -1.0)] {
+        draw_rectangle(x0, 0.0, media, h, TELON);
+        // Los pliegues: unas rayas verticales bastan para que la tela deje
+        // de ser un rectangulo. Se separan hacia el centro del escenario,
+        // que es donde cae la luz.
+        for i in 1..PLIEGUES {
+            let f = i as f32 / PLIEGUES as f32;
+            let x = if sentido > 0.0 {
+                media * f
+            } else {
+                w - media * f
+            };
+            let g = 1.0 + f * 2.5;
+            draw_line(x, 0.0, x, h, g, TELON_PLIEGUE);
         }
+        // Y el borde interior, dorado, que es lo que dice "teatro".
+        let borde = if sentido > 0.0 { media } else { w - media };
+        draw_line(borde, 0.0, borde, h, 3.0, TELON_ORO);
     }
 }
 

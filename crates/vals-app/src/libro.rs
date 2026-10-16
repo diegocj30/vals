@@ -299,14 +299,14 @@ fn ahora() -> f64 {
 }
 
 /// Minutos y segundos, con la decima: "1:42.3".
-fn reloj(ticks: u64) -> String {
+pub(crate) fn reloj(ticks: u64) -> String {
     let hz = u64::from(TICK_HZ);
     let s = ticks / hz;
     format!("{}:{:02}.{}", s / 60, s % 60, ticks % hz * 10 / hz)
 }
 
 /// El tiempo jugado, en horas y minutos.
-fn horas(ticks: u64) -> String {
+pub(crate) fn horas(ticks: u64) -> String {
     let min = ticks / u64::from(TICK_HZ) / 60;
     match min / 60 {
         0 => format!("{min} min"),

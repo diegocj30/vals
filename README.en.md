@@ -25,7 +25,8 @@ girls. Each one steals the music of its dance and flees to its own city:
 Vienna, Buenos Aires, Chicago and Paris. The dancer with the scarlet bow sets
 off after them, street by street through the promenades, and to win each song
 back she has to out-dance its thief. It is told in a five-plate prologue that can be replayed from the menu
-with `X` (Square).
+with `X` (Square). Winning all four dances brings up the ending, with the
+credits, which from then on can be replayed from the menu with `V` (Triangle).
 
 ## Every boss is a dance
 
@@ -91,6 +92,7 @@ the bullets draw it, and its long-exposure photo.
 | Back in menus, and leave the dance floor or the shop | `Esc` / `Backspace` | Circle / B |
 | Open the dance card (from the menu) | `L` | L1 / LB |
 | Replay the story (from the menu) | `X` | Square / X |
+| Replay the ending (from the menu, once all four dances are won) | `V` | Triangle / Y |
 | Turn off the ink wobble | `T` (also in options) | |
 | Mute | `M` | |
 

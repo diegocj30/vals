@@ -22,7 +22,9 @@ coristas. Cada una roba la musica de su baile y huye a su ciudad: Viena, Buenos
 Aires, Chicago y Paris. La bailarina del lazo escarlata sale tras ellas, calle a
 calle por los paseos, y para recuperar cada musica tiene que ganar a su ladron
 bailando. Se cuenta en un prologo de cinco laminas que se vuelve a ver
-desde el menu con `X` (cuadrado).
+desde el menu con `X` (cuadrado). Al ganar los cuatro bailes sale el final, con
+los creditos, y desde entonces se vuelve a ver desde el menu con `V`
+(triangulo).
 
 ## Cada jefe es un baile
 
@@ -88,6 +90,7 @@ lo dibujan las balas y su foto de larga exposicion.
 | Atras en los menus, y salir de la pista o la tienda | `Esc` / `Borrar` | Circulo / B |
 | Abrir el libro de baile (en el menu) | `L` | L1 / LB |
 | Volver a ver la historia (en el menu) | `X` | Cuadrado / X |
+| Volver a ver el final (en el menu, con los cuatro bailes ganados) | `V` | Triangulo / Y |
 | Quitar el temblor de la tinta | `T` (tambien en opciones) | |
 | Quitar el sonido | `M` | |
 

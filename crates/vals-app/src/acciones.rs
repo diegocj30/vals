@@ -70,6 +70,9 @@ pub enum Accion {
     /// Volver a ver el prologo, desde el titulo. Es el mismo boton secundario
     /// que pasear en la pista.
     Historia,
+    /// Volver a ver el final, desde el titulo, cuando ya se ha ganado. Es el
+    /// boton del super, como la historia es el del dash.
+    Final,
 }
 
 impl Accion {
@@ -87,6 +90,7 @@ impl Accion {
             Accion::Derecha => &[Right, D],
             Accion::Pasear | Accion::Historia => &[X],
             Accion::Libro => &[L],
+            Accion::Final => &[V],
         }
     }
 
@@ -104,6 +108,7 @@ impl Accion {
             Accion::Pasear | Accion::Historia => boton::OESTE,
             // El gatillo de focus, que en el titulo no hace nada.
             Accion::Libro => boton::L1,
+            Accion::Final => boton::NORTE,
         }
     }
 }
@@ -522,6 +527,7 @@ pub struct Nombres {
     pub pasear: Vec<Trozo>,
     pub libro: Vec<Trozo>,
     pub historia: Vec<Trozo>,
+    pub el_final: Vec<Trozo>,
     pub mover: Vec<Trozo>,
     pub arriba: Vec<Trozo>,
     pub disparar: Vec<Trozo>,
@@ -558,6 +564,7 @@ impl Nombres {
             pasear: accion(Accion::Pasear),
             libro: accion(Accion::Libro),
             historia: accion(Accion::Historia),
+            el_final: accion(Accion::Final),
             // La barra se lee igual en los dos idiomas.
             mover: if teclado {
                 glifos::boton(Boton::Flechas)

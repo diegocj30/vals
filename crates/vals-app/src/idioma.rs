@@ -541,6 +541,42 @@ textos! {
         "In Chicago the music plays over the rooftops: up you go.";
     LemaMontmartre: "Cuesta arriba, hasta el molino rojo donde patean las coristas.",
         "Uphill, to the red mill where the chorus girls kick.";
+
+    // --- El final ---
+    // Igual que el prologo: una idea por lamina, dicha tal cual.
+    ElFinal: "el final", "the ending";
+    Final1: "DE VUELTA EN EL SALÓN", "BACK AT THE BALLROOM";
+    Final1A: "Con las cuatro músicas recuperadas, ella vuelve al gran salón.",
+        "With all four songs won back, she returns to the grand ballroom.";
+    Final1B: "Los cuatro ladrones vuelven con ella.",
+        "The four thieves come back with her.";
+    Final2: "LA MÚSICA VUELVE", "THE MUSIC RETURNS";
+    Final2A: "Cada uno vuelve a su sitio y toca su música otra vez.",
+        "Each one goes back to its place and plays its music again.";
+    Final2B: "El vals, el tango, el charleston y el cancán suenan en el salón.",
+        "The waltz, the tango, the charleston and the can-can fill the ballroom.";
+    Final3: "SU PRIMER BAILE", "HER FIRST DANCE";
+    Final3A: "Por fin, ella baila por primera vez en el gran salón.",
+        "At last, she dances in the grand ballroom for the very first time.";
+    Final3B: "Y el baile sigue hasta el amanecer.", "And the ball goes on until dawn.";
+    Final4: "FIN", "THE END";
+    Final4A: "El gran salón ya no está en silencio.", "The grand ballroom is silent no more.";
+    Final4B: "Gracias por jugar.", "Thank you for playing.";
+    // Los creditos. Las piezas con su autor, como en el programa de un
+    // concierto.
+    LaMusica: "LA MÚSICA", "THE MUSIC";
+    CreditoDanubio: "El Danubio azul - Johann Strauss II", "The Blue Danube - Johann Strauss II";
+    CreditoOlas: "Sobre las olas - Juventino Rosas", "Over the Waves - Juventino Rosas";
+    CreditoCumparsita: "La Cumparsita - Gerardo Matos Rodríguez",
+        "La Cumparsita - Gerardo Matos Rodriguez";
+    CreditoRag: "Maple Leaf Rag - Scott Joplin", "Maple Leaf Rag - Scott Joplin";
+    CreditoGalop: "El galop infernal - Jacques Offenbach", "The Infernal Galop - Jacques Offenbach";
+    LasTipografias: "LAS TIPOGRAFÍAS (SIL OFL)", "THE TYPEFACES (SIL OFL)";
+    CreditoPoiret: "Poiret One - The Poiret One Project Authors",
+        "Poiret One - The Poiret One Project Authors";
+    CreditoBarlow: "Barlow - The Barlow Project Authors", "Barlow - The Barlow Project Authors";
+    HechoEnRust: "Hecho en Rust con macroquad", "Made in Rust with macroquad";
+    TusBailes: "TUS BAILES", "YOUR DANCES";
 }
 
 #[cfg(test)]
@@ -588,7 +624,7 @@ mod tests {
     fn el_espanol_de_pantalla_lleva_sus_tildes() {
         const FALTAS: &str = "musica salon funcion castanuela bandoneon gramofono tendra mas \
             dano ano todavia algun boton circulo triangulo record prologo corse basico cancan \
-            paris ecart compas ovacion menu espanol rodriguez cortesia";
+            paris ecart compas ovacion menu espanol rodriguez cortesia tipografias";
         let mut textos: Vec<&str> = Texto::TODOS.iter().map(|t| t.en(Idioma::Es)).collect();
         textos.push(Idioma::Es.nombre());
         textos.extend(nombres_de_los_datos().iter().filter_map(|n| en_espanol(n)));

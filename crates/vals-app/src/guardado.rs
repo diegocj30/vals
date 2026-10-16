@@ -66,6 +66,8 @@ pub struct Guardado {
     /// Si ya se vio el prologo, que sale solo la primera vez. Un guardado de
     /// antes no lo lleva y lo vera una vez, que es justo lo que se quiere.
     pub prologo_visto: bool,
+    /// Si ya se vio el final, que sale solo al ganar los cuatro bailes.
+    pub final_visto: bool,
     /// Records, intentos, caidas y tiempo jugado: el libro de baile.
     pub marcas: Marcas,
     /// El volumen, el trazo, los controles... Ver `opciones.rs`.
@@ -157,6 +159,9 @@ impl Guardado {
         if self.prologo_visto {
             poner("", PROLOGO);
         }
+        if self.final_visto {
+            poner("", FINAL);
+        }
         for o in self.opciones.a_texto() {
             poner(OPCION, &o);
         }
@@ -185,6 +190,8 @@ impl Guardado {
                 g.equipo.amuleto = Amuleto::por_nombre(a).unwrap_or_default();
             } else if n == PROLOGO {
                 g.prologo_visto = true;
+            } else if n == FINAL {
+                g.final_visto = true;
             } else if let Some(m) = n.strip_prefix(MARCA) {
                 g.marcas.leer(m);
             } else if let Some(j) = n.strip_prefix(JUGADO) {
@@ -204,6 +211,7 @@ const COMPRA: &str = "compra:";
 const TIRO: &str = "tiro:";
 const AMULETO: &str = "amuleto:";
 const PROLOGO: &str = "visto:prologo";
+const FINAL: &str = "visto:final";
 const MARCA: &str = "marca:";
 const JUGADO: &str = "jugado:";
 const OPCION: &str = "opcion:";
@@ -380,6 +388,19 @@ mod tests {
         assert!(leido.prologo_visto);
         assert!(!leido.tiene(PROLOGO), "no es un baile");
         assert_eq!(leido.bailados, ["El Vals"]);
+    }
+
+    #[test]
+    fn el_final_visto_se_guarda_y_lo_de_antes_no_lo_ha_visto() {
+        let viejo = Guardado::desde_texto("VALS1;El Vals;visto:prologo");
+        assert!(!viejo.final_visto, "un guardado de antes no lo ha visto");
+        let mut g = viejo.clone();
+        g.final_visto = true;
+        let texto = g.a_texto();
+        assert!(texto.ends_with(";visto:prologo;visto:final"), "{texto}");
+        let leido = Guardado::desde_texto(&texto);
+        assert_eq!(leido, g);
+        assert!(!leido.tiene(FINAL), "no es un baile");
     }
 
     #[test]

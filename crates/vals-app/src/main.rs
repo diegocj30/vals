@@ -648,6 +648,8 @@ async fn run_game() {
         // menu no hace nada; el cuadrado ya cuenta la historia. Se cierra con
         // lo mismo, con ESC o con el circulo.
         let libro_pulsado = libre && entrada.pulsado(Accion::Libro);
+        // El final se ofrece en el menu cuando ya se ha ganado y visto.
+        let hay_final = progreso.final_visto && pista.todo_vencido();
         if escena == Escena::Libro && (libro_pulsado || entrada.pulsado(Accion::Atras)) {
             escena = Escena::Menu;
             fundido.empezar(0.24);
@@ -680,25 +682,53 @@ async fn run_game() {
             historia = prologo::Prologo::nuevo();
             tras_prologo = Escena::Menu;
             fundido.empezar(0.30);
+        } else if escena == Escena::Menu && libre && hay_final && entrada.pulsado(Accion::Final) {
+            // El final tambien se vuelve a ver, con el boton del super.
+            escena = Escena::Prologo;
+            historia = prologo::Prologo::el_final(prologo::Resumen::de(&progreso.marcas, &bailes));
+            tras_prologo = Escena::Menu;
+            fundido.empezar(0.30);
+        }
+        // El final sale solo al llegar a la pista con los cuatro bailes
+        // ganados: lo normal es al volver del ultimo, despues de su tarjeta,
+        // y si se cerro el juego antes, al entrar desde el menu. F4 lo trae
+        // desde el menu o la pista, para verlo sin ganarse nada.
+        let llegando = escena == Escena::Pista && escena_antes != Escena::Pista;
+        let f4 =
+            libre && is_key_pressed(KeyCode::F4) && matches!(escena, Escena::Menu | Escena::Pista);
+        if f4 || llegando && prologo::toca_el_final(&pista, progreso.final_visto) {
+            tras_prologo = if f4 { escena } else { Escena::Pista };
+            escena = Escena::Prologo;
+            historia = prologo::Prologo::el_final(prologo::Resumen::de(&progreso.marcas, &bailes));
+            fundido.empezar(0.30);
         }
         // El prologo va despues del menu y de la pista a proposito: la tecla
         // que entra en el no puede leerse dos veces (la gracia la tapa), y la
         // que lo acaba no puede entrar a un baile en el mismo frame.
+        //
+        // Y no escucha el frame en que se entra: al final se llega con la
+        // tecla que cierra la tarjeta del ultimo baile, y si era ESC se lo
+        // saltaba entero sin verlo.
         if escena == Escena::Prologo {
             historia.step(frame_dt);
-            if entrada.pulsado(Accion::Aceptar) {
+            let escucha = escena_antes == Escena::Prologo;
+            if escucha && entrada.pulsado(Accion::Aceptar) {
                 historia.avanzar();
             }
             // Saltarselo entero: atras o pausa, que aqui no hay entreacto.
-            if entrada.pulsado(Accion::Atras) || entrada.pulsado(Accion::Pausa) {
+            if escucha && (entrada.pulsado(Accion::Atras) || entrada.pulsado(Accion::Pausa)) {
                 historia.saltar();
             }
             if historia.acabado() {
                 escena = tras_prologo;
-                if !progreso.prologo_visto {
+                // El final visto con F4 sin haberlo ganado no cuenta: si no,
+                // luego no saldria solo.
+                if historia.es_el_final() {
+                    progreso.final_visto |= pista.todo_vencido();
+                } else {
                     progreso.prologo_visto = true;
-                    progreso.guardar();
                 }
+                progreso.guardar();
                 accumulator = 0.0;
                 fundido.empezar(0.30);
             }
@@ -864,6 +894,8 @@ async fn run_game() {
                 // En la calle suena la primera figura de su baile: el vals se
                 // oye desde fuera, y al entrar sigue sonando sin cortarse.
                 Escena::Paseo => Tema::de(pista.nodos[nodo_actual].jefe, 0),
+                // En el final el salon vuelve a sonar: el Danubio entero.
+                Escena::Prologo if historia.es_el_final() => Tema::PasoBase,
                 _ => Tema::Sala,
             });
         }
@@ -1026,7 +1058,7 @@ async fn run_game() {
             if escena == Escena::Menu {
                 draw::menu(&layout, mostrado, intentos, &n);
                 libro::aviso_en_el_menu(&layout, &n);
-                prologo::en_el_menu(&layout, &n);
+                prologo::en_el_menu(&layout, &n, hay_final);
             } else if world.is_over() {
                 draw::fin_de_partida(
                     &layout,
