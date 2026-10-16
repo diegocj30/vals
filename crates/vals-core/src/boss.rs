@@ -162,6 +162,37 @@ impl BossDef {
         Self::from_ron(DEFAULT_BOSS_RON).expect("el RON embebido debe ser valido")
     }
 
+    /// El mismo baile en la dificultad sencilla: cada tanda a medias (ver
+    /// `EmitterSpec::a_medias`) y sin su ultima figura, que es la mas dura.
+    /// Un baile de una sola figura la conserva.
+    pub fn sencillo(&self) -> Self {
+        fn aligerar(pasos: &[Step]) -> Vec<Step> {
+            pasos
+                .iter()
+                .map(|paso| match paso {
+                    Step::Fire(spec) => Step::Fire(spec.a_medias()),
+                    Step::Repeat { times, body } => Step::Repeat {
+                        times: *times,
+                        body: aligerar(body),
+                    },
+                    Step::Forever(body) => Step::Forever(aligerar(body)),
+                    Step::Parallel(ramas) => {
+                        Step::Parallel(ramas.iter().map(|r| aligerar(r)).collect())
+                    }
+                    otro => otro.clone(),
+                })
+                .collect()
+        }
+        let mut def = self.clone();
+        if def.phases.len() > 1 {
+            def.phases.pop();
+        }
+        for fase in &mut def.phases {
+            fase.steps = aligerar(&fase.steps);
+        }
+        def
+    }
+
     /// Todos los jefes embebidos, en orden de aparicion.
     pub fn default_bosses() -> Vec<Self> {
         DEFAULT_BOSS_RONS
@@ -558,6 +589,29 @@ mod tests {
                 "{} ({}) se pasa de su presupuesto: {maxima} b/s con techo {techo}",
                 def.name,
                 def.nivel.nombre()
+            );
+        }
+    }
+
+    #[test]
+    fn en_sencillo_sale_la_mitad_de_balas_y_una_figura_menos() {
+        // Figura a figura, los mismos ticks: la sencilla echa mas o menos la
+        // mitad. No justo la mitad: las rosas se quedan, y un anillo impar
+        // redondea hacia arriba.
+        for def in BossDef::default_bosses() {
+            let facil = def.sencillo();
+            assert_eq!(facil.phases.len(), def.phases.len() - 1, "{}", def.name);
+            let (mut normal, mut sencillo) = (0, 0);
+            for (n, s) in def.phases.iter().zip(&facil.phases) {
+                assert_eq!(n.name, s.name);
+                normal += balas_de_la_fase(n, 600);
+                sencillo += balas_de_la_fase(s, 600);
+            }
+            let r = sencillo as f32 / normal as f32;
+            assert!(
+                (0.4..0.65).contains(&r),
+                "{}: la sencilla echa {sencillo} de {normal} balas ({r:.2})",
+                def.name
             );
         }
     }

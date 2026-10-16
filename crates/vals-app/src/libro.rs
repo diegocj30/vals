@@ -19,11 +19,11 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 use macroquad::prelude::*;
-use vals_core::Events;
 use vals_core::boss::BossDef;
 use vals_core::nota::{self, Marcador, Nota};
 use vals_core::paseo::{PaseoDef, VISTA_W};
 use vals_core::{ARENA_H, ARENA_W, TICK_HZ};
+use vals_core::{Dificultad, Events};
 
 use crate::acciones::Nombres;
 use crate::draw::{Layout, fade, paspartu};
@@ -104,13 +104,27 @@ pub struct Marca {
     pub nota: Option<Nota>,
     /// Golpes recibidos en cada figura. Un paseo tiene una sola.
     pub caidas: Vec<u32>,
+    /// Si el mejor tiempo y la nota se sacaron en sencillo. Se dice en el
+    /// libro, para que no pasen por los de la normal.
+    pub sencillo: bool,
 }
 
 impl Marca {
     /// Apunta un intento ganado. **Solo mejora**: un tiempo peor o una nota
     /// peor no borran lo que habia. Devuelve si se ha batido una marca que ya
     /// existia (la primera vez no es un record, es la primera vez).
-    pub fn mejorar(&mut self, ticks: u64, nota: Option<Nota>) -> (bool, bool) {
+    ///
+    /// Lo de la sencilla no pisa nunca lo de la normal, y lo de la normal pisa
+    /// siempre lo de la sencilla, como si no hubiera nada: no se comparan
+    /// tiempos de bailes que no duran lo mismo.
+    pub fn mejorar(&mut self, ticks: u64, nota: Option<Nota>, sencillo: bool) -> (bool, bool) {
+        if sencillo && !self.sencillo && self.mejor.is_some() {
+            return (false, false);
+        }
+        if !sencillo && self.sencillo {
+            (self.mejor, self.nota) = (None, None);
+        }
+        self.sencillo = sencillo;
         let tiempo = self.mejor.is_none_or(|t| ticks < t);
         let habia_tiempo = self.mejor.is_some();
         if tiempo {
@@ -134,7 +148,7 @@ impl Marca {
         (*n > 0).then_some((i, *n))
     }
 
-    /// `nombre|i3|t4321|nB|c0.2.1`. Clave y valor y no posiciones: lo que se
+    /// `nombre|i3|t4321|nB|c0.2.1|s`. Clave y valor y no posiciones: lo que se
     /// anada mas adelante entra sin romper lo guardado, y lo que no se conozca
     /// se ignora.
     fn a_texto(&self, nombre: &str) -> String {
@@ -149,6 +163,9 @@ impl Marca {
         if !self.caidas.is_empty() {
             let c: Vec<String> = self.caidas.iter().map(u32::to_string).collect();
             let _ = write!(s, "|c{}", c.join("."));
+        }
+        if self.sencillo {
+            s.push_str("|s");
         }
         s
     }
@@ -168,6 +185,7 @@ impl Marca {
                 "t" => m.mejor = v.parse().ok(),
                 "n" => m.nota = Nota::por_letra(v),
                 "c" => m.caidas = v.split('.').map(|x| x.parse().unwrap_or(0)).collect(),
+                "s" => m.sencillo = true,
                 _ => {}
             }
         }
@@ -240,30 +258,37 @@ impl Intento {
     }
 
     /// Baile ganado: su nota, sus marcas y su tarjeta.
-    pub fn cerrar_baile(&mut self, marcas: &mut Marcas) {
-        let n = nota::nota(&self.marcador, nota::par(&self.nombre));
-        self.cerrar(marcas, Some(n), None);
+    pub fn cerrar_baile(&mut self, marcas: &mut Marcas, d: Dificultad) {
+        let n = nota::nota_en(&self.marcador, nota::par(&self.nombre), d);
+        self.cerrar(marcas, Some(n), None, d == Dificultad::Sencillo);
     }
 
     /// Paseo andado hasta la puerta, con las fichas que son tuyas de las que
     /// tiene.
     pub fn cerrar_paseo(&mut self, marcas: &mut Marcas, fichas: (usize, usize)) {
-        self.cerrar(marcas, None, Some(fichas));
+        self.cerrar(marcas, None, Some(fichas), false);
     }
 
-    fn cerrar(&mut self, marcas: &mut Marcas, nota: Option<Nota>, fichas: Option<(usize, usize)>) {
+    fn cerrar(
+        &mut self,
+        marcas: &mut Marcas,
+        nota: Option<Nota>,
+        fichas: Option<(usize, usize)>,
+        sencillo: bool,
+    ) {
         let (record, _) = if self.trampa {
             (false, false)
         } else {
             marcas
                 .marca(&self.nombre)
-                .mejorar(self.marcador.ticks, nota)
+                .mejorar(self.marcador.ticks, nota, sencillo)
         };
         self.tarjeta = Some(Tarjeta {
             marcador: self.marcador,
             nota,
             record,
             fichas,
+            sencillo,
             desde: ahora(),
         });
     }
@@ -276,6 +301,8 @@ pub struct Tarjeta {
     /// Si se ha batido el mejor tiempo que habia.
     record: bool,
     fichas: Option<(usize, usize)>,
+    /// Ganado en sencillo: lo dice debajo del titulo.
+    sencillo: bool,
     /// Reloj de pared al ganar: la tarjeta se presenta sola, sin estado.
     desde: f64,
 }
@@ -449,7 +476,12 @@ pub fn tarjeta_de_baile(t: &Tarjeta, l: &Layout, teclas: &Nombres) {
         (tx(Texto::Parries), m.parries.to_string()),
         (tx(Texto::Supers), m.supers.to_string()),
     ];
-    tarjeta(l, r, tx(Texto::TarjetaDeBaile), "", &filas, a);
+    let sub = if t.sencillo {
+        tx(Texto::EnSencillo)
+    } else {
+        ""
+    };
+    tarjeta(l, r, tx(Texto::TarjetaDeBaile), sub, &filas, a);
     if let Some(n) = t.nota {
         let c = l.to_screen(r.x + 345.0, r.y + 165.0);
         sello(c, l.len(52.0), n, false, jefes::tramo(edad, 1.1, 1.3));
@@ -599,6 +631,12 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
         );
 
         let resumen = match m.mejor {
+            Some(t) if m.sencillo => format!(
+                "{}   ·   {}   ·   {}",
+                textos::mejor(&reloj(t)),
+                textos::intentos(m.intentos),
+                tx(Texto::EnSencillo)
+            ),
             Some(t) => format!(
                 "{}   ·   {}",
                 textos::mejor(&reloj(t)),
@@ -704,19 +742,57 @@ mod tests {
     fn las_marcas_solo_mejoran() {
         let mut m = Marca::default();
         // La primera vez se apunta, pero no es un record: no habia nada.
-        assert_eq!(m.mejorar(5000, Some(Nota::C)), (false, false));
+        assert_eq!(m.mejorar(5000, Some(Nota::C), false), (false, false));
         assert_eq!((m.mejor, m.nota), (Some(5000), Some(Nota::C)));
         // Peor en las dos: no se toca nada.
-        assert_eq!(m.mejorar(6000, Some(Nota::D)), (false, false));
+        assert_eq!(m.mejorar(6000, Some(Nota::D), false), (false, false));
         assert_eq!((m.mejor, m.nota), (Some(5000), Some(Nota::C)));
         // Mejor tiempo y peor nota: cada una por su lado.
-        assert_eq!(m.mejorar(4000, Some(Nota::D)), (true, false));
+        assert_eq!(m.mejorar(4000, Some(Nota::D), false), (true, false));
         assert_eq!((m.mejor, m.nota), (Some(4000), Some(Nota::C)));
-        assert_eq!(m.mejorar(4500, Some(Nota::A)), (false, true));
+        assert_eq!(m.mejorar(4500, Some(Nota::A), false), (false, true));
         assert_eq!((m.mejor, m.nota), (Some(4000), Some(Nota::A)));
         // Un paseo no trae nota y no borra la que hubiera.
-        m.mejorar(9000, None);
+        m.mejorar(9000, None, false);
         assert_eq!(m.nota, Some(Nota::A));
+    }
+
+    #[test]
+    fn lo_de_la_sencilla_no_pasa_por_lo_de_la_normal() {
+        let mut m = Marca::default();
+        // La primera vez en sencillo: se apunta, y se dice.
+        m.mejorar(5000, Some(Nota::B), true);
+        assert!(m.sencillo);
+        assert_eq!((m.mejor, m.nota), (Some(5000), Some(Nota::B)));
+        // Una normal peor la pisa igual: es otra cosa, no un tiempo peor.
+        assert_eq!(m.mejorar(9000, Some(Nota::C), false), (false, false));
+        assert!(!m.sencillo);
+        assert_eq!((m.mejor, m.nota), (Some(9000), Some(Nota::C)));
+        // Y una sencilla mejor ya no toca lo de la normal.
+        assert_eq!(m.mejorar(3000, Some(Nota::B), true), (false, false));
+        assert_eq!(
+            (m.mejor, m.nota, m.sencillo),
+            (Some(9000), Some(Nota::C), false)
+        );
+        // La marca de sencillo se guarda y se vuelve a leer.
+        let s = Marca {
+            sencillo: true,
+            ..m
+        };
+        let texto = s.a_texto("El Vals");
+        assert!(texto.ends_with("|s"), "{texto}");
+        assert_eq!(Marca::desde_texto(&texto), Some(("El Vals".into(), s)));
+    }
+
+    #[test]
+    fn en_sencillo_la_tarjeta_no_pasa_de_b_y_lo_dice() {
+        let mut marcas = Marcas::default();
+        let mut i = marcas.empezar("El Vals");
+        i.apuntar(&mut marcas, &Events::default(), 0);
+        i.cerrar_baile(&mut marcas, Dificultad::Sencillo);
+        assert!(i.tarjeta.as_ref().is_some_and(|t| t.sencillo));
+        assert_eq!(marcas.nota("El Vals"), Some(Nota::B), "rapidisimo, pero B");
+        assert!(marcas.por_nombre["El Vals"].sencillo);
     }
 
     #[test]
@@ -745,7 +821,7 @@ mod tests {
         let mut i = marcas.empezar("El Vals");
         i.trampa = true;
         i.apuntar(&mut marcas, &Events::default(), 0);
-        i.cerrar_baile(&mut marcas);
+        i.cerrar_baile(&mut marcas, Dificultad::Normal);
         assert!(i.tarjeta.is_some(), "la tarjeta se ve igual");
         assert_eq!(marcas.nota("El Vals"), None);
         assert_eq!(marcas.por_nombre["El Vals"].mejor, None);
@@ -758,6 +834,7 @@ mod tests {
             mejor: Some(6123),
             nota: Some(Nota::APlus),
             caidas: vec![0, 3, 1],
+            sencillo: false,
         };
         let texto = m.a_texto("El Vals");
         assert_eq!(texto, "El Vals|i7|t6123|nA+|c0.3.1");

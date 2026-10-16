@@ -416,7 +416,7 @@ mod tests {
             },
             1,
         );
-        i.cerrar_baile(&mut g.marcas);
+        i.cerrar_baile(&mut g.marcas, vals_core::Dificultad::Normal);
         g.marcas
             .empezar("El paseo de Viena")
             .cerrar_paseo(&mut g.marcas, (1, 4));
@@ -461,6 +461,18 @@ mod tests {
         g.opciones.idioma = Idioma::En;
         let texto = g.a_texto();
         assert_eq!(texto, "VALS1;El Vals;opcion:idioma=en");
+        assert_eq!(Guardado::desde_texto(&texto), g);
+    }
+
+    #[test]
+    fn la_dificultad_se_guarda_y_lo_de_antes_es_normal() {
+        use vals_core::Dificultad;
+        let viejo = Guardado::desde_texto("VALS1;El Vals");
+        assert_eq!(viejo.opciones.dificultad, Dificultad::Normal);
+        let mut g = viejo;
+        g.opciones.dificultad = Dificultad::Sencillo;
+        let texto = g.a_texto();
+        assert_eq!(texto, "VALS1;El Vals;opcion:dificultad=sencillo");
         assert_eq!(Guardado::desde_texto(&texto), g);
     }
 

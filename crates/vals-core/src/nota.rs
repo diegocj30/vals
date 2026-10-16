@@ -7,6 +7,7 @@
 //! **No cambia nada del mundo.** El `Marcador` solo lee los `Events` de cada
 //! tick, que no entran en la huella, asi que el replay dorado ni se entera.
 
+use crate::Dificultad;
 use crate::events::Events;
 
 /// Lo que se apunta de un intento, tick a tick.
@@ -126,6 +127,19 @@ pub fn nota(m: &Marcador, par: u64) -> Nota {
     }
 }
 
+/// Lo mas alto que se saca en la sencilla: una B. Con la mitad de balas y una
+/// figura menos, una A no diria lo mismo que en la normal.
+pub const TOPE_SENCILLO: Nota = Nota::B;
+
+/// La nota de un intento ganado en su dificultad.
+pub fn nota_en(m: &Marcador, par: u64, d: Dificultad) -> Nota {
+    let n = nota(m, par);
+    match d {
+        Dificultad::Normal => n,
+        Dificultad::Sencillo => n.min(TOPE_SENCILLO),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,6 +172,16 @@ mod tests {
         assert_eq!(nota(&m(200.0, 2, 0, 0), PAR), Nota::D);
         // Un golpe, algo lento, dos parries y un super: una B.
         assert_eq!(nota(&m(160.0, 1, 2, 1), PAR), Nota::B);
+    }
+
+    #[test]
+    fn en_sencillo_la_nota_no_pasa_de_b() {
+        let perfecto = m(100.0, 0, 3, 3);
+        assert_eq!(nota_en(&perfecto, PAR, Dificultad::Normal), Nota::APlus);
+        assert_eq!(nota_en(&perfecto, PAR, Dificultad::Sencillo), Nota::B);
+        // Lo que ya estaba por debajo se queda como estaba.
+        let flojo = m(200.0, 2, 0, 0);
+        assert_eq!(nota_en(&flojo, PAR, Dificultad::Sencillo), Nota::D);
     }
 
     #[test]

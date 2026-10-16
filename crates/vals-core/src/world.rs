@@ -51,6 +51,47 @@ impl Mode {
     }
 }
 
+/// Lo duro que es el combate: el de siempre, o el sencillo de Cuphead.
+///
+/// Es para quien no ha jugado nunca a esto. En `Sencillo` cada tanda echa la
+/// mitad de balas y el baile se acaba una figura antes (ver
+/// `BossDef::sencillo`); los RON no se tocan. Es una entrada de la
+/// simulacion, como el equipo: el replay la guarda en su cabecera.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Dificultad {
+    #[default]
+    Normal,
+    Sencillo,
+}
+
+impl Dificultad {
+    /// Como se guarda.
+    pub fn clave(self) -> &'static str {
+        match self {
+            Dificultad::Normal => "normal",
+            Dificultad::Sencillo => "sencillo",
+        }
+    }
+
+    pub fn por_clave(c: &str) -> Option<Self> {
+        [Dificultad::Normal, Dificultad::Sencillo]
+            .into_iter()
+            .find(|d| d.clave() == c)
+    }
+
+    pub(crate) fn as_u8(self) -> u8 {
+        self as u8
+    }
+
+    /// Un numero que no se conoce cae en la normal, como el equipo.
+    pub fn from_u8(v: u8) -> Self {
+        match v {
+            1 => Dificultad::Sencillo,
+            _ => Dificultad::Normal,
+        }
+    }
+}
+
 /// Vidas con las que empieza una partida.
 ///
 /// Tres. Es lo que convierte el boss-rush en una carrera con tension: sin un
@@ -97,6 +138,8 @@ pub struct World {
     /// El tiro y el amuleto que se llevan. Es una entrada, como
     /// la semilla: no cambia durante la partida y el replay lo guarda.
     pub equipo: Equipo,
+    /// Normal o sencillo. Otra entrada: ver [`World::con_dificultad`].
+    pub dificultad: Dificultad,
     /// Lo que ha pasado en el ultimo tick. Lo lee la capa de presentacion para
     /// saber que sonido tocar. No entra en el hash: es informacion derivada.
     pub events: Events,
@@ -129,6 +172,7 @@ impl World {
             defeat: false,
             mode: Mode::Flight,
             equipo: Equipo::default(),
+            dificultad: Dificultad::Normal,
             events: Events::default(),
             boss_defs: defs,
             prev_input: InputFrame::NONE,
@@ -195,6 +239,24 @@ impl World {
         w.equipo = equipo;
         w.lives = w.vidas_de_salida();
         w
+    }
+
+    /// El mismo mundo en otra dificultad. Hay que llamarlo antes del primer
+    /// tick: rehace los jefes, y el que hubiera empezado vuelve a su salida.
+    pub fn con_dificultad(mut self, d: Dificultad) -> Self {
+        self.dificultad = d;
+        let defs = std::mem::take(&mut self.boss_defs);
+        self.boss_defs = self.a_su_medida(defs);
+        self.boss = Boss::from_def(&self.boss_defs[self.boss_index]);
+        self
+    }
+
+    /// Los jefes como se bailan en la dificultad de este mundo.
+    fn a_su_medida(&self, defs: Vec<BossDef>) -> Vec<BossDef> {
+        match self.dificultad {
+            Dificultad::Normal => defs,
+            Dificultad::Sencillo => defs.iter().map(BossDef::sencillo).collect(),
+        }
     }
 
     /// Las vidas con las que se empieza: tres, y una mas con el relicario.
@@ -274,6 +336,7 @@ impl World {
         if defs.is_empty() {
             return;
         }
+        let defs = self.a_su_medida(defs);
         self.boss_index = self.boss_index.min(defs.len() - 1);
         self.boss = Boss::from_def(&defs[self.boss_index]);
         self.boss_defs = defs;
@@ -546,6 +609,10 @@ impl World {
             let [t, a] = self.equipo.a_bytes();
             h.write_u64(u64::from(t) << 8 | u64::from(a));
         }
+        // La dificultad, igual: la normal no deja rastro.
+        if self.dificultad != Dificultad::Normal {
+            h.write_u64(u64::from(self.dificultad.as_u8()));
+        }
 
         h.finish()
     }
@@ -605,6 +672,25 @@ mod tests {
         a.step(pulsar(InputFrame::LEFT));
         b.step(pulsar(InputFrame::RIGHT));
         assert_ne!(a.state_hash(), b.state_hash());
+    }
+
+    #[test]
+    fn en_sencillo_el_baile_acaba_una_figura_antes() {
+        for baile in 0..BossDef::default_bosses().len() {
+            let normal = World::empezar_en(1, Mode::Flight, baile);
+            let mut w =
+                World::empezar_en(1, Mode::Flight, baile).con_dificultad(Dificultad::Sencillo);
+            let figuras = normal.boss.phase_count() - 1;
+            assert_eq!(w.boss.phase_count(), figuras);
+            // Tumbar la penultima figura acaba el baile.
+            for _ in 0..figuras {
+                assert!(!w.boss.defeated);
+                w.boss.damage(i32::MAX / 4);
+            }
+            assert!(w.boss.defeated);
+            // Y no es el mismo mundo, aunque se juegue igual.
+            assert_ne!(normal.state_hash(), w.state_hash());
+        }
     }
 
     // --- Movimiento ---

@@ -462,6 +462,10 @@ textos! {
     FilaMapa: "Volver a la pista", "Back to the dance floor";
     FilaOpciones: "Opciones", "Options";
     FilaIdioma: "Idioma / Language", "Idioma / Language";
+    FilaDificultad: "Dificultad", "Difficulty";
+    Normal: "Normal", "Regular";
+    Sencillo: "Sencillo", "Simple";
+    EnSencillo: "en sencillo", "on simple";
     Musica: "Música", "Music";
     Efectos: "Efectos", "Sound effects";
     Hervor: "Tinta temblorosa", "Wobbly ink";

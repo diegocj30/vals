@@ -9,7 +9,7 @@ use vals_core::boss::BossDef;
 use vals_core::paseo::{Paseo, PaseoDef, VISTA_H, VISTA_W};
 use vals_core::pista::Pista;
 use vals_core::replay::{GOLDEN_REPLAY, Replay};
-use vals_core::{DT, Equipo, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
+use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
 
 mod acciones;
 mod audio;
@@ -485,10 +485,15 @@ async fn run_game() {
             // `with_mode` montaba el vals con los cuatro detras, asi que R en
             // mitad del cancan te mandaba a bailar el vals, y ahora ademas en
             // el suelo.
-            if world.defeat {
+            //
+            // La dificultad, la de las opciones: si se ha cambiado en el
+            // entreacto, reintentar es la forma de estrenarla.
+            let dificultad = progreso.opciones.dificultad;
+            if world.defeat && world.dificultad == dificultad {
                 world.retry_current_boss();
             } else {
-                world = World::empezar_con(SEED, world.mode, world.baile, world.equipo);
+                world = World::empezar_con(SEED, world.mode, world.baile, world.equipo)
+                    .con_dificultad(dificultad);
             }
             recorder = Recorder::for_world(&world);
             accumulator = 0.0;
@@ -606,7 +611,7 @@ async fn run_game() {
                     );
                 } else {
                     escena = Escena::Combate;
-                    (world, recorder, cartela) = empezar_baile(jefe, progreso.equipo);
+                    (world, recorder, cartela) = empezar_baile(jefe, &progreso);
                     intentos += 1;
                     intento = progreso.marcas.empezar(&bailes[jefe].name);
                 }
@@ -644,7 +649,7 @@ async fn run_game() {
             } else {
                 escena = Escena::Combate;
                 (world, recorder, cartela) =
-                    empezar_baile(pista.nodos[nodo_actual].jefe, progreso.equipo);
+                    empezar_baile(pista.nodos[nodo_actual].jefe, &progreso);
                 intentos += 1;
                 intento = progreso.marcas.empezar(&pista.nodos[nodo_actual].nombre);
             }
@@ -969,7 +974,7 @@ async fn run_game() {
         // arriba, con el resto de los finales.
         if intento.tarjeta.is_none() {
             if escena == Escena::Combate && world.victory {
-                intento.cerrar_baile(&mut progreso.marcas);
+                intento.cerrar_baile(&mut progreso.marcas, world.dificultad);
                 progreso.guardar();
             } else if escena == Escena::Paseo
                 && let Some((_, p)) = paseo.as_ref()
@@ -1135,10 +1140,11 @@ fn ganados(pista: &Pista) -> u8 {
 /// en el suelo y el resto en el aire. El vuelo que se pasa aqui es solo para
 /// los que no dicen nada.
 ///
-/// Con el equipo que se lleve puesto, que entra en el mundo y
-/// en la grabacion.
-fn empezar_baile(jefe: usize, equipo: Equipo) -> (World, Recorder, Option<Cartela>) {
-    let world = World::empezar_con(SEED, Mode::Flight, jefe, equipo);
+/// Con el equipo que se lleve puesto y la dificultad de las opciones, que
+/// entran en el mundo y en la grabacion.
+fn empezar_baile(jefe: usize, progreso: &Guardado) -> (World, Recorder, Option<Cartela>) {
+    let world = World::empezar_con(SEED, Mode::Flight, jefe, progreso.equipo)
+        .con_dificultad(progreso.opciones.dificultad);
     let recorder = Recorder::for_world(&world);
     let cartela = Cartela::entrada(
         nombre(&world.boss.name),

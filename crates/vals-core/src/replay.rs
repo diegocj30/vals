@@ -16,12 +16,17 @@
 
 use crate::boss::DEFAULT_BOSS_RONS;
 use crate::hash::Fnv1a;
-use crate::{Equipo, InputFrame, Mode, World};
+use crate::{Dificultad, Equipo, InputFrame, Mode, World};
 
 /// Cabecera del formato. El ultimo digito es la version; subio a 2 al anadir
 /// el modo de juego, porque un replay de plataformas no se puede reproducir
-/// como si fuera de vuelo, a 3 con el baile y a 4 con el equipo.
-const MAGIC: &[u8; 8] = b"VALSRPL4";
+/// como si fuera de vuelo, a 3 con el baile, a 4 con el equipo y a 5 con la
+/// dificultad.
+const MAGIC: &[u8; 8] = b"VALSRPL5";
+
+/// La version de antes de la dificultad. Se lee en la normal, que es la unica
+/// que habia: el dorado es de estos y por eso tampoco hubo que regrabarlo.
+const MAGIC_SIN_DIFICULTAD: &[u8; 8] = b"VALSRPL4";
 
 /// La version de antes del equipo. Se sigue leyendo, con el equipo de serie,
 /// que es con el que se grabo todo lo que la lleva: el replay dorado entre
@@ -68,6 +73,9 @@ pub struct Replay {
     /// El tiro y el amuleto. Cambian la simulacion igual que el
     /// modo, asi que la misma leccion por tercera vez.
     pub equipo: Equipo,
+    /// Normal o sencillo, y por cuarta vez la misma leccion: en sencillo los
+    /// jefes echan otras balas.
+    pub dificultad: Dificultad,
     pub inputs: Vec<InputFrame>,
     pub checkpoints: Vec<Checkpoint>,
 }
@@ -124,6 +132,7 @@ impl Replay {
         out.push(self.mode.as_u8());
         out.push(self.baile);
         out.extend_from_slice(&self.equipo.a_bytes());
+        out.push(self.dificultad.as_u8());
         out.extend_from_slice(&(self.inputs.len() as u32).to_le_bytes());
         for i in &self.inputs {
             out.extend_from_slice(&i.bits().to_le_bytes());
@@ -140,7 +149,8 @@ impl Replay {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ReplayError> {
         let mut c = Cursor::new(bytes);
         let magia = c.take(8)?;
-        let con_equipo = magia == MAGIC;
+        let con_dificultad = magia == MAGIC;
+        let con_equipo = con_dificultad || magia == MAGIC_SIN_DIFICULTAD;
         if !con_equipo && magia != MAGIC_SIN_EQUIPO {
             return Err(ReplayError::BadMagic);
         }
@@ -153,6 +163,11 @@ impl Replay {
             Equipo::de_bytes([c.u8()?, c.u8()?])
         } else {
             Equipo::default()
+        };
+        let dificultad = if con_dificultad {
+            Dificultad::from_u8(c.u8()?)
+        } else {
+            Dificultad::Normal
         };
 
         let n_inputs = c.u32()? as usize;
@@ -182,16 +197,18 @@ impl Replay {
             mode,
             baile,
             equipo,
+            dificultad,
             inputs,
             checkpoints,
         })
     }
 
     /// El mundo recien empezado que reproduce este replay: su semilla, su
-    /// modo, su baile y su equipo. Lo usan `verify` y el visor, para que los
-    /// dos monten el mismo.
+    /// modo, su baile, su equipo y su dificultad. Lo usan `verify` y el visor,
+    /// para que los dos monten el mismo.
     pub fn mundo(&self) -> World {
         World::empezar_con(self.seed, self.mode, self.baile as usize, self.equipo)
+            .con_dificultad(self.dificultad)
     }
 
     /// Reproduce el replay y comprueba que el mundo pasa por las mismas
@@ -312,6 +329,7 @@ impl Recorder {
     pub fn for_world(world: &World) -> Self {
         let mut r = Self::new(world.seed(), world.mode, world.baile);
         r.replay.equipo = world.equipo;
+        r.replay.dificultad = world.dificultad;
         r
     }
 
@@ -324,6 +342,7 @@ impl Recorder {
                 mode,
                 baile: baile.min(u8::MAX as usize) as u8,
                 equipo: Equipo::default(),
+                dificultad: Dificultad::Normal,
                 inputs: Vec::new(),
                 checkpoints: Vec::new(),
             },
@@ -752,16 +771,51 @@ mod tests {
 
     #[test]
     fn un_replay_de_antes_del_equipo_se_lee_con_el_de_serie() {
-        // Un VALSRPL3 es un VALSRPL4 sin los dos bytes del equipo, que van
-        // justo detras del baile (8 + 8 + 8 + 4 + 1 + 1 = 30).
+        // Un VALSRPL3 es un VALSRPL5 sin los dos bytes del equipo, que van
+        // justo detras del baile (8 + 8 + 8 + 4 + 1 + 1 = 30), ni el de la
+        // dificultad, detras de ellos.
         let nuevo = replay_de_prueba(120);
         let mut viejo = nuevo.to_bytes();
         viejo[..8].copy_from_slice(MAGIC_SIN_EQUIPO);
-        viejo.drain(30..32);
+        viejo.drain(30..33);
         let r = Replay::from_bytes(&viejo).expect("un replay viejo se sigue leyendo");
         assert_eq!(r.equipo, Equipo::default());
         assert_eq!(r, nuevo);
         r.verify().expect("y se reproduce igual");
+    }
+
+    #[test]
+    fn un_replay_de_antes_de_la_dificultad_se_lee_en_la_normal() {
+        // Un VALSRPL4 es un VALSRPL5 sin el byte de la dificultad, el 32.
+        let nuevo = replay_de_prueba(120);
+        let mut viejo = nuevo.to_bytes();
+        viejo[..8].copy_from_slice(MAGIC_SIN_DIFICULTAD);
+        viejo.remove(32);
+        let r = Replay::from_bytes(&viejo).expect("un replay viejo se sigue leyendo");
+        assert_eq!(r.dificultad, Dificultad::Normal);
+        assert_eq!(r, nuevo);
+        r.verify().expect("y se reproduce igual");
+    }
+
+    #[test]
+    fn un_replay_en_sencillo_lleva_su_dificultad_y_se_distingue() {
+        let inputs = inputs_de_prueba(13, 600);
+        let grabar = |d: Dificultad| {
+            let mut w = World::empezar_en(5, Mode::Flight, 1).con_dificultad(d);
+            let mut rec = Recorder::for_world(&w);
+            for i in inputs.iter().copied() {
+                w.step(i);
+                rec.record(i, &w);
+            }
+            rec.finish()
+        };
+        let r = grabar(Dificultad::Sencillo);
+        let vuelta = Replay::from_bytes(&r.to_bytes()).unwrap();
+        assert_eq!(vuelta.dificultad, Dificultad::Sencillo, "va en la cabecera");
+        assert_eq!(vuelta, r);
+        vuelta.verify().expect("y se reproduce con ella");
+        // En la normal, la misma partida es otra.
+        assert_ne!(grabar(Dificultad::Normal).checkpoints, r.checkpoints);
     }
 
     #[test]

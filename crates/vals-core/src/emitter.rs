@@ -13,7 +13,7 @@ use std::f32::consts::TAU;
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
-use crate::bullets::{Bullets, KIND_SMALL, Spawn};
+use crate::bullets::{Bullets, FLAG_PARRYABLE, KIND_SMALL, Spawn};
 use crate::math;
 
 /// Hacia donde se orienta el emisor.
@@ -124,6 +124,33 @@ impl EmitterSpec {
         self.rings = rings;
         self.speed_step = speed_step;
         self.ring_offset = ring_offset;
+        self
+    }
+
+    /// La misma tanda con la mitad de balas, para la dificultad sencilla.
+    ///
+    /// Se quita una de cada dos **sin perder la forma**: se baja la cuenta y
+    /// se deja el arco, asi que un anillo sigue siendo un anillo, con el doble
+    /// de hueco, y un abanico impar conserva sus extremos y su centro. Un
+    /// abanico par apuntado se queda par: uno impar le pondria una bala justo
+    /// encima a quien no se mueve, que el par de antes no le ponia. Con una
+    /// bala por capa se quitan capas, y siempre queda al menos una.
+    ///
+    /// Las rosas no se tocan: son lentas, gordas y se parrian, y el parry es
+    /// lo que llena la barra del super.
+    pub fn a_medias(mut self) -> Self {
+        if self.flags & FLAG_PARRYABLE != 0 {
+            return self;
+        }
+        if self.count > 1 {
+            let mut n = self.count.div_ceil(2);
+            if matches!(self.aim, Aim::AtPlayer) && self.count.is_multiple_of(2) {
+                n += n % 2;
+            }
+            self.count = n;
+        } else {
+            self.rings = self.rings.max(1).div_ceil(2);
+        }
         self
     }
 }

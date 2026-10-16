@@ -11,10 +11,12 @@
 //! ponerse al dia, y el replay no se entera de que hubo pausa.
 //!
 //! Desde el entreacto y desde el titulo se llega a las opciones, que se
-//! guardan con el progreso (`Opciones`, en `guardado.rs`): el volumen, el
-//! trazo que hierve, la sacudida, la pantalla completa y los controles.
+//! guardan con el progreso (`Opciones`, en `guardado.rs`): la dificultad, el
+//! volumen, el trazo que hierve, la sacudida, la pantalla completa y los
+//! controles.
 
 use macroquad::prelude::*;
+use vals_core::Dificultad;
 
 use crate::acciones::{
     Accion, Controles, Dispositivo, Entrada, Juego, Nombres, bit_boton, bit_tecla,
@@ -43,6 +45,8 @@ pub struct Opciones {
     pub controles: Controles,
     /// El de la primera vez lo elige `guardado` (ver `idioma::de_primeras`).
     pub idioma: Idioma,
+    /// Se aplica al empezar un baile, no a mitad: el mundo la lleva dentro.
+    pub dificultad: Dificultad,
 }
 
 pub const VOLUMEN_MAX: u8 = 10;
@@ -57,6 +61,7 @@ impl Default for Opciones {
             pantalla_completa: false,
             controles: Controles::default(),
             idioma: Idioma::Es,
+            dificultad: Dificultad::Normal,
         }
     }
 }
@@ -87,6 +92,9 @@ impl Opciones {
         if self.idioma != serie.idioma {
             out.push(format!("idioma={}", self.idioma.clave()));
         }
+        if self.dificultad != serie.dificultad {
+            out.push(format!("dificultad={}", self.dificultad.clave()));
+        }
         out.extend(self.controles.a_texto());
         out
     }
@@ -110,6 +118,9 @@ impl Opciones {
             "sacudida" => self.sacudida = si_no.unwrap_or(self.sacudida),
             "pantalla" => self.pantalla_completa = si_no.unwrap_or(self.pantalla_completa),
             "idioma" => self.idioma = Idioma::por_clave(valor).unwrap_or(self.idioma),
+            "dificultad" => {
+                self.dificultad = Dificultad::por_clave(valor).unwrap_or(self.dificultad)
+            }
             _ => {
                 self.controles.leer(clave, valor);
             }
@@ -168,6 +179,7 @@ enum Fila {
     Mapa,
     Opciones,
     Idioma,
+    Dificultad,
     Musica,
     Efectos,
     Hervor,
@@ -224,9 +236,11 @@ impl Carta {
             Pantalla::Entreacto => vec![Fila::Seguir, Fila::Reintentar, Fila::Mapa, Fila::Opciones],
             Pantalla::Opciones => {
                 // El idioma, lo primero: quien no entiende el que hay lo
-                // busca sin poder leer nada mas.
+                // busca sin poder leer nada mas. Y luego la dificultad, que
+                // es lo que busca quien no ha jugado nunca.
                 let mut v = vec![
                     Fila::Idioma,
+                    Fila::Dificultad,
                     Fila::Musica,
                     Fila::Efectos,
                     Fila::Hervor,
@@ -335,6 +349,12 @@ impl Carta {
             Fila::Musica => volumen(&mut op.musica),
             Fila::Efectos => volumen(&mut op.efectos),
             Fila::Idioma => op.idioma = op.idioma.otro(),
+            Fila::Dificultad => {
+                op.dificultad = match op.dificultad {
+                    Dificultad::Normal => Dificultad::Sencillo,
+                    Dificultad::Sencillo => Dificultad::Normal,
+                }
+            }
             Fila::Hervor => op.hervor = !op.hervor,
             Fila::Sacudida => op.sacudida = !op.sacudida,
             Fila::PantallaCompleta => op.pantalla_completa = !op.pantalla_completa,
@@ -501,7 +521,7 @@ impl Carta {
                 if self.pantalla == Pantalla::Opciones
                     && matches!(
                         filas[self.cursor.min(filas.len() - 1)],
-                        Fila::Musica | Fila::Efectos | Fila::Idioma
+                        Fila::Musica | Fila::Efectos | Fila::Idioma | Fila::Dificultad
                     )
                 {
                     p.extend(txg(Texto::PieCambiar, &[&n.mover]));
@@ -552,6 +572,13 @@ impl Carta {
             Fila::Mapa => (Texto::FilaMapa, None),
             Fila::Opciones => (Texto::FilaOpciones, None),
             Fila::Idioma => (Texto::FilaIdioma, Some(txt(op.idioma.nombre()))),
+            Fila::Dificultad => {
+                let d = match op.dificultad {
+                    Dificultad::Normal => Texto::Normal,
+                    Dificultad::Sencillo => Texto::Sencillo,
+                };
+                (Texto::FilaDificultad, Some(txt(tx(d))))
+            }
             // El volumen se dibuja aparte, en rayas.
             Fila::Musica => (Texto::Musica, None),
             Fila::Efectos => (Texto::Efectos, None),
@@ -604,6 +631,7 @@ mod tests {
         op.hervor = false;
         op.sacudida = false;
         op.pantalla_completa = true;
+        op.dificultad = Dificultad::Sencillo;
         op.controles
             .asignar(Dispositivo::Mando, Juego::Parry, boton::L3 as u64);
         let mut leido = Opciones::default();
@@ -617,6 +645,7 @@ mod tests {
             "musica=99",
             "efectos=-1",
             "hervor=quiza",
+            "dificultad=imposible",
             "brillo=5",
             "sin igual",
         ] {
