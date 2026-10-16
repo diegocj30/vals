@@ -29,8 +29,8 @@ Teclado o mando, sin instalar nada. También compila en nativo para escritorio.
 ## La historia
 
 > Corre el año 1900 y esta noche hay gran baile. A medianoche el salón cobra
-> vida: una caja de música, un bandoneón, un gramófono y las coristas del
-> cartel. Dicen que allí nadie sabe bailar lo suyo, y cada uno se lleva su
+> vida: una caja de música, un bandoneón, un gramófono y las coristas
+> pintadas en un cartel. Dicen que allí nadie sabe bailar lo suyo, y cada uno se lleva su
 > música a su ciudad: **Viena, Buenos Aires, Chicago y París**.
 >
 > La bailarina del lazo escarlata sale tras ellos, calle a calle, y a cada uno
@@ -80,7 +80,7 @@ cómo lo dibujan las balas y la foto de cada figura.
   música que recupera un instrumento con cada baile ganado.
 - **Nota y libro de baile**: cada baile ganado se puntúa de D a A+ (tiempo,
   golpes, parries y supers) en una tarjeta con su sello, y el libro guarda los
-  mejores tiempos, los intentos y en qué figura se cae más.
+  mejores tiempos, los intentos y en qué figura te dan más golpes.
 - **Parry y super**: parriar las balas rosas llena el medidor, y el super
   limpia la pantalla. El juego premia meterse entre las balas en vez de huir de
   todas.

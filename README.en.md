@@ -33,7 +33,7 @@ Keyboard or gamepad, nothing to install. It also builds natively for desktop.
 
 > The year is 1900, and tonight is the grand ball. At midnight the ballroom
 > comes alive: a music box, a bandoneon, a gramophone and the chorus girls
-> from the poster. They say no one there can dance their dance, and each takes
+> painted on a poster. They say no one there can dance their dance, and each takes
 > its music away to its own city: **Vienna, Buenos Aires, Chicago and Paris**.
 >
 > The dancer with the scarlet bow sets off after them, street by street, and
@@ -84,8 +84,8 @@ how the bullets draw it, and a photo of every figure.
   music that gets an instrument back with every dance you win.
 - **Grades and the dance card**: every dance you win is graded from D to A+
   (time, hits taken, parries and supers) on a card with its own seal, and the
-  dance card keeps your best times, your attempts and which figure you fall on
-  most.
+  dance card keeps your best times, your attempts and which figure you get hit
+  in most.
 - **Parry and super**: parrying pink bullets fills the meter, and the super
   clears the screen. The game rewards weaving into the bullets instead of
   running from all of them.

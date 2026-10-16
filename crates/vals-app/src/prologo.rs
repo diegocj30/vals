@@ -82,6 +82,8 @@ const CIUDADES: [&str; 4] = ["VIENA", "BUENOS AIRES", "CHICAGO", "PARIS"];
 /// Los numeros del programa, en el mismo orden.
 const NUMEROS: [&str; 4] = ["El Vals", "El Tango", "El Charleston", "El Cancan"];
 const ROMANOS: [&str; 4] = ["I.", "II.", "III.", "IV."];
+/// El orden de la pista: por nivel, con el tango al fondo (`Pista::new`).
+const ORDEN_DE_LA_NOCHE: [usize; 4] = [0, 2, 3, 1];
 
 /// Una linea por jefe, para su cartela de entrada.
 const LEMAS_BAILE: [Texto; 4] = [
@@ -545,13 +547,15 @@ fn ella_sola(l: &Layout, s: f32, ella: &Player) {
 fn programa(l: &Layout, s: f32) {
     hoja(l, 84.0);
 
-    for (i, numero) in NUMEROS.iter().enumerate() {
-        let titulo = nombre(numero);
-        let a = ((s - 0.5 - 0.45 * i as f32) / 0.4).clamp(0.0, 1.0);
+    // En el orden en que se bailan, no en el de los ficheros: el vals abre, el
+    // charleston y el cancan van en medio y el tango, el mas dificil, cierra.
+    for (fila, &i) in ORDEN_DE_LA_NOCHE.iter().enumerate() {
+        let titulo = nombre(NUMEROS[i]);
+        let a = ((s - 0.5 - 0.45 * fila as f32) / 0.4).clamp(0.0, 1.0);
         if a <= 0.0 {
             continue;
         }
-        let y = 160.0 + 66.0 * i as f32;
+        let y = 160.0 + 66.0 * fila as f32;
         let (tinta, ropa) = paleta::del_baile(i);
         jefe(
             l,
@@ -565,7 +569,7 @@ fn programa(l: &Layout, s: f32) {
         let tam = l.len(30.0);
         let x = l.to_screen(300.0, 0.0).x;
         let tenue = fade(paleta::TINTA_TENUE, a);
-        fuentes::texto(ROMANOS[i], x, base, tam, Cara::Titulo, tenue);
+        fuentes::texto(ROMANOS[fila], x, base, tam, Cara::Titulo, tenue);
         let x = l.to_screen(350.0, 0.0).x;
         fuentes::texto(titulo, x, base, tam, Cara::Titulo, fade(TINTA, a));
         let ancho = fuentes::medir(titulo, tam, Cara::Titulo).width;

@@ -443,7 +443,7 @@ textos! {
     Intento: "{} intento", "{} attempt";
     Intentos: "{} intentos", "{} attempts";
     Mejor: "mejor {}", "best {}";
-    DondeCaes: "donde más caes: {} ({})", "where you fall most: {} ({})";
+    DondeCaes: "donde más golpes te llevas: {} ({})", "where you get hit most: {} ({})";
     Jugado: "en la pista: {}", "on the floor: {}";
     CerrarLibro: "{}  cerrar el libro", "{}  close the dance card";
     Ovacion: "¡ovación!", "standing ovation!";
@@ -513,8 +513,8 @@ textos! {
     Lamina2: "A MEDIANOCHE", "AT THE STROKE OF MIDNIGHT";
     Lamina2A: "Al dar las doce, el salón cobra vida:",
         "As the clock strikes twelve, the ballroom comes alive:";
-    Lamina2B: "una caja de música, un bandoneón, un gramófono y las coristas del cartel.",
-        "a music box, a bandoneon, a gramophone and the chorus girls from the poster.";
+    Lamina2B: "una caja de música, un bandoneón, un gramófono y las coristas pintadas en un cartel.",
+        "a music box, a bandoneon, a gramophone and the chorus girls painted on a poster.";
     Lamina3: "Y SE LLEVAN LA MÚSICA", "AND THEY TAKE THE MUSIC WITH THEM";
     Lamina3A: "Dicen que aquí nadie sabe bailar lo suyo, y se van a sus ciudades:",
         "They say no one here can dance their dance, and leave for their cities:";
