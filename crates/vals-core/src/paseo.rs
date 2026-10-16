@@ -51,6 +51,10 @@ pub const PASEO_RONS: [&str; 4] = [
 /// bajan y el alto es tiempo de reaccion; aqui se corre de lado, y lo que hace
 /// falta es ver lo que viene por delante.
 pub const VISTA_W: f32 = 960.0;
+/// Donde lleva la camara a la jugadora, como fraccion de la vista. Esta aqui y
+/// no en el dibujo porque la arena del portero se cierra justo cuando la
+/// camara llega a ella: cerrarla antes o despues seria un salto de camara.
+pub const ENCUADRE: f32 = 0.38;
 pub const VISTA_H: f32 = 540.0;
 
 /// Donde pisan los pies en la acera.
@@ -214,6 +218,83 @@ pub struct Plataforma {
     /// La superficie, donde se pisa.
     pub y: f32,
     pub ancho: f32,
+    /// Si se mueve. Entonces `x` e `y` son donde esta **ahora**: el paseo las
+    /// reescribe cada tick a partir de donde dice el RON (ver
+    /// `Paseo::mover_plataformas`), asi que todo lo que pisa o dibuja
+    /// plataformas vale sin enterarse.
+    #[serde(default)]
+    pub mueve: Option<Mueve>,
+}
+
+/// Como se mueve una plataforma: el fiacre, el tranvia, el tren, las aspas.
+///
+/// Sale solo del tick, sin estado propio: dos paseos con el mismo tick tienen
+/// las plataformas en el mismo sitio, y el hot-reload no las descoloca.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+pub enum Mueve {
+    /// Va y vuelve en linea recta hasta `(dx, dy)` de donde dice el RON, en
+    /// `periodo` ticks la ida y la vuelta. Frena en los extremos, que es lo
+    /// que deja subirse y bajarse sin que tire. `fase`, de 0 a 1, es por
+    /// donde va al empezar.
+    Vaiven {
+        dx: f32,
+        dy: f32,
+        periodo: u32,
+        #[serde(default)]
+        fase: f32,
+    },
+    /// Da vueltas alrededor de donde dice el RON sin volcar, como la cabina de
+    /// una noria: las aspas del molino. `fase` reparte varias por el mismo
+    /// circulo, y el signo de `radio` da el sentido.
+    Gira {
+        radio: f32,
+        periodo: u32,
+        #[serde(default)]
+        fase: f32,
+    },
+}
+
+impl Mueve {
+    /// Cuanto se ha apartado de su sitio en el tick `t`.
+    pub fn desvio(self, t: u64) -> Vec2 {
+        let vuelta = |periodo: u32, fase: f32| {
+            let periodo = periodo.max(1);
+            TAU * ((t % u64::from(periodo)) as f32 / periodo as f32 + fase)
+        };
+        match self {
+            Mueve::Vaiven {
+                dx,
+                dy,
+                periodo,
+                fase,
+            } => {
+                let (_, c) = sin_cos(vuelta(periodo, fase));
+                Vec2::new(dx, dy) * (1.0 - c) * 0.5
+            }
+            Mueve::Gira {
+                radio,
+                periodo,
+                fase,
+            } => {
+                let (s, c) = sin_cos(vuelta(periodo, fase));
+                Vec2::new(c, s) * radio
+            }
+        }
+    }
+}
+
+/// La arena del portero: una vista entera, de `desde` a `desde + VISTA_W`.
+///
+/// Al llegar, la camara se para y la calle se cierra por los dos lados hasta
+/// tumbar al portero (los enemigos con `portero: true`). Lo de detras ya no
+/// vuelve: tras cerrarse, la calle no deja volver a antes de `desde`.
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct Porteria {
+    pub desde: f32,
+    /// La ficha que suelta el portero: su indice en `fichas`. No se ve ni se
+    /// coge mientras siga en pie, y sale donde diga el RON.
+    #[serde(default)]
+    pub ficha: Option<usize>,
 }
 
 /// Una escalera: de `x` a `x + ancho` la acera sube `sube` unidades, y se
@@ -460,6 +541,10 @@ pub struct Aparicion {
     /// Solo en las notas: si se puede parriar.
     #[serde(default)]
     pub rosa: bool,
+    /// Si es el portero del paseo: el que cierra la arena del final, con su
+    /// barra de vida.
+    #[serde(default)]
+    pub portero: bool,
 }
 
 /// Un paseo, tal como viene del RON.
@@ -488,6 +573,9 @@ pub struct PaseoDef {
     /// al final**: meter una en medio cambiaria cual tiene cada uno.
     #[serde(default)]
     pub fichas: Vec<(f32, f32)>,
+    /// La arena del portero, si el paseo acaba con uno.
+    #[serde(default)]
+    pub porteria: Option<Porteria>,
 }
 
 impl PaseoDef {
@@ -571,9 +659,16 @@ pub struct Enemigo {
     pub gesto: f32,
     /// Velocidad propia (rosa), que se frena tick a tick.
     pub vel: Vec2,
+    /// Si es el portero: cierra la arena y lleva barra de vida.
+    pub portero: bool,
 }
 
 impl Enemigo {
+    /// La vida con que nacio, para la barra del portero.
+    pub fn vida_max(&self) -> i32 {
+        self.tipo.vida()
+    }
+
     /// La pierna de una corista: de la cadera a la punta del botin. Parada
     /// cuelga recta; con `gesto` a 1 apunta arriba y un poco hacia ti, que es
     /// la patada del cancan.
@@ -658,6 +753,14 @@ pub struct Paseo {
     /// seguidas y fuera, sin haber podido reaccionar. Es lo que hacen los
     /// juegos de plataformas: despues de reaparecer hay que volver a pulsar.
     soltar: bool,
+    /// Donde estan las plataformas segun el RON. Las que se mueven se
+    /// recolocan cada tick a partir de aqui.
+    bases: Vec<Vec2>,
+    /// La plataforma que pisa, para llevarla con ella si se mueve.
+    sobre: Option<usize>,
+    /// Lo mas a la izquierda que se puede ir. Cero hasta que se cierra la
+    /// arena del portero; desde entonces, su borde: lo de detras no vuelve.
+    muro: f32,
     prev_input: InputFrame,
     rng: Pcg32,
 }
@@ -679,7 +782,12 @@ impl Paseo {
         jugadora.facing = Vec2::new(1.0, 0.0);
         jugadora.on_ground = true;
         let fichas = vec![false; def.fichas.len()];
-        Self {
+        let bases = def
+            .plataformas
+            .iter()
+            .map(|pl| Vec2::new(pl.x, pl.y))
+            .collect();
+        let mut p = Self {
             def,
             tick: 0,
             jugadora,
@@ -699,9 +807,14 @@ impl Paseo {
             siguiente: 0,
             seguro: salida,
             soltar: false,
+            bases,
+            sobre: None,
+            muro: 0.0,
             prev_input: InputFrame::NONE,
             rng: Pcg32::new(seed),
-        }
+        };
+        p.colocar_plataformas(0);
+        p
     }
 
     /// Rehace el nivel con otra definicion, con la jugadora donde estaba.
@@ -767,7 +880,9 @@ impl Paseo {
         }
 
         let input = self.sin_lado_hasta_soltar(input);
+        self.mover_plataformas();
         self.mover(input);
+        self.cerrar_arena();
         self.caida();
         self.recoger();
         self.disparar(input);
@@ -780,7 +895,7 @@ impl Paseo {
         self.mover_disparos();
         self.recibir();
         self.olvidar();
-        if self.jugadora.pos.x >= self.def.puerta {
+        if self.jugadora.pos.x >= self.def.puerta && !self.portero_vivo() {
             self.llegar();
         }
 
@@ -788,12 +903,80 @@ impl Paseo {
         self.tick += 1;
     }
 
+    /// Pone las plataformas que se mueven donde tocan en el tick `t`, y
+    /// devuelve cuanto se ha movido la que pisa la jugadora.
+    fn colocar_plataformas(&mut self, t: u64) -> Vec2 {
+        let mut arrastre = Vec2::ZERO;
+        for (i, pl) in self.def.plataformas.iter_mut().enumerate() {
+            let Some(m) = pl.mueve else { continue };
+            let nueva = self.bases[i] + m.desvio(t);
+            if self.sobre == Some(i) {
+                arrastre = nueva - Vec2::new(pl.x, pl.y);
+            }
+            (pl.x, pl.y) = (nueva.x, nueva.y);
+        }
+        arrastre
+    }
+
+    /// Las plataformas al tick que empieza, llevandose a quien este encima.
+    /// Va antes de la fisica: la jugadora se mueve con el fiacre y luego
+    /// anda sobre el, como en cualquier plataformas.
+    fn mover_plataformas(&mut self) {
+        let arrastre = self.colocar_plataformas(self.tick + 1);
+        if self.jugadora.on_ground {
+            self.jugadora.pos += arrastre;
+        }
+    }
+
+    /// Cierra la arena del portero cuando la camara llega a ella: con la
+    /// jugadora a `ENCUADRE` de la vista, la camara empieza justo en `desde`.
+    fn cerrar_arena(&mut self) {
+        if let Some(po) = self.def.porteria
+            && self.muro < po.desde
+            && self.jugadora.pos.x >= po.desde + VISTA_W * ENCUADRE
+            && self.portero_vivo()
+        {
+            self.muro = po.desde;
+        }
+    }
+
+    /// Si queda portero por tumbar, despierto o sin despertar.
+    pub fn portero_vivo(&self) -> bool {
+        self.enemigos.iter().any(|e| e.portero)
+            || self.def.enemigos[self.siguiente..]
+                .iter()
+                .any(|a| a.portero)
+    }
+
+    /// El borde izquierdo de la arena mientras esta cerrada.
+    pub fn cierre(&self) -> Option<f32> {
+        let po = self.def.porteria?;
+        (self.muro >= po.desde && self.portero_vivo()).then_some(po.desde)
+    }
+
+    /// Lo mas a la izquierda que puede ir la camara: tras la arena, su borde.
+    pub fn muro(&self) -> f32 {
+        self.muro
+    }
+
+    /// El portero despierto, para su barra de vida.
+    pub fn portero(&self) -> Option<&Enemigo> {
+        self.enemigos.iter().find(|e| e.portero)
+    }
+
+    /// Si la ficha `i` esta en la calle: sin coger, y si es la del portero,
+    /// con el portero ya tumbado.
+    pub fn ficha_visible(&self, i: usize) -> bool {
+        let del_portero = self.def.porteria.and_then(|po| po.ficha) == Some(i);
+        !self.fichas[i] && !(del_portero && self.portero_vivo())
+    }
+
     /// Las fichas que toca, se las lleva. Aunque sea en un dash o recien
     /// golpeada: cogerla es pasar por donde esta, y el riesgo es llegar.
     fn recoger(&mut self) {
         for i in 0..self.fichas.len() {
             let (x, y) = self.def.fichas[i];
-            if !self.fichas[i] && self.toca(Vec2::new(x, y), RADIO_FICHA) {
+            if self.ficha_visible(i) && self.toca(Vec2::new(x, y), RADIO_FICHA) {
                 self.fichas[i] = true;
                 self.events.fichas += 1;
             }
@@ -828,6 +1011,11 @@ impl Paseo {
         const DECEL: f32 = PLAYER_SPEED / (PLAYER_DECEL_TICKS * DT);
         let prev = self.prev_input;
         let flanco = |b: u16| input.is_down(b) && !prev.is_down(b);
+        let izquierda = self.muro + CUERPO_RADIO;
+        let derecha = match self.cierre() {
+            Some(a) => a + VISTA_W,
+            None => self.def.largo,
+        } - CUERPO_RADIO;
         let p = &mut self.jugadora;
         p.prev_pos = p.pos;
 
@@ -927,7 +1115,7 @@ impl Paseo {
         // no se choca: mirar todo el tramo la mandaba al otro extremo.
         const PARED: f32 = 2.0;
         let def = &self.def;
-        p.pos.x = (p.pos.x + p.vel.x * DT).clamp(CUERPO_RADIO, def.largo - CUERPO_RADIO);
+        p.pos.x = (p.pos.x + p.vel.x * DT).clamp(izquierda, derecha);
         let (antes, pies) = (p.prev_pos.x, p.pos.y + PIES);
         for &(a, b) in &def.suelo {
             let fuera = antes < a || antes > b;
@@ -960,13 +1148,22 @@ impl Paseo {
                     pisa = Some(y);
                 }
             }
-            for pl in &def.plataformas {
-                if cruza(pl.y) && x >= pl.x && x <= pl.x + pl.ancho {
+            let mut sobre = None;
+            for (i, pl) in def.plataformas.iter().enumerate() {
+                // Una que se mueve puede subir por encima de los pies en el
+                // mismo tick en que se cae sobre ella: se perdona su paso.
+                let entra = cruza(pl.y) || pl.mueve.is_some() && cruza(pl.y - 3.0);
+                if entra && x >= pl.x && x <= pl.x + pl.ancho && pisa.is_none_or(|y| pl.y < y) {
                     // Si hay dos, la de mas arriba: es la que se ha cruzado
                     // primero.
-                    pisa = Some(pisa.map_or(pl.y, |y: f32| y.min(pl.y)));
+                    pisa = Some(pl.y);
+                    sobre = Some(i);
                 }
             }
+            if pisa.is_some_and(|y| def.suelo_en(x) == Some(y)) {
+                sobre = None;
+            }
+            self.sobre = sobre;
             if let Some(y) = pisa {
                 p.pos.y = y - PIES;
                 p.vel.y = 0.0;
@@ -981,10 +1178,9 @@ impl Paseo {
                     let sx = x.clamp(a + margen, b - margen);
                     self.seguro = Vec2::new(sx, def.altura(sx) - PIES);
                 } else if !def.hay_suelo(x)
-                    && let Some(pl) = def
-                        .plataformas
-                        .iter()
-                        .find(|pl| pl.y == y && x >= pl.x && x <= pl.x + pl.ancho)
+                    && let Some(pl) = def.plataformas.iter().find(|pl| {
+                        pl.mueve.is_none() && pl.y == y && x >= pl.x && x <= pl.x + pl.ancho
+                    })
                 {
                     // Sobre el vacio, la plataforma es el suelo: en las azoteas
                     // de Chicago no hay acera en toda la manzana, y caerse entre
@@ -1174,6 +1370,7 @@ impl Paseo {
                 avance: 0.0,
                 gesto: 0.0,
                 vel: Vec2::ZERO,
+                portero: a.portero,
             });
         }
     }
@@ -1499,6 +1696,7 @@ impl Paseo {
                         avance: 0.0,
                         gesto: 0.0,
                         vel: hacia * ROSA_V,
+                        portero: false,
                     });
                 }
                 Tipo::Rosa => {
@@ -1809,6 +2007,7 @@ mod tests {
             enemigos: vec![],
             escaleras: vec![],
             fichas: vec![],
+            porteria: None,
         }
     }
 
@@ -1984,6 +2183,7 @@ mod tests {
             x: 50.0,
             y: 400.0,
             ancho: 100.0,
+            mueve: None,
         }];
         let mut p = Paseo::new(def, 1);
         p.step(pulsar(InputFrame::JUMP));
@@ -2058,6 +2258,7 @@ mod tests {
                 x: 450.0,
                 y: 0.0,
                 rosa: false,
+                portero: false,
             }]),
             1,
         );
@@ -2093,6 +2294,7 @@ mod tests {
                 x: 220.0,
                 y: 0.0,
                 rosa: false,
+                portero: false,
             }]),
             1,
         );
@@ -2153,6 +2355,7 @@ mod tests {
                 x: 600.0,
                 y: 0.0,
                 rosa: false,
+                portero: false,
             }]),
             1,
         );
@@ -2250,6 +2453,7 @@ mod tests {
             x,
             y,
             rosa: false,
+            portero: false,
         }])
     }
 
@@ -2337,6 +2541,7 @@ mod tests {
             x: 300.0,
             y: 300.0,
             ancho: 500.0,
+            mueve: None,
         }];
         let mut p = Paseo::new(def, 1);
         p.jugadora.iframes = 10;
@@ -2376,11 +2581,13 @@ mod tests {
                 x: 300.0,
                 y: 470.0,
                 ancho: 400.0,
+                mueve: None,
             },
             Plataforma {
                 x: 1000.0,
                 y: 470.0,
                 ancho: 400.0,
+                mueve: None,
             },
         ];
         let mut p = Paseo::new(def, 1);
@@ -2506,6 +2713,7 @@ mod tests {
                 x: 400.0,
                 y: 0.0,
                 rosa: false,
+                portero: false,
             }]),
             1,
         );
@@ -2555,6 +2763,7 @@ mod tests {
             avance: 0.0,
             gesto: 0.0,
             vel: Vec2::new(-ROSA_V, 0.0),
+            portero: false,
         });
         let mut antes = 700.0;
         let mut paso = f32::MAX;
@@ -2584,11 +2793,13 @@ mod tests {
             x: 500.0,
             y: 360.0,
             rosa: false,
+            portero: false,
         }]);
         def.plataformas = vec![Plataforma {
             x: 440.0,
             y: 360.0,
             ancho: 120.0,
+            mueve: None,
         }];
         let mut p = Paseo::new(def, 1);
         let (mut vistas, mut rosas) = (0, 0);
@@ -2635,6 +2846,7 @@ mod tests {
             x,
             y: 0.0,
             rosa: false,
+            portero: false,
         }
     }
 
@@ -2987,5 +3199,130 @@ mod tests {
             p.step(InputFrame::NONE);
             assert_eq!(p.events.player_died, golpe, "{amuleto:?}");
         }
+    }
+
+    /// Una calle cortada por un foso largo, con una plataforma que va y viene
+    /// de un lado al otro: el fiacre. Se sale ya encima, sobre el foso.
+    fn con_fiacre() -> PaseoDef {
+        let mut def = calle();
+        def.suelo = vec![(0.0, 250.0), (1000.0, 3200.0)];
+        def.plataformas = vec![Plataforma {
+            x: 300.0,
+            y: 470.0,
+            ancho: 120.0,
+            mueve: Some(Mueve::Vaiven {
+                dx: 640.0,
+                dy: 0.0,
+                periodo: 240,
+                fase: 0.0,
+            }),
+        }];
+        def.salida = 350.0;
+        def
+    }
+
+    #[test]
+    fn la_plataforma_que_se_mueve_lleva_a_quien_la_pisa() {
+        let mut p = Paseo::new(con_fiacre(), 1);
+        // Media vuelta sin tocar nada: el fiacre cruza el foso con ella encima.
+        for _ in 0..120 {
+            p.step(InputFrame::NONE);
+            assert!(p.jugadora.on_ground, "se ha caido del fiacre");
+        }
+        assert!(
+            (p.jugadora.pos.x - 990.0).abs() < 2.0,
+            "x {}",
+            p.jugadora.pos.x
+        );
+        assert_eq!(p.vidas, VIDAS);
+        // Y se baja andando al otro lado.
+        correr(&mut p, DERECHA, 30);
+        assert!(p.jugadora.pos.x > 1000.0 && p.jugadora.on_ground);
+    }
+
+    #[test]
+    fn la_plataforma_sale_del_tick_y_no_de_la_historia() {
+        let mut a = Paseo::new(con_fiacre(), 1);
+        correr(&mut a, DERECHA | InputFrame::JUMP, 77);
+        let b = Paseo::new(con_fiacre(), 9);
+        let t = a.tick;
+        let esperada = 300.0
+            + Mueve::Vaiven {
+                dx: 640.0,
+                dy: 0.0,
+                periodo: 240,
+                fase: 0.0,
+            }
+            .desvio(t)
+            .x;
+        assert!((a.def.plataformas[0].x - esperada).abs() < 1e-3);
+        assert_eq!(
+            b.def.plataformas[0].x, 300.0,
+            "en el tick 0, donde dice el RON"
+        );
+    }
+
+    #[test]
+    fn la_cabina_de_la_noria_da_la_vuelta_sin_volcar() {
+        let m = Mueve::Gira {
+            radio: 100.0,
+            periodo: 400,
+            fase: 0.0,
+        };
+        assert!((m.desvio(0) - Vec2::new(100.0, 0.0)).length() < 1e-3);
+        assert!((m.desvio(100) - Vec2::new(0.0, 100.0)).length() < 1e-2);
+        assert!((m.desvio(400) - m.desvio(0)).length() < 1e-3);
+    }
+
+    /// Una calle con portero: arena en 1000, el portero dentro y su ficha.
+    fn con_portero() -> PaseoDef {
+        let mut def = con(vec![Aparicion {
+            portero: true,
+            ..aparece(Tipo::Camarero, 1800.0)
+        }]);
+        def.porteria = Some(Porteria {
+            desde: 1000.0,
+            ficha: Some(0),
+        });
+        def.fichas = vec![(1500.0, 435.0)];
+        def.puerta = 2500.0;
+        def
+    }
+
+    #[test]
+    fn la_arena_del_portero_no_deja_salir_hasta_tumbarlo() {
+        let mut p = Paseo::new(con_portero(), 1);
+        while p.cierre().is_none() {
+            p.jugadora.iframes = 5;
+            p.step(pulsar(DERECHA));
+            assert!(p.tick < 600, "la arena no se cierra");
+        }
+        // La camara llega justo al borde: la jugadora va a su encuadre.
+        let x = p.jugadora.pos.x;
+        assert!((x - (1000.0 + VISTA_W * ENCUADRE)).abs() < 10.0, "x {x}");
+        // Ni hacia delante ni hacia atras, y su ficha aun no esta.
+        for bits in [DERECHA, InputFrame::LEFT] {
+            for _ in 0..240 {
+                p.jugadora.iframes = 5;
+                p.step(pulsar(bits));
+                let x = p.jugadora.pos.x;
+                assert!((1000.0..=1000.0 + VISTA_W).contains(&x), "x {x}");
+            }
+        }
+        assert!(!p.ficha_visible(0), "la ficha del portero aun no sale");
+        assert!(p.portero().is_some());
+
+        // Tumbado, se abre por delante pero no por detras.
+        p.enemigos.iter_mut().for_each(|e| e.vida = 0);
+        p.step(InputFrame::NONE);
+        assert!(p.cierre().is_none() && p.ficha_visible(0));
+        correr(&mut p, InputFrame::LEFT, 120);
+        assert!(p.jugadora.pos.x >= 1000.0, "lo de detras no vuelve");
+        while !p.terminado() {
+            p.jugadora.iframes = 5;
+            p.step(pulsar(DERECHA));
+            assert!(p.tick < 2000, "no llega a la puerta");
+        }
+        assert!(p.completado.is_some());
     }
 }

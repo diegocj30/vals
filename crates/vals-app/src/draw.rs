@@ -737,6 +737,12 @@ fn draw_boss(world: &World, alpha: f32, l: &Layout, caida: f32) {
     }
 }
 
+/// Una barra de vida: la del jefe y la del portero de un paseo.
+pub(crate) fn barra_de_vida(x: f32, y: f32, w: f32, alto: f32, frac: f32) {
+    draw_rectangle(x, y, w, alto, HP_BAR_BG);
+    draw_rectangle(x, y, w * frac.clamp(0.0, 1.0), alto, HP_BAR);
+}
+
 /// Barra de vida de la fase, con una marca por fase superada.
 fn draw_hp_bar(world: &World, l: &Layout) {
     let b = &world.boss;
@@ -748,8 +754,7 @@ fn draw_hp_bar(world: &World, l: &Layout) {
     let alto = 6.0;
     let y = o.y + 8.0;
 
-    draw_rectangle(o.x, y, w, alto, HP_BAR_BG);
-    draw_rectangle(o.x, y, w * b.hp_ratio(), alto, HP_BAR);
+    barra_de_vida(o.x, y, w, alto, b.hp_ratio());
 
     // Un punto por fase: lleno el que se esta jugando, hueco el que queda.
     for i in 0..b.phase_count() {

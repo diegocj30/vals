@@ -19,7 +19,8 @@
 use macroquad::prelude::*;
 use vals_core::math::{PI, sin_cos};
 use vals_core::paseo::{
-    CADENCIA_CAMARERO, Enemigo, Forma, PIES, Paseo, RADIO_FICHA, SUELO_Y, Tipo, VISTA_H, VISTA_W,
+    CADENCIA_CAMARERO, ENCUADRE, Enemigo, Forma, PIES, Paseo, RADIO_FICHA, SUELO_Y, Tipo, VISTA_H,
+    VISTA_W,
 };
 use vals_core::player::PARRY_RADIUS;
 use vals_core::rng::Pcg32;
@@ -38,8 +39,6 @@ use crate::paleta::{self, LUZ, ORO, PAPEL, TINTA};
 use crate::protagonista;
 use crate::skeleton;
 
-/// Donde lleva la camara a la jugadora, como fraccion de la vista.
-const ENCUADRE: f32 = 0.38;
 /// La protagonista, mas grande que en el combate: alli comparte pantalla con
 /// mil balas y aqui con una docena de cosas, y en una calle de 960 de ancho a
 /// 1.4 seria un muneco de 40 unidades.
@@ -76,9 +75,17 @@ const TEXTO_TENUE: Color = color_u8!(142, 124, 102, 255);
 const VELO: Color = color_u8!(20, 13, 15, 205);
 
 /// Donde esta la camara: el borde izquierdo de la vista, en x de la calle.
+///
+/// En la arena del portero se queda quieta en su borde, y despues no vuelve
+/// atras de el: tumbado el portero, la jugadora puede estar a la izquierda del
+/// encuadre y la camara no da el salto hacia atras.
 pub fn camara(p: &Paseo, alpha: f32) -> f32 {
+    if let Some(a) = p.cierre() {
+        return a;
+    }
     let x = p.jugadora.render_pos(alpha).x;
-    (x - VISTA_W * ENCUADRE).clamp(0.0, (p.def.largo - VISTA_W).max(0.0))
+    let muro = p.muro();
+    (x - VISTA_W * ENCUADRE).clamp(muro, (p.def.largo - VISTA_W).max(muro))
 }
 
 /// Cuanto ha subido la camara: la y de la calle que queda en el borde de
@@ -211,6 +218,15 @@ pub fn encima(p: &Paseo, l: &Layout, n: &Nombres) {
         let aviso = glifos::txg(Texto::Plantar, &[&n.focus, &n.arriba]);
         let y = l.to_screen(0.0, VISTA_H).y - 16.0;
         glifos::derecha(&aviso, o.x + w - 12.0, y, 16.0, fade(TEXTO, k));
+    }
+
+    // El portero lleva barra, como un jefe pequeno, mientras cierra la arena.
+    if p.cierre().is_some()
+        && let Some(e) = p.portero()
+    {
+        let ancho = l.len(VISTA_W * 0.4);
+        let frac = e.vida as f32 / e.vida_max().max(1) as f32;
+        draw::barra_de_vida(o.x + (w - ancho) * 0.5, o.y + 14.0, ancho, 7.0, frac);
     }
 
     if p.derrota {
@@ -1093,7 +1109,7 @@ fn platos(p: &Paseo, l: &Layout, t: f32, azul: Color) {
 /// encontrarlas.
 fn fichas(p: &Paseo, l: &Layout, t: f32) {
     for (i, &(x, y)) in p.def.fichas.iter().enumerate() {
-        if p.fichas[i] {
+        if !p.ficha_visible(i) {
             continue;
         }
         let flota = (t * 0.06 + i as f32 * 1.7).sin() * 3.0;
