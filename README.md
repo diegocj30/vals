@@ -16,12 +16,12 @@ sin instalar nada.
 
 ## La historia
 
-En 1900, la noche del gran baile, cuatro cosas del salon cobran vida a
-medianoche: una caja de musica, un bandoneon, un gramofono y una fila de
-coristas. Cada una roba la musica de su baile y huye a su ciudad: Viena, Buenos
-Aires, Chicago y Paris. La bailarina del lazo escarlata sale tras ellas, calle a
-calle por los paseos, y para recuperar cada musica tiene que ganar a su ladron
-bailando. Se cuenta en un prologo de cinco laminas que se vuelve a ver
+En 1900, la noche del gran baile, el salon cobra vida a medianoche: una caja de
+musica, un bandoneon, un gramofono y las coristas del cartel. Dicen que alli
+nadie sabe bailar lo suyo, y cada uno se lleva su musica a su ciudad: Viena,
+Buenos Aires, Chicago y Paris. La bailarina del lazo escarlata sale tras ellos,
+calle a calle por los paseos, y a cada uno lo reta en su propio baile: si le
+gana, vuelve al salon. Se cuenta en un prologo de cinco laminas que se vuelve a ver
 desde el menu con `X` (cuadrado). Al ganar los cuatro bailes sale el final, con
 los creditos, y desde entonces se vuelve a ver desde el menu con `V`
 (triangulo).

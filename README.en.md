@@ -19,12 +19,13 @@ gamepad, nothing to install.
 
 ## The story
 
-In 1900, on the night of the grand ball, four things in the ballroom come
-alive at midnight: a music box, a bandoneon, a gramophone and a line of chorus
-girls. Each one steals the music of its dance and flees to its own city:
-Vienna, Buenos Aires, Chicago and Paris. The dancer with the scarlet bow sets
-off after them, street by street through the promenades, and to win each song
-back she has to out-dance its thief. It is told in a five-plate prologue that can be replayed from the menu
+In 1900, on the night of the grand ball, the ballroom comes alive at midnight:
+a music box, a bandoneon, a gramophone and the chorus girls from the poster.
+They say no one there can dance their dance, and each takes its music away to
+its own city: Vienna, Buenos Aires, Chicago and Paris. The dancer with the
+scarlet bow sets off after them, street by street through the promenades, and
+challenges each one at its own dance: beat it, and it comes back to the
+ballroom. It is told in a five-plate prologue that can be replayed from the menu
 with `X` (Square). Winning all four dances brings up the ending, with the
 credits, which from then on can be replayed from the menu with `V` (Triangle).
 

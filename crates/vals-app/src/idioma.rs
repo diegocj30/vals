@@ -499,7 +499,7 @@ textos! {
     Siguiente: "siguiente", "next";
     SaltarHistoria: "saltar", "skip";
     // La historia, contada para que se entienda a la primera: quien es ella,
-    // que pasa, que roban, adonde huyen y que tiene que hacer. Una idea por
+    // que pasa, por que se van, adonde y que tiene que hacer. Una idea por
     // lamina y nada que haya que deducir.
     Lamina1: "EL GRAN SALÓN", "THE GRAND BALLROOM";
     Lamina1A: "Corre el año 1900. Esta noche hay gran baile en el salón,",
@@ -507,20 +507,20 @@ textos! {
     Lamina1B: "y ella va a bailar por primera vez.",
         "and she is about to dance for the very first time.";
     Lamina2: "A MEDIANOCHE", "AT THE STROKE OF MIDNIGHT";
-    Lamina2A: "Al dar las doce, cuatro cosas del salón cobran vida:",
-        "As the clock strikes twelve, four things in the ballroom come alive:";
-    Lamina2B: "una caja de música, un bandoneón, un gramófono y una fila de coristas.",
-        "a music box, a bandoneon, a gramophone and a line of chorus girls.";
-    Lamina3: "Y ROBAN LA MÚSICA", "AND THEY STEAL THE MUSIC";
-    Lamina3A: "Cada uno se lleva la música de su baile y huye a su ciudad:",
-        "Each one takes the music of its dance and flees to its own city:";
+    Lamina2A: "Al dar las doce, el salón cobra vida:",
+        "As the clock strikes twelve, the ballroom comes alive:";
+    Lamina2B: "una caja de música, un bandoneón, un gramófono y las coristas del cartel.",
+        "a music box, a bandoneon, a gramophone and the chorus girls from the poster.";
+    Lamina3: "Y SE LLEVAN LA MÚSICA", "AND THEY TAKE THE MUSIC WITH THEM";
+    Lamina3A: "Dicen que aquí nadie sabe bailar lo suyo, y se van a sus ciudades:",
+        "They say no one here can dance their dance, and leave for their cities:";
     Lamina3B: "Viena, Buenos Aires, Chicago y París. El salón se queda en silencio.",
         "Vienna, Buenos Aires, Chicago and Paris. The ballroom falls silent.";
     Lamina4: "EL RETO", "THE CHALLENGE";
     Lamina4A: "Ella sale tras ellos, de ciudad en ciudad.",
         "She sets off after them, from city to city.";
-    Lamina4B: "Para recuperar cada música tendrá que ganarles bailando.",
-        "To win each song back, she will have to out-dance its thief.";
+    Lamina4B: "Si les gana bailando lo suyo, volverán al salón.",
+        "If she beats them at their own dance, they will come back to the ballroom.";
     Lamina5: "PROGRAMA DE LA NOCHE", "TONIGHT'S PROGRAMME";
     Lamina5A: "Cuatro ciudades, cuatro bailes, cuatro rivales.",
         "Four cities, four dances, four rivals.";
@@ -534,7 +534,7 @@ textos! {
     LemaCancan: "Se llevaron el galop a París, y patean sin parar.",
         "They took the galop to Paris, and kick without end.";
     LemaViena: "Las calles de Viena todavía silban el vals que se llevaron.",
-        "The streets of Vienna still whistle the stolen waltz.";
+        "The streets of Vienna still whistle the waltz it carried off.";
     LemaArrabal: "En La Boca hasta los compadritos buscan al bandoneón.",
         "In La Boca, even the compadritos are out hunting the bandoneon.";
     LemaChicago: "En Chicago la música suena por los tejados: hay que subir.",
@@ -546,15 +546,15 @@ textos! {
     // Igual que el prologo: una idea por lamina, dicha tal cual.
     ElFinal: "el final", "the ending";
     Final1: "DE VUELTA EN EL SALÓN", "BACK AT THE BALLROOM";
-    Final1A: "Con las cuatro músicas recuperadas, ella regresa al gran salón.",
-        "With all four songs won back, she returns to the grand ballroom.";
-    Final1B: "Los cuatro ladrones la siguen, ya sin ganas de huir.",
-        "The four thieves follow her, done with running away.";
+    Final1A: "Les ha ganado a los cuatro, a cada uno en su baile.",
+        "She has beaten all four, each one at its own dance.";
+    Final1B: "Cumplen su palabra y vuelven con ella al gran salón.",
+        "They keep their word and return with her to the grand ballroom.";
     Final2: "LA MÚSICA VUELVE", "THE MUSIC RETURNS";
-    Final2A: "Cada uno ocupa su sitio y toca otra vez su música.",
-        "Each one takes its place and plays its music once more.";
-    Final2B: "El vals, el tango, el charleston y el cancán suenan en el salón.",
-        "The waltz, the tango, the charleston and the can-can fill the ballroom.";
+    Final2A: "Cada uno ocupa su sitio en el escenario.",
+        "Each one takes its place on the stage.";
+    Final2B: "El vals, el tango, el charleston y el cancán vuelven a sonar.",
+        "The waltz, the tango, the charleston and the can-can ring out once more.";
     Final3: "SU PRIMER BAILE", "HER FIRST DANCE";
     Final3A: "Por fin, ella baila por primera vez en el gran salón.",
         "At last, she dances in the grand ballroom for the very first time.";
