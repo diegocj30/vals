@@ -84,9 +84,10 @@ pub fn lema_del_paseo(jefe: usize) -> &'static str {
 // El reloj
 // ---------------------------------------------------------------------------
 
-/// Lo que dura cada lamina si no se toca nada: lo justo para leer dos lineas
-/// y ver que pasa. Cinco laminas, medio minuto escaso.
-const DURA: f32 = 5.5;
+/// Lo que dura cada lamina si no se toca nada: para leer dos lineas sin prisa,
+/// aunque uno se despiste un momento. Con 5,5 s habia que leer deprisa; quien
+/// lee rapido ya puede pasarla con confirmar.
+const DURA: f32 = 9.0;
 /// Lo que tarda en poder pasarse. Se entra pulsando confirmar, y ese mismo
 /// boton no puede pasar ya la primera lamina (lo mismo que en las cartelas).
 const GRACIA: f32 = 0.6;
@@ -571,8 +572,8 @@ mod tests {
             segundos += FRAME;
             assert!(segundos < 60.0, "no se acaba nunca");
         }
-        // Entre 20 y 30 segundos: lo que se aguanta sin tocar nada.
-        assert!((20.0..=30.0).contains(&segundos), "dura {segundos} s");
+        // Entre 40 y 50 segundos: lo que se aguanta sin tocar nada.
+        assert!((40.0..=50.0).contains(&segundos), "dura {segundos} s");
     }
 
     #[test]
