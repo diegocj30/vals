@@ -151,7 +151,7 @@ flowchart LR
   `wasm-bindgen`; gamepad support (gilrs on native, the Gamepad API on web) and
   saving (`localStorage`) are wired in through miniquad plugins a few lines
   long.
-- **416 tests**, including bots that play through every promenade end to end,
+- **420 tests**, including bots that play through every promenade end to end,
   tests that require each dance to use its own engine verb and no one else's,
   and one that plants a motionless player at every point on the screen so that
   no figure leaves a spot where you can stand still without dodging. CI runs
