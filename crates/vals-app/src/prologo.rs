@@ -31,7 +31,7 @@ use vals_core::pista::Pista;
 use vals_core::player::PLAYER_SPEED;
 use vals_core::{Player, World};
 
-use crate::acciones::Nombres;
+use crate::acciones::{Accion, Nombres};
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{circulo, linea, rect, tri};
 use crate::fuentes::{self, Cara};
@@ -298,23 +298,26 @@ impl Prologo {
 /// La invitacion del menu a volver a verlo, arriba a la izquierda de la
 /// arena: discreta, que lo que se viene a hacer al menu es jugar. Debajo, el
 /// final, si ya se ha ganado.
-pub fn en_el_menu(l: &Layout, teclas: &Nombres, hay_final: bool) {
+///
+/// Devuelve donde ha quedado cada linea, que con el dedo se tocan.
+pub fn en_el_menu(l: &Layout, teclas: &Nombres, hay_final: bool) -> Vec<(Rect, Accion)> {
     let o = l.to_screen(0.0, 0.0);
     let u = l.scale().clamp(0.55, 1.2);
     let lineas = [
-        (&teclas.historia, Texto::LaHistoria),
-        (&teclas.el_final, Texto::ElFinal),
+        (&teclas.historia, Texto::LaHistoria, Accion::Historia),
+        (&teclas.el_final, Texto::ElFinal, Accion::Final),
     ];
-    for (i, (tecla, t)) in lineas.iter().take(1 + hay_final as usize).enumerate() {
+    let mut zonas = Vec::new();
+    for (i, (tecla, t, a)) in lineas.iter().take(1 + hay_final as usize).enumerate() {
         let texto = glifos::rellenar("{}   {}", &[tecla, &glifos::txt(tx(*t))]);
-        glifos::texto(
-            &texto,
-            o.x + 22.0 * u,
-            o.y + (64.0 + 24.0 * i as f32) * u,
-            17.0 * u,
-            draw::TEXT_DIM,
-        );
+        let (x, y, tam) = (o.x + 22.0 * u, o.y + (64.0 + 24.0 * i as f32) * u, 17.0 * u);
+        glifos::texto(&texto, x, y, tam, draw::TEXT_DIM);
+        zonas.push((
+            Rect::new(x, y - tam, glifos::ancho(&texto, tam), tam * 1.3),
+            *a,
+        ));
     }
+    zonas
 }
 
 // ---------------------------------------------------------------------------

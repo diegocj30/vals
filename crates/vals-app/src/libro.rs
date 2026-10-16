@@ -542,12 +542,16 @@ pub fn tarjeta_de_paseo(t: &Tarjeta, nombre: &str, l: &Layout, teclas: &Nombres)
 /// Lo que dice el menu para abrir el libro: arriba a la izquierda, que es lo
 /// unico que el modo atractor deja libre (el centro es del titulo y de ella, y
 /// arriba a la derecha va el nombre de la figura).
-pub fn aviso_en_el_menu(l: &Layout, teclas: &Nombres) {
+///
+/// Devuelve donde ha quedado, que con el dedo se abre tocandolo.
+pub fn aviso_en_el_menu(l: &Layout, teclas: &Nombres) -> Rect {
     // Se abre con la L, o con el gatillo de focus: "L1" en PlayStation, "LB"
     // en Xbox.
     let s = l.to_screen(24.0, 40.0);
     let texto = textos::abrir(&teclas.libro);
-    glifos::texto(&texto, s.x, s.y, l.len(16.0), fade(PAPEL, 0.8));
+    let tam = l.len(16.0);
+    glifos::texto(&texto, s.x, s.y, tam, fade(PAPEL, 0.8));
+    Rect::new(s.x, s.y - tam, glifos::ancho(&texto, tam), tam * 1.3)
 }
 
 /// La pagina del libro: cada baile con su sello, su mejor tiempo, sus

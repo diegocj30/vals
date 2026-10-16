@@ -17,32 +17,44 @@
 //!   y cruceta.
 //!
 //! Y se recuerda **con que se jugo lo ultimo** (`Dispositivo`): toda ayuda en
-//! pantalla sale de `Nombres`, que habla del teclado o del mando segun eso, y
-//! lo dice con el dibujo de cada boton (ver `glifos`).
+//! pantalla sale de `Nombres`, que habla del teclado, del mando o de la
+//! pantalla tactil segun eso, y lo dice con el dibujo de cada boton (ver
+//! `glifos`). La pantalla tactil no tiene teclas que cambiar: sus dedos se
+//! convierten en estas mismas acciones en `tactil`.
 
-use macroquad::prelude::{KeyCode, get_last_key_pressed, is_key_down, is_key_pressed};
+use macroquad::prelude::{KeyCode, Vec2, get_last_key_pressed, is_key_down, is_key_pressed};
 use vals_core::InputFrame;
 
 use crate::glifos::{self, Boton, Dir, Forma, Trozo, txg};
 use crate::idioma::{Texto, tx};
 use crate::mando::{self, Mando, boton};
+use crate::tactil::Tactil;
 
 /// Con que se esta jugando.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Dispositivo {
     Teclado,
     Mando,
+    Tactil,
 }
 
 /// Con que se jugo lo ultimo, visto lo que ha pasado este frame.
 ///
 /// Gana el ultimo que se toco. Enchufar un mando cuenta como tocarlo —es lo
 /// que se espera al conectarlo con el juego abierto—, y desenchufarlo devuelve
-/// la ayuda al teclado, que es lo unico que queda.
-pub fn ultimo_usado(antes: Dispositivo, tecla: bool, boton: bool, conectado: bool) -> Dispositivo {
-    if boton {
+/// la ayuda al teclado. Con la pantalla tactil no hay nada que desenchufar.
+pub fn ultimo_usado(
+    antes: Dispositivo,
+    tecla: bool,
+    boton: bool,
+    dedo: bool,
+    conectado: bool,
+) -> Dispositivo {
+    if dedo {
+        Dispositivo::Tactil
+    } else if boton {
         Dispositivo::Mando
-    } else if tecla || !conectado {
+    } else if tecla || antes == Dispositivo::Mando && !conectado {
         Dispositivo::Teclado
     } else {
         antes
@@ -308,6 +320,17 @@ fn glifo_boton(bit: u32, playstation: bool) -> Boton {
     }
 }
 
+/// Como se dibuja una accion de menu en la pantalla tactil: volver y la pausa
+/// tienen su boton, pasear el suyo cuando sale, y todo lo demas es tocar.
+fn glifo_tactil(a: Accion) -> Boton {
+    match a {
+        Accion::Atras => Boton::Volver,
+        Accion::Pausa => Boton::Pausa,
+        Accion::Pasear => Boton::Toque(tx(Texto::TocaPasear)),
+        _ => Boton::Dedo,
+    }
+}
+
 /// Las acciones de juego, cada una con sus teclas y sus botones.
 ///
 /// Son **mascaras**: una accion puede tener varias (disparar va en R1 y R2, el
@@ -358,6 +381,7 @@ impl Controles {
         match d {
             Dispositivo::Teclado => &mut self.teclado,
             Dispositivo::Mando => &mut self.mando,
+            Dispositivo::Tactil => unreachable!("lo tactil no se cambia"),
         }
     }
 
@@ -443,6 +467,7 @@ impl Controles {
                 let m = self.mando[j as usize] as u32;
                 (m != 0).then(|| glifo_boton(m, playstation))
             }
+            Dispositivo::Tactil => Some(Boton::Toque(j.nombre())),
         };
         b.map_or_else(|| glifos::txt(NADA), glifos::boton)
     }
@@ -544,13 +569,22 @@ impl Nombres {
             glifos::boton(match d {
                 Dispositivo::Teclado => glifo_tecla(a.teclas()[0]),
                 Dispositivo::Mando => glifo_boton(a.botones(), playstation),
+                Dispositivo::Tactil => glifo_tactil(a),
             })
         };
         let juego = |j: Juego| c.glifo(d, j, playstation);
         let teclado = d == Dispositivo::Teclado;
+        let tactil = d == Dispositivo::Tactil;
         // El stick que mueve es el izquierdo, y lleva su nombre dentro: un
         // circulo vacio, al lado del de PlayStation, se confundia con el.
-        let stick = if playstation { "L" } else { "LS" };
+        // En la pantalla no tiene nombre: es el que aparece bajo el pulgar.
+        let stick = if tactil {
+            ""
+        } else if playstation {
+            "L"
+        } else {
+            "LS"
+        };
         let arriba = glifos::boton(if teclado {
             Boton::Flecha(Dir::Arriba)
         } else {
@@ -568,6 +602,8 @@ impl Nombres {
             // La barra se lee igual en los dos idiomas.
             mover: if teclado {
                 glifos::boton(Boton::Flechas)
+            } else if tactil {
+                glifos::boton(Boton::Stick(stick, None))
             } else {
                 glifos::rellenar(
                     "{} / {}",
@@ -592,9 +628,10 @@ impl Nombres {
     }
 }
 
-/// El teclado y el mando juntos, y con cual se jugo lo ultimo.
+/// El teclado, el mando y la pantalla juntos, y con cual se jugo lo ultimo.
 pub struct Entrada {
     pub mando: Mando,
+    pub tactil: Tactil,
     pub ultimo: Dispositivo,
     /// La tecla que se acaba de pulsar, si alguna. Para cambiar controles.
     tecla: Option<KeyCode>,
@@ -604,6 +641,7 @@ impl Entrada {
     pub fn new() -> Self {
         Self {
             mando: Mando::new(),
+            tactil: Tactil::default(),
             ultimo: Dispositivo::Teclado,
             tecla: None,
         }
@@ -612,23 +650,33 @@ impl Entrada {
     /// Una vez por frame, antes de leer nada.
     pub fn actualizar(&mut self) {
         self.mando.actualizar();
+        self.tactil.actualizar();
         self.tecla = get_last_key_pressed();
         self.ultimo = ultimo_usado(
             self.ultimo,
             self.tecla.is_some(),
             self.mando.algo_pulsado() || self.mando.recien_conectado(),
+            self.tactil.algo(),
             self.mando.conectado(),
         );
     }
 
     /// Si se acaba de pulsar una accion de menu, con lo que sea.
     pub fn pulsado(&self, a: Accion) -> bool {
-        a.teclas().iter().any(|k| is_key_pressed(*k)) || self.mando.pulsado(a.botones())
+        a.teclas().iter().any(|k| is_key_pressed(*k))
+            || self.mando.pulsado(a.botones())
+            || self.tactil.pulsado(a)
     }
 
     /// Si se acaba de pulsar cualquier cosa.
     pub fn algo(&self) -> bool {
-        self.tecla.is_some() || self.mando.algo_pulsado()
+        self.tecla.is_some() || self.mando.algo_pulsado() || self.tactil.algo()
+    }
+
+    /// Donde se ha tocado la pantalla este frame, en las listas (ver
+    /// `tactil::Modo::Lista`).
+    pub fn toque(&self) -> Option<Vec2> {
+        self.tactil.toque()
     }
 
     pub fn tecla(&self) -> Option<KeyCode> {
@@ -636,10 +684,17 @@ impl Entrada {
     }
 
     /// Lo que le llega a la simulacion. Teclado y mando se suman en vez de
-    /// elegir uno: soltar el mando a media partida no rompe nada.
+    /// elegir uno: soltar el mando a media partida no rompe nada. La pantalla
+    /// solo cuenta si es lo ultimo que se ha tocado: el disparo que se queda
+    /// puesto no puede seguir disparando con el teclado en la mano.
     pub fn juego(&self, c: &Controles) -> InputFrame {
+        let dedos = if self.ultimo == Dispositivo::Tactil {
+            self.tactil.bits()
+        } else {
+            0
+        };
         InputFrame::from_bits(
-            c.del_teclado(is_key_down).bits() | c.del_mando(self.mando.crudo()).bits(),
+            c.del_teclado(is_key_down).bits() | c.del_mando(self.mando.crudo()).bits() | dedos,
         )
     }
 
@@ -691,18 +746,25 @@ mod tests {
     #[test]
     fn se_juega_con_lo_ultimo_que_se_toco() {
         use Dispositivo::*;
-        assert_eq!(ultimo_usado(Teclado, false, true, true), Mando);
-        assert_eq!(ultimo_usado(Mando, true, false, true), Teclado);
+        assert_eq!(ultimo_usado(Teclado, false, true, false, true), Mando);
+        assert_eq!(ultimo_usado(Mando, true, false, false, true), Teclado);
         assert_eq!(
-            ultimo_usado(Mando, false, false, true),
+            ultimo_usado(Mando, false, false, false, true),
             Mando,
             "sin nada, igual"
         );
         assert_eq!(
-            ultimo_usado(Mando, false, false, false),
+            ultimo_usado(Mando, false, false, false, false),
             Teclado,
             "desenchufado"
         );
+        assert_eq!(ultimo_usado(Mando, false, false, true, true), Tactil);
+        assert_eq!(
+            ultimo_usado(Tactil, false, false, false, false),
+            Tactil,
+            "sin mando no se vuelve al teclado"
+        );
+        assert_eq!(ultimo_usado(Tactil, true, false, false, false), Teclado);
         // Y los nombres siguen al aparato.
         let c = Controles::default();
         let b = glifos::boton;
@@ -719,6 +781,13 @@ mod tests {
         assert_eq!(ps.pausa, b(Boton::Pastilla("Options")));
         assert_eq!(ps.parry, b(Boton::Ps(Forma::Circulo)));
         assert_eq!(ps.aceptar, b(Boton::Ps(Forma::Cruz)));
+        // En la pantalla, cada accion es su boton, y aceptar es tocar.
+        let dedo = Nombres::de(Tactil, false, &c);
+        assert_eq!(dedo.aceptar, b(Boton::Dedo));
+        assert_eq!(dedo.atras, b(Boton::Volver));
+        assert_eq!(dedo.pausa, b(Boton::Pausa));
+        assert_eq!(dedo.parry, b(Boton::Toque("Parry")));
+        assert_eq!(dedo.saltar, b(Boton::Toque("Saltar")));
     }
 
     #[test]

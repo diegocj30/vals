@@ -2,12 +2,23 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>VALS</title>
   <link rel="icon" type="image/svg+xml" href="icono.svg" />
   <style>
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #08080e; }
     canvas { display: block; width: 100%; height: 100%; outline: none; }
+    /* En el movil: ni zoom con dos dedos ni con dos toques, ni arrastrar la
+       pagina, ni seleccionar, ni el menu de mantener pulsado. Los dedos son
+       del juego. */
+    html, body, canvas {
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
   </style>
 </head>
 <body>
@@ -145,6 +156,38 @@
     var glcanvas = document.getElementById("glcanvas");
     glcanvas.focus();
     glcanvas.addEventListener("click", function () { glcanvas.focus(); });
+
+    // Los dedos. El bundle ya pasa los toques del canvas a Rust (y los
+    // cancela alli, asi que el navegador no se inventa clics de raton); esto
+    // es para lo que se le escapa: el zoom de Safari, que va por "gesture", y
+    // lo que caiga fuera del canvas. Tiene que ser `passive: false` o el
+    // navegador ignora el preventDefault.
+    (function () {
+      var parar = function (e) { e.preventDefault(); };
+      var opciones = { passive: false };
+      document.addEventListener("touchmove", parar, opciones);
+      document.addEventListener("gesturestart", parar, opciones);
+      document.addEventListener("dblclick", parar, opciones);
+      document.addEventListener("contextmenu", parar);
+
+      // Al primer toque, pantalla completa: sin la barra del navegador el
+      // juego gana un buen trozo. Va en touchend porque es lo que el
+      // navegador cuenta como gesto del usuario; donde no se puede (Safari en
+      // el iPhone), se juega igual.
+      var pedida = false;
+      document.addEventListener("touchend", function () {
+        if (pedida) return;
+        pedida = true;
+        var raiz = document.documentElement;
+        var pedir = raiz.requestFullscreen || raiz.webkitRequestFullscreen;
+        if (pedir) {
+          try {
+            var p = pedir.call(raiz, { navigationUI: "hide" });
+            if (p && p.catch) p.catch(function () {});
+          } catch (e) {}
+        }
+      });
+    })();
     load("vals.wasm");
   </script>
 </body>

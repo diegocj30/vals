@@ -492,6 +492,8 @@ textos! {
     Parry: "Parry", "Parry";
     Super: "Super", "Super";
     Focus: "Focus", "Focus";
+    // El boton de la pantalla tactil para volver a un paseo ya andado.
+    TocaPasear: "Pasear", "Promenade";
     ArribaO: "{} o {}", "{} or {}";
     Espacio: "ESPACIO", "SPACE";
     ShiftDcho: "SHIFT DCHO", "RIGHT SHIFT";

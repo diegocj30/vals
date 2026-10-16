@@ -28,6 +28,7 @@ use macroquad::prelude::*;
 use crate::fuentes::{self, Cara};
 use crate::idioma::{Texto, tx};
 use crate::paleta::{PAPEL, TINTA};
+use crate::protagonista::LAZO;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Dir {
@@ -77,6 +78,15 @@ pub enum Boton {
     /// Un stick con su nombre (L, LS, L3...) y hacia donde, si es empujarlo.
     Stick(&'static str, Option<Dir>),
     Cruceta(Option<Dir>),
+    /// Un boton de la pantalla tactil con su nombre, como sale encima del
+    /// juego (ver `tactil`).
+    Toque(&'static str),
+    /// Tocar la pantalla, donde sea.
+    Dedo,
+    /// El boton tactil de volver, con su flecha.
+    Volver,
+    /// El boton tactil de la pausa, con sus dos rayas.
+    Pausa,
 }
 
 /// Un trozo de una linea de ayuda.
@@ -164,6 +174,7 @@ fn rotulo_de(b: Boton, tam: f32) -> Option<(&'static str, f32)> {
         Boton::Hombro(s) => (s, 0.62),
         Boton::Pastilla(s) => (s, 0.54),
         Boton::Stick(s, _) if !s.is_empty() => (s, 0.45),
+        Boton::Toque(s) => (s, 0.5),
         _ => return None,
     };
     Some((s, (tam * k).max(LETRA_MIN)))
@@ -182,6 +193,8 @@ fn medida(b: Boton, tam: f32, medir: &dyn Fn(&str, f32) -> f32) -> f32 {
         Boton::Ps(_) | Boton::Xbox(_) | Boton::Stick(..) | Boton::Cruceta(_) => alto,
         Boton::Hombro(_) => (escrito + tam * 0.6).max(alto * 1.25),
         Boton::Pastilla(_) => escrito + tam * 0.75,
+        Boton::Toque(_) => (escrito + tam * 0.9).max(alto),
+        Boton::Dedo | Boton::Volver | Boton::Pausa => alto,
     }
 }
 
@@ -402,6 +415,57 @@ fn dibujar(b: Boton, c: Vec2, w: f32, tam: f32, color: Color) {
                 draw_rectangle(q.x - bw * 0.5, q.y - bh * 0.5, bw, bh, alfa(color, 0.85));
             }
         }
+        Boton::Toque(_) | Boton::Dedo | Boton::Volver | Boton::Pausa => {
+            tactil(b, c, vec2(w, h), a, false);
+        }
+    }
+}
+
+/// Un boton de la pantalla tactil centrado en `c`: papel con filo de tinta y
+/// el anillo escarlata del lazo dentro. Es el mismo dibujo en la ayuda, del
+/// tamano de la letra, y encima del juego, del tamano de un pulgar: asi la
+/// ayuda ensena el boton que hay que tocar. Si `w` es mas ancho que alto sale
+/// una pastilla; si no, un disco. Encendido, el papel se vuelve escarlata.
+pub fn tactil(b: Boton, c: Vec2, tam: Vec2, a: f32, encendido: bool) {
+    let (w, h) = (tam.x.max(tam.y), tam.y);
+    let r = h * 0.5;
+    let fino = (h * 0.07).max(1.0);
+    let fondo = if encendido { LAZO } else { PAPEL };
+    let tinta = alfa(if encendido { PAPEL } else { TINTA }, a);
+    redondeado(c, w, h, r, Some(alfa(fondo, a)), alfa(TINTA, a), fino);
+    let dentro = h * 0.14;
+    redondeado(
+        c,
+        w - dentro * 2.0,
+        h - dentro * 2.0,
+        r - dentro,
+        None,
+        alfa(if encendido { PAPEL } else { LAZO }, a * 0.8),
+        (h * 0.035).max(1.0),
+    );
+    match b {
+        Boton::Toque(s) => {
+            let mut t = h * 0.36;
+            let cabe = w - h * 0.45;
+            let mide = medir_cuerpo(s, t);
+            if mide > cabe {
+                t *= cabe / mide;
+            }
+            rotulo(s, c, t.max(LETRA_MIN), tinta);
+        }
+        Boton::Dedo => {
+            draw_circle(c.x, c.y, r * 0.22, tinta);
+            draw_circle_lines(c.x, c.y, r * 0.48, fino, tinta);
+        }
+        Boton::Volver => flecha(c - vec2(r * 0.08, 0.0), Dir::Izquierda, r * 0.4, tinta),
+        Boton::Pausa => {
+            let (bw, bh) = (r * 0.2, r * 0.8);
+            for dx in [-0.22, 0.22] {
+                let x = c.x + dx * r - bw * 0.5;
+                draw_rectangle(x, c.y - bh * 0.5, bw, bh, tinta);
+            }
+        }
+        _ => {}
     }
 }
 

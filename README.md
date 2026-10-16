@@ -24,7 +24,7 @@ Cada jefe es un baile, y sus balas son la coreografía.
 |:---:|:---:|
 | ![Combate contra El Vals](docs/media/jefe.gif) | ![El mapa del juego](docs/media/mapa.gif) |
 
-Teclado o mando, sin instalar nada. También compila en nativo para escritorio.
+Teclado, mando o pantalla táctil, sin instalar nada. También compila en nativo para escritorio.
 
 ## La historia
 
@@ -143,17 +143,17 @@ flowchart LR
 
 ## Controles
 
-| | Teclado | Mando |
-|---|---|---|
-| Mover | Flechas / WASD | Stick o cruceta |
-| Disparar | `Z` | R1 / R2 (RB / RT) |
-| Saltar (en los paseos) | Arriba / `W` / `K` | Botón de abajo (X en PlayStation, A en Xbox) |
-| Dash, con invulnerabilidad | `X` | Cuadrado / X |
-| Parry | `C` | Círculo / B |
-| Super | `Espacio` / `V` | Triángulo / Y |
-| Focus (lento; en los paseos, plantarse y apuntar) | `Shift` | L1 / L2 (LB / LT) |
-| Pausa y, en el título, opciones | `Esc` / `P` | Options / Menu (Start) |
-| Reintentar el baile o el paseo | `R` | Share / View (Back) |
+| | Teclado | Mando | Pantalla táctil |
+|---|---|---|---|
+| Mover | Flechas / WASD | Stick o cruceta | Stick que aparece bajo el pulgar izquierdo |
+| Disparar | `Z` | R1 / R2 (RB / RT) | Botón grande: se queda puesto, otro toque lo quita |
+| Saltar (en los paseos) | Arriba / `W` / `K` | Botón de abajo (X en PlayStation, A en Xbox) | Botón *Saltar* |
+| Dash, con invulnerabilidad | `X` | Cuadrado / X | Botón *Dash* |
+| Parry | `C` | Círculo / B | Botón *Parry* |
+| Super | `Espacio` / `V` | Triángulo / Y | Botón *Super* |
+| Focus (lento; en los paseos, plantarse y apuntar) | `Shift` | L1 / L2 (LB / LT) | Botón *Focus* |
+| Pausa y, en el título, opciones | `Esc` / `P` | Options / Menu (Start) | Botón de arriba a la derecha |
+| Reintentar el baile o el paseo | `R` | Share / View (Back) | Desde la pausa |
 
 <details>
 <summary><b>Menús, mapa y opciones</b></summary>
@@ -174,8 +174,13 @@ Disparar, saltar, dash, parry, super y focus **se pueden cambiar**, por
 separado para el teclado y para el mando, en *Opciones > Controles*: se elige
 la acción y se pulsa la tecla o el botón nuevo. Si ya lo tenía otra acción, se
 intercambian, así que ninguna se queda sin nada. Las ayudas en pantalla
-muestran los botones del teclado o del mando según con cuál se haya jugado lo
-último.
+muestran los botones del teclado, del mando o de la pantalla según con cuál se
+haya jugado lo último.
+
+Con la pantalla táctil, en los menús tocar es aceptar y el botón de arriba a la
+izquierda es atrás; en las opciones y en la tienda se toca la fila o la
+prenda. En el título se tocan sus avisos (el libro, la historia), y en la pista
+el stick mueve a la bailarina y un toque entra al baile.
 
 En la pausa el baile se para del todo (no avanza ni un tick, así que los
 replays no se enteran) y se puede seguir, reintentar, volver a la pista o ir a

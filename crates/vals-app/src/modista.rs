@@ -190,6 +190,13 @@ impl Modista {
     /// apretada.
     pub fn entrada(&mut self, g: &mut Guardado, e: &Entrada) -> Option<Sfx> {
         let (fila, col) = (self.fila, self.col);
+        // Con el dedo, tocar una etiqueta la elige, y tocar la elegida la pide.
+        let tocada = e
+            .toque()
+            .and_then(|p| articulo_en(Layout::compute().to_world(p)));
+        if let Some((c, f)) = tocada {
+            (self.col, self.fila) = (c, f);
+        }
         if e.pulsado(Accion::Arriba) {
             self.fila = self.fila.saturating_sub(1);
         }
@@ -205,7 +212,7 @@ impl Modista {
         if (fila, col) != (self.fila, self.col) {
             return Some(Sfx::Graze);
         }
-        if !e.pulsado(Accion::Aceptar) {
+        if !e.pulsado(Accion::Aceptar) && tocada.is_none() {
             return None;
         }
         let a = CATALOGO[self.col][self.fila];
@@ -275,14 +282,14 @@ impl Modista {
             .iter()
             .enumerate()
         {
-            let x = 24.0 + c as f32 * 304.0;
+            let x = sitio(c, 0).x;
             let s = p(x + 144.0, 372.0);
             fuentes::centrado(titulo, s.x, s.y, l.len(20.0), Cara::Titulo, ORO);
             let (i, d) = (p(x + 20.0, 380.0), p(x + 268.0, 380.0));
             draw_line(i.x, i.y, d.x, d.y, l.len(1.0), fade(ORO, 0.6));
             for (f, art) in CATALOGO[c].iter().enumerate() {
                 let elegida = (c, f) == (self.col, self.fila);
-                etiqueta(l, x, 392.0 + f as f32 * 88.0, *art, g, elegida, t);
+                etiqueta(l, x, sitio(c, f).y, *art, g, elegida, t);
             }
         }
 
@@ -507,8 +514,24 @@ fn maniqui(l: &Layout, pie: Vec2, t: f32) {
 
 /// Una etiqueta del catalogo: papel con tinta, el dibujo, el nombre, lo que
 /// hace y el precio o su sello.
+/// Donde va la etiqueta de la columna `c` y la fila `f`, en la lamina.
+fn sitio(c: usize, f: usize) -> Vec2 {
+    vec2(24.0 + c as f32 * 304.0, 392.0 + f as f32 * 88.0)
+}
+
+const ETIQUETA: Vec2 = Vec2::new(288.0, 78.0);
+
+/// La etiqueta que hay en `p`, en la lamina: columna y fila.
+fn articulo_en(p: Vec2) -> Option<(usize, usize)> {
+    (0..2)
+        .flat_map(|c| (0..4).map(move |f| (c, f)))
+        .find(|(c, f)| {
+            Rect::new(sitio(*c, *f).x, sitio(*c, *f).y, ETIQUETA.x, ETIQUETA.y).contains(p)
+        })
+}
+
 fn etiqueta(l: &Layout, x: f32, y: f32, a: Articulo, g: &Guardado, elegida: bool, t: f32) {
-    let (w, h) = (288.0, 78.0);
+    let (w, h) = (ETIQUETA.x, ETIQUETA.y);
     let tuyo = lo_tiene(g, a);
     let puesto = lo_lleva(g, a);
     let alcanza = tuyo || saldo(g) >= a.precio();
@@ -844,6 +867,16 @@ mod tests {
             g.marcar_ficha("El paseo de Viena", i);
         }
         g
+    }
+
+    #[test]
+    fn se_toca_la_etiqueta_que_se_ve() {
+        let centro = sitio(1, 2) + ETIQUETA * 0.5;
+        assert_eq!(articulo_en(centro), Some((1, 2)));
+        assert_eq!(articulo_en(sitio(0, 3) + vec2(1.0, 1.0)), Some((0, 3)));
+        // Entre dos etiquetas y en el escaparate, nada.
+        assert_eq!(articulo_en(vec2(320.0, 430.0)), None);
+        assert_eq!(articulo_en(vec2(320.0, 200.0)), None);
     }
 
     #[test]

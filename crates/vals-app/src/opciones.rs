@@ -191,6 +191,54 @@ enum Fila {
     Volver,
 }
 
+/// Donde va la tarjeta en la pantalla, en pixeles: lo que dibuja `dibujar` y
+/// lo que mira el dedo al tocar una fila.
+struct Marco {
+    u: f32,
+    x0: f32,
+    y0: f32,
+    w: f32,
+    h: f32,
+    alto_fila: f32,
+}
+
+impl Marco {
+    fn de(filas: usize, sw: f32, sh: f32) -> Self {
+        let u = (sh / 860.0).clamp(0.6, 1.4);
+        let alto_fila = 34.0 * u;
+        // Arriba el titulo, en medio las filas y abajo el pie: la ayuda va
+        // dentro del papel, que sobre la sala oscura competia con lo de detras.
+        let (w, h) = (470.0 * u, 184.0 * u + alto_fila * filas as f32);
+        let (x0, y0) = ((sw - w) * 0.5, (sh - h) * 0.5 - 20.0 * u);
+        Self {
+            u,
+            x0,
+            y0,
+            w,
+            h,
+            alto_fila,
+        }
+    }
+
+    /// La linea base de la primera fila: bajo el titulo y su filete.
+    fn primera(&self) -> f32 {
+        self.y0 + (62.0 + 16.0 + 40.0) * self.u
+    }
+
+    fn papel(&self) -> Rect {
+        Rect::new(self.x0, self.y0, self.w, self.h)
+    }
+
+    /// La fila que hay en `p`, si hay alguna. Cada una ocupa su alto entero,
+    /// sin huecos entre ellas: es la banda de la elegida, alargada.
+    fn fila_en(&self, p: Vec2, filas: usize) -> Option<usize> {
+        let dentro = p.x >= self.x0 + 26.0 * self.u && p.x <= self.x0 + self.w - 26.0 * self.u;
+        let arriba = self.primera() - 26.0 * self.u;
+        let i = ((p.y - arriba) / self.alto_fila).floor();
+        (dentro && i >= 0.0 && (i as usize) < filas).then_some(i as usize)
+    }
+}
+
 /// La tarjeta: el entreacto o, desde el titulo, las opciones a secas.
 pub struct Carta {
     pantalla: Pantalla,
@@ -319,6 +367,20 @@ impl Carta {
         }
         let filas = self.filas();
         let n = filas.len();
+        // Con el dedo: tocar una fila la elige y la acepta, y tocar fuera del
+        // papel es volver.
+        let mut tocada = false;
+        if let Some(p) = e.toque() {
+            let m = Marco::de(n, screen_width(), screen_height());
+            match m.fila_en(p, n) {
+                Some(i) => {
+                    self.cursor = i;
+                    tocada = true;
+                }
+                None if !m.papel().contains(p) => return Some(self.atras()),
+                None => return None,
+            }
+        }
         if e.pulsado(Accion::Arriba) {
             self.cursor = (self.cursor + n - 1) % n;
             return Some(Orden::Tic);
@@ -330,7 +392,7 @@ impl Carta {
         let fila = filas[self.cursor.min(n - 1)];
         let menos = e.pulsado(Accion::Izquierda);
         let mas = e.pulsado(Accion::Derecha);
-        let aceptar = e.pulsado(Accion::Aceptar);
+        let aceptar = e.pulsado(Accion::Aceptar) || tocada;
         let volumen = |v: &mut u8| {
             *v = if menos {
                 v.saturating_sub(1)
@@ -386,7 +448,8 @@ impl Carta {
             self.esperando = None;
             return None;
         };
-        if e.pulsado(Accion::Pausa) {
+        // Con el dedo no hay tecla que dar: tocar donde sea tambien la deja.
+        if e.pulsado(Accion::Pausa) || e.toque().is_some() || e.tactil.pulsado(Accion::Atras) {
             self.esperando = None;
             return Some(Orden::Tic);
         }
@@ -396,6 +459,7 @@ impl Carta {
                 let nuevos = e.mando.nuevos();
                 (bit_boton(nuevos), nuevos & !boton::START != 0)
             }
+            Dispositivo::Tactil => (None, false),
         };
         match bit {
             Some(b) => {
@@ -418,13 +482,16 @@ impl Carta {
         let (sw, sh) = (screen_width(), screen_height());
         draw_rectangle(0.0, 0.0, sw, sh, fade(TINTA, 0.78));
 
-        let u = (sh / 860.0).clamp(0.6, 1.4);
         let filas = self.filas();
-        let alto_fila = 34.0 * u;
-        // Arriba el titulo, en medio las filas y abajo el pie: la ayuda va
-        // dentro del papel, que sobre la sala oscura competia con lo de detras.
-        let (w, h) = (470.0 * u, 184.0 * u + alto_fila * filas.len() as f32);
-        let (x0, y0) = ((sw - w) * 0.5, (sh - h) * 0.5 - 20.0 * u);
+        let m = Marco::de(filas.len(), sw, sh);
+        let Marco {
+            u,
+            x0,
+            y0,
+            w,
+            h,
+            alto_fila,
+        } = m;
         let cx = sw * 0.5;
 
         // El papel, con su sombra de tinta corrida y la doble orla de un
@@ -447,7 +514,7 @@ impl Carta {
             Pantalla::Entreacto => Texto::Entreacto,
             Pantalla::Opciones => Texto::Opciones,
             Pantalla::Controles(Dispositivo::Teclado) => Texto::ElTeclado,
-            Pantalla::Controles(Dispositivo::Mando) => Texto::ElMando,
+            Pantalla::Controles(Dispositivo::Mando | Dispositivo::Tactil) => Texto::ElMando,
         };
         let titulo = tx(titulo);
         let ty = y0 + 62.0 * u;
@@ -459,7 +526,7 @@ impl Carta {
         draw_poly(cx, ry, 4, 5.0 * u, 45.0, TINTA);
 
         let playstation = e.mando.playstation();
-        let mut y = ry + 40.0 * u;
+        let mut y = m.primera();
         for (i, fila) in filas.iter().enumerate() {
             let elegida = i == self.cursor;
             let (texto, valor) = self.fila(*fila, op, n, playstation);
@@ -506,7 +573,7 @@ impl Carta {
             (Some(j), Pantalla::Controles(d)) => {
                 let pide = match d {
                     Dispositivo::Teclado => Texto::PulsaTecla,
-                    Dispositivo::Mando => Texto::PulsaBoton,
+                    Dispositivo::Mando | Dispositivo::Tactil => Texto::PulsaBoton,
                 };
                 glifos::rellenar(
                     "{}    {}",
@@ -518,7 +585,9 @@ impl Carta {
             }
             _ => {
                 let mut p = txg(Texto::Pie, &[&n.aceptar, &n.atras]);
+                // Con el dedo se cambia tocando la fila, que ya dice el pie.
                 if self.pantalla == Pantalla::Opciones
+                    && e.ultimo != Dispositivo::Tactil
                     && matches!(
                         filas[self.cursor.min(filas.len() - 1)],
                         Fila::Musica | Fila::Efectos | Fila::Idioma | Fila::Dificultad
@@ -586,7 +655,9 @@ impl Carta {
             Fila::Sacudida => (Texto::Sacudida, si_no(op.sacudida)),
             Fila::PantallaCompleta => (Texto::PantallaCompleta, si_no(op.pantalla_completa)),
             Fila::Controles(Dispositivo::Teclado) => (Texto::ControlesTeclado, None),
-            Fila::Controles(Dispositivo::Mando) => (Texto::ControlesMando, None),
+            Fila::Controles(Dispositivo::Mando | Dispositivo::Tactil) => {
+                (Texto::ControlesMando, None)
+            }
             // Las acciones ya traen su nombre traducido.
             Fila::Accion(j) => {
                 let Pantalla::Controles(d) = self.pantalla else {
@@ -666,5 +737,25 @@ mod tests {
         assert_eq!(c.atras(), Orden::Tic);
         assert_eq!(c.pantalla, Pantalla::Entreacto);
         assert_eq!(c.atras(), Orden::Seguir);
+    }
+
+    #[test]
+    fn se_toca_la_fila_que_se_ve() {
+        let m = Marco::de(4, 960.0, 540.0);
+        let x = m.x0 + m.w * 0.5;
+        // En la linea de cada una, y un poco por encima, que es donde va la
+        // banda de la elegida.
+        for i in 0..4 {
+            let y = m.primera() + m.alto_fila * i as f32;
+            assert_eq!(m.fila_en(vec2(x, y), 4), Some(i));
+            assert_eq!(m.fila_en(vec2(x, y - 20.0 * m.u), 4), Some(i));
+        }
+        // Debajo de la ultima, en el titulo y en el margen, ninguna.
+        let bajo = m.primera() + m.alto_fila * 4.0;
+        assert_eq!(m.fila_en(vec2(x, bajo), 4), None);
+        assert_eq!(m.fila_en(vec2(x, m.y0 + 30.0), 4), None);
+        assert_eq!(m.fila_en(vec2(m.x0 + 5.0, m.primera()), 4), None);
+        assert!(m.papel().contains(vec2(x, bajo)));
+        assert!(!m.papel().contains(vec2(10.0, 10.0)));
     }
 }

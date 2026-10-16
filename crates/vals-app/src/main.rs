@@ -44,6 +44,7 @@ mod replay_io;
 mod salon;
 mod skeleton;
 mod stats;
+mod tactil;
 mod trazo;
 mod zumo;
 
@@ -999,6 +1000,10 @@ async fn run_game() {
         // Todos los nombres de teclas y botones de este frame, del aparato que
         // se toco lo ultimo.
         let n = entrada.nombres(&progreso.opciones.controles);
+        // Lo que se puede tocar con el dedo, que sale de lo que se dibuja: las
+        // ayudas del titulo y el boton de pasear de la pista.
+        let mut zonas = Vec::new();
+        let mut se_pasea = false;
         if escena == Escena::Pista {
             // Lo que el mapa dice de las fichas: el bolsillo y, de cada baile
             // cuyo paseo ya se anduvo, cuantas de las suyas son tuyas.
@@ -1019,6 +1024,9 @@ async fn run_game() {
                     })
                     .collect(),
             };
+            se_pasea = pista
+                .nodo_cerca()
+                .is_some_and(|i| pista.abierto(i) && fichas.paseos[i].is_some());
             let teclas = [&n.aceptar[..], &n.pasear, &n.mover, &n.atras];
             let notas: Vec<_> = pista
                 .nodos
@@ -1074,8 +1082,8 @@ async fn run_game() {
             }
             if escena == Escena::Menu {
                 draw::menu(&layout, mostrado, intentos, &n);
-                libro::aviso_en_el_menu(&layout, &n);
-                prologo::en_el_menu(&layout, &n, hay_final);
+                zonas.push((libro::aviso_en_el_menu(&layout, &n), Accion::Libro));
+                zonas.extend(prologo::en_el_menu(&layout, &n, hay_final));
             } else if world.is_over() {
                 draw::fin_de_partida(
                     &layout,
@@ -1100,6 +1108,28 @@ async fn run_game() {
             c.dibujar(&progreso.opciones, &n, &entrada);
         }
         fundido.dibujar();
+        // Que es cada dedo el frame que viene, y sus botones, si se esta
+        // jugando con ellos. Se baila mientras no se haya acabado y no haya
+        // nada encima.
+        let bailando = match escena {
+            Escena::Combate => !world.is_over(),
+            Escena::Paseo => paseo.as_ref().is_some_and(|(_, p)| !p.terminado()),
+            _ => false,
+        };
+        entrada.tactil.modo = if carta.is_some() || escena == Escena::Modista {
+            tactil::Modo::Lista
+        } else if bailando {
+            tactil::Modo::Juego
+        } else {
+            match escena {
+                Escena::Menu => tactil::Modo::Titulo(zonas),
+                Escena::Pista => tactil::Modo::Pista { pasear: se_pasea },
+                _ => tactil::Modo::Menu,
+            }
+        };
+        if entrada.ultimo == Dispositivo::Tactil {
+            entrada.tactil.dibujar();
+        }
         // La pelicula va encima de todo: es la copia la que tiene grano.
         pelicula::dibujar();
         if let Some((msg, error)) = hot.aviso() {

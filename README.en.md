@@ -24,7 +24,7 @@ Every boss is a dance, and its bullets are the choreography.
 |:---:|:---:|
 | ![Fighting The Waltz](docs/media/jefe.gif) | ![The game map](docs/media/mapa.gif) |
 
-Keyboard or gamepad, nothing to install. It also builds natively for desktop.
+Keyboard, gamepad or touchscreen, nothing to install. It also builds natively for desktop.
 
 > The codebase (identifiers, comments, data files) is written in Spanish; the
 > commands and names below are quoted exactly as they appear in it.
@@ -149,17 +149,17 @@ flowchart LR
 
 ## Controls
 
-| | Keyboard | Gamepad |
-|---|---|---|
-| Move | Arrows / WASD | Stick or D-pad |
-| Shoot | `Z` | R1 / R2 (RB / RT) |
-| Jump (on promenades) | Up / `W` / `K` | Bottom face button (X on PlayStation, A on Xbox) |
-| Dash, with invulnerability | `X` | Square / X |
-| Parry | `C` | Circle / B |
-| Super | `Space` / `V` | Triangle / Y |
-| Focus (slow; on promenades, plant and aim) | `Shift` | L1 / L2 (LB / LT) |
-| Pause and, on the title screen, options | `Esc` / `P` | Options / Start |
-| Retry the dance or promenade | `R` | Share / Back |
+| | Keyboard | Gamepad | Touchscreen |
+|---|---|---|---|
+| Move | Arrows / WASD | Stick or D-pad | Stick that appears under your left thumb |
+| Shoot | `Z` | R1 / R2 (RB / RT) | Big button: stays on, tap again to stop |
+| Jump (on promenades) | Up / `W` / `K` | Bottom face button (X on PlayStation, A on Xbox) | *Jump* button |
+| Dash, with invulnerability | `X` | Square / X | *Dash* button |
+| Parry | `C` | Circle / B | *Parry* button |
+| Super | `Space` / `V` | Triangle / Y | *Super* button |
+| Focus (slow; on promenades, plant and aim) | `Shift` | L1 / L2 (LB / LT) | *Focus* button |
+| Pause and, on the title screen, options | `Esc` / `P` | Options / Start | Top-right button |
+| Retry the dance or promenade | `R` | Share / Back | From the pause menu |
 
 <details>
 <summary><b>Menus, map and options</b></summary>
@@ -179,8 +179,13 @@ flowchart LR
 Shoot, jump, dash, parry, super and focus **can be remapped**, separately for
 keyboard and gamepad, under *Options > Controls*: pick the action and press the
 new key or button. If another action already had it, the two swap, so no
-action is ever left unbound. On-screen hints show the keyboard or gamepad
-buttons, whichever was used last.
+action is ever left unbound. On-screen hints show the keyboard, gamepad or
+touchscreen buttons, whichever was used last.
+
+On a touchscreen, tapping confirms in menus and the top-left button goes back;
+in the options and the shop you tap the row or the item. On the title screen
+you tap its hints (the dance card, the story), and on the dance floor the stick
+moves the dancer and a tap steps into the dance.
 
 While paused the dance stops completely (not a single tick advances, so
 replays are unaffected), and you can resume, retry, go back to the dance floor

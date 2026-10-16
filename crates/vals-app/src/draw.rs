@@ -138,6 +138,11 @@ impl Layout {
         self.origin + vec2(x, y) * self.scale
     }
 
+    /// Lo contrario: de un pixel a la lamina. Para saber que se ha tocado.
+    pub(crate) fn to_world(&self, p: Vec2) -> Vec2 {
+        (p - self.origin) / self.scale
+    }
+
     /// Esquina de la arena en pixeles. La necesita el shader instanciado.
     pub fn origin_px(&self) -> Vec2 {
         self.origin
