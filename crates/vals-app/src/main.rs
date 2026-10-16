@@ -139,6 +139,13 @@ fn legacy_render() -> bool {
     std::env::args().any(|a| a == "--legacy-render")
 }
 
+/// Las teclas de probar lo que no deberia verse sin ganarselo (F4, el final).
+/// Solo con `--pruebas` en la linea de comandos, asi que la web y el ejecutable
+/// a secas no las tienen.
+fn pruebas() -> bool {
+    std::env::args().any(|a| a == "--pruebas")
+}
+
 fn nuevo_renderer() -> Option<BulletRenderer> {
     (!legacy_render()).then(|| BulletRenderer::new(MAX_BULLETS))
 }
@@ -262,6 +269,7 @@ async fn run_game() {
     let mut accumulator = 0.0f32;
     // Apagado de serie: es una herramienta, no parte del juego. F1 lo trae.
     let mut show_debug = false;
+    let con_pruebas = pruebas();
     let mut hot = HotReload::new();
     let mut frames: u32 = 0;
     let mut aviso: Option<(String, bool, u32)> = None;
@@ -692,10 +700,13 @@ async fn run_game() {
         // El final sale solo al llegar a la pista con los cuatro bailes
         // ganados: lo normal es al volver del ultimo, despues de su tarjeta,
         // y si se cerro el juego antes, al entrar desde el menu. F4 lo trae
-        // desde el menu o la pista, para verlo sin ganarse nada.
+        // desde el menu o la pista, para verlo sin ganarse nada, pero solo
+        // con `--pruebas`: si no, cualquiera se haria el spoiler.
         let llegando = escena == Escena::Pista && escena_antes != Escena::Pista;
-        let f4 =
-            libre && is_key_pressed(KeyCode::F4) && matches!(escena, Escena::Menu | Escena::Pista);
+        let f4 = libre
+            && con_pruebas
+            && is_key_pressed(KeyCode::F4)
+            && matches!(escena, Escena::Menu | Escena::Pista);
         if f4 || llegando && prologo::toca_el_final(&pista, progreso.final_visto) {
             tras_prologo = if f4 { escena } else { Escena::Pista };
             escena = Escena::Prologo;
