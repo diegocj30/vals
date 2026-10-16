@@ -407,7 +407,7 @@ fn el_salon(l: &Layout, s: f32, ella: &Player) {
         0,
         suelo / 1.5,
         s * 60.0,
-        latido(Tema::Sala, s),
+        latido(Tema::Sala(0), s),
     );
     tarima(l, suelo);
 

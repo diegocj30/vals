@@ -287,7 +287,7 @@ async fn run_game() {
     let mut nodo_actual = 0usize;
     let mut marcado = false;
     let mut intentos: u32 = 0;
-    let mut audio = Audio::load().await;
+    let mut audio = Audio::load(ganados(&pista)).await;
     // Los navegadores no dejan sonar nada hasta que el usuario toca algo. Si la
     // musica arrancase sola, en web el menu saldria mudo y no se sabria por
     // que. Se espera a la primera tecla, que ademas es cuando el jugador esta
@@ -894,9 +894,10 @@ async fn run_game() {
                 // En la calle suena la primera figura de su baile: el vals se
                 // oye desde fuera, y al entrar sigue sonando sin cortarse.
                 Escena::Paseo => Tema::de(pista.nodos[nodo_actual].jefe, 0),
-                // En el final el salon vuelve a sonar: el Danubio entero.
-                Escena::Prologo if historia.es_el_final() => Tema::PasoBase,
-                _ => Tema::Sala,
+                // Y la sala, con los instrumentos que le han devuelto los
+                // bailes ganados. En el final suenan los cuatro: es el salon
+                // entero, que es lo que cuenta el epilogo.
+                _ => Tema::Sala(ganados(&pista)),
             });
         }
         // En el menu no suena nada ni sacude nada: el atractor es un fondo, no
@@ -1103,6 +1104,16 @@ async fn run_game() {
 
         next_frame().await;
     }
+}
+
+/// Los bailes ganados, un bit por jefe: lo que la sala necesita para saber
+/// que instrumentos le han devuelto.
+fn ganados(pista: &Pista) -> u8 {
+    pista
+        .nodos
+        .iter()
+        .filter(|n| n.vencido)
+        .fold(0, |m, n| m | 1u8.checked_shl(n.jefe as u32).unwrap_or(0))
 }
 
 /// Todo lo que hace falta para empezar el baile `jefe`: su mundo, su

@@ -30,6 +30,15 @@
 //! tiene que sonar en el jefe espejo.
 //!
 //! El bucle se renderiza entero una vez al arrancar y se reproduce en bucle.
+//!
+//! # La sala
+//!
+//! La pista no toca ningun baile: toca su propia cancion, un vals original
+//! escrito para una caja de musica. Es lo unico que les queda a los salones
+//! cuando los cuatro objetos se llevan la musica, y cada baile ganado le
+//! devuelve su instrumento: el vals, el pah-pah que la hace mecer; el tango,
+//! un bandoneon por debajo; el charleston, un piano a contratiempo; y el
+//! cancan, la banda de metales. Con los cuatro, el salon entero.
 
 use crate::audio::{Voz, Wave};
 
@@ -46,7 +55,10 @@ use crate::audio::{Voz, Wave};
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tema {
     /// La pista. No es ningun baile: es la sala antes de que empiece nada.
-    Sala,
+    ///
+    /// Lleva los bailes ganados, un bit por jefe en el orden de `Tema::de`:
+    /// cuanto mas has bailado, mas instrumentos vuelven a la sala.
+    Sala(u8),
 
     // --- El Vals ---
     /// El Danubio azul entero. 3/4, oom-pah-pah, el vals de toda la vida.
@@ -85,8 +97,11 @@ pub enum Tema {
 }
 
 /// Todos, en el orden en que se sintetizan y se guardan.
+///
+/// De la sala solo esta la vacia: las demas se sintetizan cuando hacen falta,
+/// y comparten su hueco.
 pub const TEMAS: [Tema; 14] = [
-    Tema::Sala,
+    Tema::Sala(0),
     Tema::PasoBase,
     Tema::Espejo,
     Tema::Molinete,
@@ -127,11 +142,10 @@ impl Tema {
     }
 
     pub fn indice(self) -> usize {
+        if let Tema::Sala(_) = self {
+            return 0;
+        }
         TEMAS.iter().position(|t| *t == self).unwrap_or(0)
-    }
-
-    pub fn por_indice(i: usize) -> Self {
-        TEMAS.get(i).copied().unwrap_or(Tema::Sala)
     }
 
     /// Que suena, para poder decirlo en pantalla.
@@ -217,10 +231,16 @@ enum Acompanamiento {
     /// marcato en donde caen los golpes y no se parece en nada al oirlo,
     /// porque el bajo se mueve en vez de repetirse.
     Stride,
-    /// Ni una cosa ni la otra: notas largas y nada de golpes. Una sala no
-    /// tiene compas porque no se esta bailando todavia.
-    Sala,
+    /// La caja de musica, con una pua grave por compas, y encima lo que
+    /// hayan devuelto los bailes ganados (los bits de `Tema::Sala`).
+    Sala(u8),
 }
+
+/// Que bit de la sala devuelve cada baile. Mismo orden que `Tema::de`.
+const VALS: u8 = 1;
+const TANGO: u8 = 1 << 1;
+const CHARLESTON: u8 = 1 << 2;
+const CANCAN: u8 = 1 << 3;
 
 impl Acorde {
     fn intervalos(self) -> &'static [i32] {
@@ -377,21 +397,56 @@ const CUMPARSITA_B_ACORDES: [Acorde; 8] = [
     sep(7), sep(7), men(0), men(0),
 ];
 
-/// La sala. No es una pieza de nadie: son cuatro acordes largos.
+/// La sala: un vals original para caja de musica, en sol mayor.
 ///
-/// Y es a proposito que no se reconozca ni suene a ningun baile. En la pista no
-/// se esta bailando: se esta eligiendo. Poner ahi el vals en bucle decia que el
-/// vals era el juego, y el vals es **un** jefe del juego.
+/// No es de ningun baile a proposito. En la pista no se esta bailando: se
+/// esta eligiendo, y poner ahi el Danubio decia que el vals era el juego. Es
+/// la cancion del salon, y suena igual sin nada encima que con los cuatro
+/// bailes devueltos: lo que cambia es quien la acompana.
+///
+/// Dos frases de ocho compases. La primera sube por el acorde y vuelve; la
+/// segunda repite su arranque con el mi bajado a mi bemol (do mayor, do menor),
+/// que es lo que le da la nostalgia, y cierra en sol con una vuelta que lleva
+/// otra vez al principio sin que se note la costura.
 #[rustfmt::skip]
-const SALA: [Nota; 9] = [
-    n(12, 10), z(6),
-    n(15, 10), z(6),
-    n(19, 8), n(17, 4), z(4),
-    n(12, 12), z(4),
+const SALA: [Nota; 48] = [
+    n(7, 8), n(4, 2), n(7, 2),                          // 1  sol
+    n(12, 8), n(11, 2), n(9, 2),                        // 2  mi menor
+    n(9, 4), n(5, 4), n(2, 4),                          // 3  la menor
+    n(-1, 4), n(2, 4), n(5, 4),                         // 4  re7
+    n(4, 8), n(2, 2), n(4, 2),                          // 5  sol
+    n(13, 8), n(11, 2), n(9, 2),                        // 6  mi7: el compas 2 con sol sostenido
+    n(14, 4), n(9, 4), n(5, 4),                         // 7  la menor
+    n(7, 4), n(11, 4), n(14, 4),                        // 8  re7
+    n(12, 8), n(9, 4),                                  // 9  do
+    n(12, 8), n(8, 4),                                  // 10 do menor
+    n(7, 8), n(4, 2), n(7, 2),                          // 11 sol
+    n(11, 4), n(13, 4), n(16, 4),                       // 12 mi7
+    n(14, 6), n(12, 2), n(9, 2), n(5, 2),               // 13 la menor
+    n(2, 4), n(7, 4), n(5, 4),                          // 14 re7
+    n(4, 4), n(2, 2), n(-1, 2), n(0, 4),                // 15 sol
+    z(4), n(2, 4), n(5, 4),                             // 16 re7, y vuelta al 1
 ];
 
 #[rustfmt::skip]
-const SALA_ACORDES: [Acorde; 4] = [men(0), may(8), men(5), men(0)];
+const SALA_ACORDES: [Acorde; 16] = [
+    may(0), men(9), men(2), sep(7),
+    may(0), sep(9), men(2), sep(7),
+    may(5), men(5), may(0), sep(9),
+    men(2), sep(7), may(0), sep(7),
+];
+
+/// El bandoneon que devuelve el tango: una voz interior, una nota larga por
+/// compas, siempre del acorde y casi siempre a un paso de la anterior. Va al
+/// reves que la caja: cuando ella sube, el baja.
+#[rustfmt::skip]
+const SALA_BANDONEON: [Nota; 16] = [
+    n(-5, 12), n(-8, 12), n(-7, 12), n(-10, 12),        // 1-4   re si do la
+    n(-8, 12), n(-5, 12), n(-7, 12), n(-10, 12),        // 5-8   si re do la
+    n(-7, 24), n(-8, 12), n(-11, 12),                   // 9-12  do (ligada) si sol#
+    n(-10, 12), n(-7, 12), n(-8, 12),                   // 13-15 la do si
+    n(-10, 6), n(-7, 6),                                // 16    la do, y al re
+];
 
 /// **Maple Leaf Rag**, Scott Joplin (1899), primera parte.
 ///
@@ -559,12 +614,14 @@ fn partitura(t: Tema) -> Partitura {
     };
 
     match t {
-        Tema::Sala => Partitura {
+        // Cada baile ganado le da un poco mas de prisa: la sala vacia va a
+        // paso de caja de musica, y la llena, a paso de baile.
+        Tema::Sala(bailes) => Partitura {
             titulo: "la sala",
-            bpm: 60.0,
-            tiempos: 4,
-            acompanamiento: Acompanamiento::Sala,
-            tonica: 12, // la
+            bpm: 88.0 + 8.0 * bailes.count_ones() as f32,
+            tiempos: 3,
+            acompanamiento: Acompanamiento::Sala(bailes),
+            tonica: 22, // sol
             melodia: &SALA,
             acordes: &SALA_ACORDES,
             espejo: false,
@@ -848,6 +905,13 @@ pub fn tema(t: Tema) -> Vec<Voz> {
     let mut v = Vec::with_capacity(512);
 
     acompanar(&mut v, &p, tiempo);
+    let sala = match p.acompanamiento {
+        Acompanamiento::Sala(bailes) => Some(bailes),
+        _ => None,
+    };
+    if sala.is_some_and(|b| b & TANGO != 0) {
+        bandoneon(&mut v, &p, u);
+    }
 
     // --- Melodia.
     let mut unidad = 0u32;
@@ -874,15 +938,40 @@ pub fn tema(t: Tema) -> Vec<Voz> {
             };
             let dur = (nota.unidades as f32 - atraso) * u;
             let f = frecuencia(p.tonica + tono);
-            v.push(
-                Voz::nota(Wave::Sine, f, dur * 0.92, 0.22, decay)
-                    .tras((unidad as f32 + atraso) * u),
-            );
+            let cuando = (unidad as f32 + atraso) * u;
+            match sala {
+                None => v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.22, decay).tras(cuando)),
+                // La caja de musica: el mismo seno, y su octava apagandose
+                // enseguida, que es la pua.
+                Some(bailes) => {
+                    v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.29, decay).tras(cuando));
+                    v.push(Voz::nota(Wave::Sine, f * 2.0, dur * 0.4, 0.07, 5.0).tras(cuando));
+                    // Y la trompeta del cancan doblandola: con la banda, la
+                    // cancion deja de ser una nana.
+                    if bailes & CANCAN != 0 {
+                        v.push(Voz::nota(Wave::Square, f, dur * 0.85, 0.07, decay).tras(cuando));
+                    }
+                }
+            }
         }
         unidad += nota.unidades;
     }
 
     v
+}
+
+/// El bandoneon que el tango devuelve a la sala. Dos sierras casi a la par:
+/// la lengueta y su batido, que es por lo que un fuelle no suena a organo.
+fn bandoneon(v: &mut Vec<Voz>, p: &Partitura, u: f32) {
+    let mut unidad = 0u32;
+    for nota in &SALA_BANDONEON {
+        let f = frecuencia(p.tonica + nota.tono);
+        let dur = nota.unidades as f32 * u * 0.95;
+        for f in [f, f * 1.006] {
+            v.push(Voz::nota(Wave::Saw, f, dur, 0.09, 0.7).tras(unidad as f32 * u));
+        }
+        unidad += nota.unidades;
+    }
 }
 
 /// El acompanamiento, compas a compas.
@@ -952,13 +1041,40 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
                     }
                 }
             }
-            // Sin golpes: el grave y el acorde duran el compas entero. No hay
-            // compas que marcar porque todavia no se esta bailando.
-            Acompanamiento::Sala => {
+            // La caja sola no marca el compas: una pua grave al uno y nada
+            // mas. Lo demas lo traen los bailes, cada uno en su sitio del
+            // compas, para que se sumen sin pisarse.
+            Acompanamiento::Sala(bailes) => {
                 let largo = p.tiempos as f32 * t;
-                v.push(Voz::nota(Wave::Sine, grave, largo * 0.95, 0.22, 1.0).tras(t0));
-                for f in triada() {
-                    v.push(Voz::nota(Wave::Sine, f, largo * 0.9, 0.05, 0.9).tras(t0));
+                v.push(Voz::nota(Wave::Sine, grave, largo * 0.8, 0.14, 2.5).tras(t0));
+                // El vals: el pah-pah del dos y el tres. Es lo que convierte la
+                // cancion de la caja en un vals.
+                if bailes & VALS != 0 {
+                    for paso in 1..p.tiempos {
+                        let cuando = t0 + paso as f32 * t;
+                        for f in triada() {
+                            v.push(Voz::nota(Wave::Sine, f, t * 0.4, 0.09, 3.0).tras(cuando));
+                        }
+                    }
+                }
+                // El charleston: un piano desafinado entre golpe y golpe, y
+                // swingado, a dos tercios del tiempo. Las dos sierras casi
+                // iguales son el piano de bar.
+                if bailes & CHARLESTON != 0 {
+                    for paso in 0..p.tiempos - 1 {
+                        let cuando = t0 + (paso as f32 + 2.0 / 3.0) * t;
+                        for f in triada() {
+                            for f in [f, f * 1.008] {
+                                v.push(Voz::nota(Wave::Saw, f, t * 0.4, 0.05, 3.0).tras(cuando));
+                            }
+                        }
+                    }
+                }
+                // El cancan: el golpe de metales al uno, encima de la pua.
+                if bailes & CANCAN != 0 {
+                    for f in triada() {
+                        v.push(Voz::nota(Wave::Square, f, t * 0.6, 0.06, 2.5).tras(t0));
+                    }
                 }
             }
         }
@@ -969,14 +1085,17 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
 mod tests {
     use super::*;
 
-    const TODOS: [Tema; 14] = TEMAS;
+    /// Todos los temas, y la sala con cada combinacion de bailes ganados.
+    fn todos() -> Vec<Tema> {
+        TEMAS.into_iter().chain((1..16).map(Tema::Sala)).collect()
+    }
 
     #[test]
     fn la_melodia_y_la_armonia_cuadran() {
         // Un acorde por compas y doce unidades por compas. Si una transcripcion
         // se descuadra por una corchea, la melodia se va desplazando del
         // acompanamiento y el tema se deshace a la mitad. Aqui salta antes.
-        for b in TODOS {
+        for b in todos() {
             let p = partitura(b);
             let unidades: u32 = p.melodia.iter().map(|n| n.unidades).sum();
             assert_eq!(
@@ -1033,7 +1152,7 @@ mod tests {
     #[test]
     fn ninguna_nota_se_sale_del_bucle() {
         // Si una nota terminase despues del bucle, el bucle daria un salto.
-        for b in TODOS {
+        for b in todos() {
             let fin = duracion(b);
             for voz in tema(b) {
                 assert!(
@@ -1047,7 +1166,7 @@ mod tests {
 
     #[test]
     fn las_frecuencias_son_audibles() {
-        for b in TODOS {
+        for b in todos() {
             for voz in tema(b) {
                 let f = voz.frecuencia();
                 assert!(
@@ -1063,7 +1182,7 @@ mod tests {
         // El bajo vive por debajo de 150 Hz y la melodia por encima de 200.
         // Es lo que deja sitio en medio para los acordes.
         //
-        for b in TODOS {
+        for b in todos() {
             for voz in tema(b) {
                 let f = voz.frecuencia();
                 assert!(
@@ -1194,7 +1313,7 @@ mod tests {
         for t in TEMAS {
             let esperado = match t {
                 Tema::Cancan | Tema::Galop | Tema::Infernal => 2,
-                Tema::PasoBase | Tema::Espejo | Tema::Molinete | Tema::Coda => 3,
+                Tema::Sala(_) | Tema::PasoBase | Tema::Espejo | Tema::Molinete | Tema::Coda => 3,
                 _ => 4,
             };
             assert_eq!(partitura(t).tiempos, esperado, "{t:?}");
@@ -1216,23 +1335,62 @@ mod tests {
     }
 
     #[test]
-    fn la_sala_no_suena_a_ningun_baile() {
-        // Sin golpes: un grave por compas y nada mas percutido. Si algun dia
-        // alguien le pone un compas, la pista vuelve a decir que el juego es
-        // ese baile.
-        let p = partitura(Tema::Sala);
-        assert!(p.acompanamiento == Acompanamiento::Sala);
-        let voces = tema(Tema::Sala);
+    fn la_sala_vacia_no_suena_a_ningun_baile() {
+        // Sin bailes ganados es la caja de musica sola: ni golpes secos, ni
+        // sierras, ni pah-pah. Si algun dia alguien le pone un compas, la
+        // pista vuelve a decir que el juego es ese baile.
+        let voces = tema(Tema::Sala(0));
         assert!(
-            voces.iter().all(|v| !matches!(v.forma(), Wave::Square)),
-            "la sala no lleva golpes secos"
+            voces.iter().all(|v| matches!(v.forma(), Wave::Sine)),
+            "la sala vacia es una caja de musica"
         );
-        assert_eq!(graves_por_compas(Tema::Sala).len(), p.acordes.len());
+        let caja = partitura(Tema::Sala(0)).melodia.iter();
+        let notas = caja.filter(|n| n.tono != SILENCIO).count();
+        let graves = graves_por_compas(Tema::Sala(0)).len();
+        assert_eq!(voces.len(), graves + 2 * notas, "algo suena de mas");
+        // Y lo que se le sume despues no le cambia el bajo: una pua por
+        // compas, con los bailes que sean.
+        for bailes in 0..16 {
+            let p = partitura(Tema::Sala(bailes));
+            assert_eq!(graves_por_compas(Tema::Sala(bailes)).len(), p.acordes.len());
+        }
+        let bandoneon: u32 = SALA_BANDONEON.iter().map(|n| n.unidades).sum();
+        assert_eq!(bandoneon, 16 * 3 * UNIDADES_POR_TIEMPO);
+    }
+
+    #[test]
+    fn la_sala_se_llena_con_cada_baile_ganado() {
+        // Cuanto suena por segundo: la suma de volumen por duracion de cada
+        // voz. Cualquier baile que se gane, se gane cuando se gane, tiene que
+        // dejar la sala mas llena y mas deprisa que antes.
+        let lleno = |b: u8| {
+            let t = Tema::Sala(b);
+            let voces = tema(t);
+            let energia: f32 = voces
+                .iter()
+                .map(|v| v.volumen() * (v.fin() - v.inicio()))
+                .sum();
+            (voces.len() as f32 / duracion(t), energia / duracion(t))
+        };
+        for antes in 0..16u8 {
+            for baile in [VALS, TANGO, CHARLESTON, CANCAN] {
+                if antes & baile != 0 {
+                    continue;
+                }
+                let (n0, e0) = lleno(antes);
+                let (n1, e1) = lleno(antes | baile);
+                assert!(n1 > n0, "{antes:04b} + {baile:04b}: no hay mas notas");
+                assert!(e1 > e0, "{antes:04b} + {baile:04b}: no suena mas");
+                assert!(
+                    partitura(Tema::Sala(antes | baile)).bpm > partitura(Tema::Sala(antes)).bpm
+                );
+            }
+        }
     }
 
     #[test]
     fn el_bucle_dura_los_compases_que_dice() {
-        for b in TODOS {
+        for b in todos() {
             let p = partitura(b);
             let esperado = 60.0 / p.bpm * (p.acordes.len() * p.tiempos) as f32;
             assert!((duracion(b) - esperado).abs() < 0.001, "{b:?}");
@@ -1254,10 +1412,11 @@ mod tests {
         assert_eq!(Tema::de(0, 99), Tema::Coda);
         assert_eq!(Tema::de(1, 99), Tema::Quebrada);
         assert_eq!(Tema::de(2, 99), Tema::CharlestonFin);
-        // Y el indice y su vuelta cuadran para todos.
-        for t in TEMAS {
-            assert_eq!(Tema::por_indice(t.indice()), t);
+        // Cada tema tiene su hueco, y todas las salas comparten el suyo.
+        for (i, t) in TEMAS.into_iter().enumerate() {
+            assert_eq!(t.indice(), i);
         }
+        assert_eq!(Tema::Sala(15).indice(), Tema::Sala(0).indice());
     }
 
     #[test]
@@ -1277,10 +1436,11 @@ mod tests {
                 .map(|v| (v.frecuencia() as u32).wrapping_mul(31) ^ (v.fin() * 1000.0) as u32)
                 .fold(0u32, |a, x| a.wrapping_mul(17).wrapping_add(x))
         };
-        let f: Vec<u32> = TODOS.iter().map(|b| firma(*b)).collect();
+        let todos = todos();
+        let f: Vec<u32> = todos.iter().map(|b| firma(*b)).collect();
         for i in 0..f.len() {
             for j in i + 1..f.len() {
-                assert_ne!(f[i], f[j], "{:?} y {:?} suenan igual", TODOS[i], TODOS[j]);
+                assert_ne!(f[i], f[j], "{:?} y {:?} suenan igual", todos[i], todos[j]);
             }
         }
     }
@@ -1309,7 +1469,7 @@ mod tests {
         for t in TEMAS {
             let menor = matches!(
                 t,
-                Tema::Sala | Tema::Espejo | Tema::Caminata | Tema::Corte | Tema::Quebrada
+                Tema::Espejo | Tema::Caminata | Tema::Corte | Tema::Quebrada
             );
             let [r, iii, v] = triada_tonica(t);
             assert_eq!(r, partitura(t).tonica, "{t:?}");

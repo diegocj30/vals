@@ -16,6 +16,7 @@
 use macroquad::audio::{
     PlaySoundParams, Sound, load_sound_from_bytes, play_sound, set_sound_volume, stop_sound,
 };
+use macroquad::experimental::coroutines::{Coroutine, start_coroutine};
 use vals_core::Events;
 
 use crate::music::{self, TEMAS, Tema};
@@ -92,6 +93,11 @@ impl Voz {
     #[cfg(test)]
     pub(crate) fn frecuencia(&self) -> f32 {
         self.f0
+    }
+
+    #[cfg(test)]
+    pub(crate) fn volumen(&self) -> f32 {
+        self.vol
     }
 
     const fn new(wave: Wave, f0: f32, f1: f32, dur: f32, vol: f32, decay: f32) -> Self {
@@ -352,6 +358,11 @@ pub struct Audio {
     sonidos: Vec<Vec<Option<Sound>>>,
     /// Un tema por baile.
     musica: Vec<Option<Sound>>,
+    /// Que sala hay en su hueco, el primero: los bailes ganados con que se
+    /// sintetizo. Hay dieciseis y solo se guarda una.
+    sala: u8,
+    /// La sala que se esta sintetizando porque ha cambiado lo ganado.
+    sala_nueva: Option<(u8, Coroutine<Option<Sound>>)>,
     /// Cual esta sonando ahora.
     sonando: Option<usize>,
     pub muted: bool,
@@ -362,18 +373,19 @@ pub struct Audio {
 }
 
 impl Audio {
-    /// Sintetiza y carga todos los sonidos.
+    /// Sintetiza y carga todos los sonidos, con la sala de los bailes que ya
+    /// se hayan ganado.
     ///
     /// Si alguno falla se queda a `None` y el juego sigue sin el: quedarse sin
     /// audio es un incordio, no un motivo para no poder jugar.
-    pub async fn load() -> Self {
+    pub async fn load(sala: u8) -> Self {
         let mut sonidos = Vec::with_capacity(TODOS.len());
         let mut bytes_en_tono = 0usize;
         for sfx in TODOS {
             let temas: &[Tema] = if sfx.tematico() {
                 &TEMAS
             } else {
-                &[Tema::Sala]
+                &[Tema::Sala(0)]
             };
             let mut variantes = Vec::with_capacity(temas.len());
             for t in temas {
@@ -397,10 +409,11 @@ impl Audio {
         let mut musica = Vec::with_capacity(TEMAS.len());
         let mut bytes_musica = 0usize;
         for b in TEMAS {
-            let bytes = wav_a(
-                &render_len_a(&music::tema(b), music::duracion(b), SAMPLE_RATE_MUSICA),
-                SAMPLE_RATE_MUSICA,
-            );
+            let b = match b {
+                Tema::Sala(_) => Tema::Sala(sala),
+                b => b,
+            };
+            let bytes = wav_tema(b);
             bytes_musica += bytes.len();
             match load_sound_from_bytes(&bytes).await {
                 Ok(s) => musica.push(Some(s)),
@@ -422,6 +435,8 @@ impl Audio {
         Self {
             sonidos,
             musica,
+            sala,
+            sala_nueva: None,
             sonando: None,
             muted: false,
             volumen_musica: 1.0,
@@ -431,7 +446,44 @@ impl Audio {
 
     /// Pone el tema de un baile, en bucle. No hace nada si ya sonaba.
     pub fn poner_musica(&mut self, b: Tema) {
-        let idx = b.indice();
+        if let Tema::Sala(bailes) = b {
+            self.cambiar_sala(bailes);
+            // Si se llega a la sala y la que hay ya no vale, se espera a la
+            // nueva en silencio: un frame de la vieja suena a error.
+            if self.sala_nueva.is_some() && self.sonando != Some(0) {
+                self.parar_musica();
+                self.sonando = None;
+                return;
+            }
+        }
+        self.poner(b.indice());
+    }
+
+    /// La sala que toca con lo ganado. Si no es la que hay, se sintetiza
+    /// aparte, sin parar el juego, y entra en cuanto esta: al volver de ganar
+    /// un baile, la pista suena con lo que ese baile ha devuelto.
+    fn cambiar_sala(&mut self, bailes: u8) {
+        if let Some((nueva, hilo)) = self.sala_nueva.take() {
+            if !hilo.is_done() {
+                self.sala_nueva = Some((nueva, hilo));
+                return;
+            }
+            if self.sonando == Some(0) {
+                self.parar_musica();
+                self.sonando = None;
+            }
+            self.musica[0] = hilo.retrieve().flatten();
+            self.sala = nueva;
+        }
+        if bailes != self.sala {
+            let t = Tema::Sala(bailes);
+            let hilo =
+                start_coroutine(async move { load_sound_from_bytes(&wav_tema(t)).await.ok() });
+            self.sala_nueva = Some((bailes, hilo));
+        }
+    }
+
+    fn poner(&mut self, idx: usize) {
         if self.sonando == Some(idx) {
             return;
         }
@@ -487,7 +539,7 @@ impl Audio {
             self.sonando = actual;
         } else if let Some(i) = actual {
             self.sonando = None;
-            self.poner_musica(Tema::por_indice(i));
+            self.poner(i);
         }
     }
 
@@ -552,7 +604,14 @@ impl Audio {
     }
 }
 
-/// Sintetiza las voces y las empaqueta como WAV.
+/// Un tema sintetizado y empaquetado como WAV, tal cual se carga.
+fn wav_tema(t: Tema) -> Vec<u8> {
+    wav_a(
+        &render_len_a(&music::tema(t), music::duracion(t), SAMPLE_RATE_MUSICA),
+        SAMPLE_RATE_MUSICA,
+    )
+}
+
 /// Escribe cada tema como un `.wav` en `dir`, para escucharlos fuera del
 /// juego. La musica no existe como fichero: se sintetiza al arrancar desde
 /// las partituras de `music.rs`, y esto es la misma sintesis puesta en disco.
@@ -562,8 +621,19 @@ pub fn exportar_musica(dir: &std::path::Path) -> std::io::Result<Vec<std::path::
     let mut hechos = Vec::with_capacity(TEMAS.len());
     for (i, b) in TEMAS.into_iter().enumerate() {
         let ruta = dir.join(format!("{i:02} {}.wav", fichero(b)));
-        let muestras = render_len_a(&music::tema(b), music::duracion(b), SAMPLE_RATE_MUSICA);
-        std::fs::write(&ruta, wav_a(&muestras, SAMPLE_RATE_MUSICA))?;
+        std::fs::write(&ruta, wav_tema(b))?;
+        hechos.push(ruta);
+    }
+    // Y las otras quince salas, con los bailes que las llenan en el nombre.
+    for bailes in 1..16u8 {
+        let quien: Vec<&str> = ["vals", "tango", "charleston", "cancan"]
+            .into_iter()
+            .enumerate()
+            .filter(|(i, _)| bailes & (1 << i) != 0)
+            .map(|(_, b)| b)
+            .collect();
+        let ruta = dir.join(format!("00 la sala {bailes:02} - {}.wav", quien.join(" ")));
+        std::fs::write(&ruta, wav_tema(Tema::Sala(bailes)))?;
         hechos.push(ruta);
     }
     Ok(hechos)
@@ -764,10 +834,20 @@ mod tests {
         TODOS
             .into_iter()
             .flat_map(|s| {
-                let temas: &[Tema] = if s.tematico() { &TEMAS } else { &[Tema::Sala] };
+                let temas: &[Tema] = if s.tematico() {
+                    &TEMAS
+                } else {
+                    &[Tema::Sala(0)]
+                };
                 temas.iter().map(move |t| (s, *t))
             })
             .collect()
+    }
+
+    /// Los temas tal cual se cargan, y la sala con cada combinacion de
+    /// bailes ganados, que se sintetiza cuando cambia.
+    fn musicas() -> Vec<Tema> {
+        TEMAS.into_iter().chain((1..16).map(Tema::Sala)).collect()
     }
 
     fn pico(m: &[i16]) -> f32 {
@@ -841,7 +921,7 @@ mod tests {
 
     #[test]
     fn los_temas_de_musica_duran_lo_que_dicen() {
-        for b in TEMAS {
+        for b in musicas() {
             let muestras = render_len_a(&music::tema(b), music::duracion(b), SAMPLE_RATE_MUSICA);
             let esperado = (music::duracion(b) * SAMPLE_RATE_MUSICA as f32) as usize;
             assert_eq!(muestras.len(), esperado, "{b:?}");
@@ -853,7 +933,7 @@ mod tests {
 
     #[test]
     fn los_temas_no_saturan() {
-        for b in TEMAS {
+        for b in musicas() {
             let muestras = render_len_a(&music::tema(b), music::duracion(b), SAMPLE_RATE_MUSICA);
             let pico = muestras.iter().map(|v| v.unsigned_abs()).max().unwrap_or(0);
             assert!(pico < i16::MAX as u16, "{b:?} llega al tope y distorsiona");
@@ -864,7 +944,7 @@ mod tests {
     fn el_bucle_no_da_un_salto_al_volver_a_empezar() {
         // El final y el principio tienen que ser silencio o casi: si el bucle
         // corta una nota a media vibracion, se oye un chasquido cada vuelta.
-        for b in TEMAS {
+        for b in musicas() {
             let m = render_len_a(&music::tema(b), music::duracion(b), SAMPLE_RATE_MUSICA);
             let cola: i32 = m[m.len() - 200..]
                 .iter()
@@ -900,7 +980,7 @@ mod tests {
     fn la_sintesis_es_reproducible() {
         // El ruido usa un generador propio, asi que el mismo sonido sale igual
         // en cada arranque.
-        let muerte = Sfx::Muerte.receta(Tema::Sala);
+        let muerte = Sfx::Muerte.receta(Tema::Sala(0));
         assert_eq!(render(&muerte), render(&muerte));
         // Y las variantes en tono, igual: misma receta, mismas muestras.
         for t in TEMAS {
