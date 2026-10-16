@@ -12,7 +12,7 @@ Every boss is a dance, and its bullets are the choreography.
 [![CI](https://github.com/diegocj30/vals/actions/workflows/ci.yml/badge.svg)](https://github.com/diegocj30/vals/actions/workflows/ci.yml)
 ![Rust](https://img.shields.io/badge/Rust-stable-1a1418?logo=rust)
 ![WebAssembly](https://img.shields.io/badge/WebAssembly-no_wasm--bindgen-654ff0?logo=webassembly&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-420-2f7d5b)
+![Tests](https://img.shields.io/badge/tests-428-2f7d5b)
 
 [Español](README.md) · **English**
 
@@ -92,11 +92,12 @@ how the bullets draw it, and a photo of every figure.
 - **A Belle Époque poster look** with film grain, and public-domain music
   (Strauss, Juventino Rosas, Matos Rodríguez, Joplin, Offenbach) transcribed
   into note tables.
-- **In Spanish and English**, with remappable controls.
+- **In Spanish and English**, with remappable controls and a simple mode for
+  first-timers.
 
 ## How it's built
 
-| 0 images | 32,000 bullets at 144 fps | 4 KB per 30 s of play | 420 tests |
+| 0 images | 32,000 bullets at 144 fps | 4 KB per 30 s of play | 428 tests |
 |:---:|:---:|:---:|:---:|
 | Everything is drawn in code, and the music is synthesized at startup | Instanced rendering; with macroquad's primitives, 30 fps | A run is a seed plus the list of inputs | Including bots that play every promenade end to end |
 
@@ -183,8 +184,9 @@ buttons, whichever was used last.
 
 While paused the dance stops completely (not a single tick advances, so
 replays are unaffected), and you can resume, retry, go back to the dance floor
-or open the options: language, music and sound effects volume, wobbly ink,
-screen shake, fullscreen (desktop only) and controls. Options are saved along
+or open the options: language, difficulty (regular or simple: half the
+bullets, one figure fewer and grades up to B), music and sound effects volume,
+wobbly ink, screen shake, fullscreen (desktop only) and controls. Options are saved along
 with progress.
 
 </details>
