@@ -352,8 +352,8 @@ textos! {
     VolverPista: "{}  volver a la pista", "{}  back to the dance floor";
 
     // --- Avisos ---
-    TrazoVivo: "trazo vivo", "living line";
-    TrazoQuieto: "trazo quieto", "still line";
+    TrazoVivo: "tinta temblorosa", "wobbly ink";
+    TrazoQuieto: "tinta quieta", "steady ink";
     FichasTuyas: "{} de {} fichas del paseo son tuyas", "{} of {} dance tokens from the promenade are yours";
     PaseoSaltado: "paseo saltado", "promenade skipped";
     BaileSaltado: "baile saltado", "dance skipped";
@@ -464,7 +464,7 @@ textos! {
     FilaIdioma: "Idioma / Language", "Idioma / Language";
     Musica: "Música", "Music";
     Efectos: "Efectos", "Sound effects";
-    Hervor: "Trazo vivo", "Living line";
+    Hervor: "Tinta temblorosa", "Wobbly ink";
     Sacudida: "Sacudida", "Screen shake";
     PantallaCompleta: "Pantalla completa", "Fullscreen";
     ControlesTeclado: "Controles del teclado", "Keyboard controls";
@@ -502,8 +502,8 @@ textos! {
     // que pasa, que roban, adonde huyen y que tiene que hacer. Una idea por
     // lamina y nada que haya que deducir.
     Lamina1: "EL GRAN SALÓN", "THE GRAND BALLROOM";
-    Lamina1A: "Hacia 1900. Esta noche hay gran baile en el salón,",
-        "Circa 1900. Tonight is the night of the grand ball,";
+    Lamina1A: "Corre el año 1900. Esta noche hay gran baile en el salón,",
+        "The year is 1900. Tonight is the night of the grand ball,";
     Lamina1B: "y ella va a bailar por primera vez.",
         "and she is about to dance for the very first time.";
     Lamina2: "A MEDIANOCHE", "AT THE STROKE OF MIDNIGHT";

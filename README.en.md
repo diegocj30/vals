@@ -19,7 +19,7 @@ gamepad, nothing to install.
 
 ## The story
 
-Circa 1900, on the night of the grand ball, four things in the ballroom come
+In 1900, on the night of the grand ball, four things in the ballroom come
 alive at midnight: a music box, a bandoneon, a gramophone and a line of chorus
 girls. Each one steals the music of its dance and flees to its own city:
 Vienna, Buenos Aires, Chicago and Paris. The dancer with the scarlet bow sets
@@ -103,7 +103,7 @@ always refer to the keyboard or the gamepad, whichever was used last.
 During the intermission the dance stops completely (not a single tick
 advances, so replays are unaffected), and you can resume, retry, go back to
 the dance floor or open the options: language (Spanish or English), music and
-sound effects volume, living
+sound effects volume, wobbly
 ink, screen shake, fullscreen (desktop build only) and controls. Options are
 saved along with progress.
 
@@ -149,7 +149,7 @@ flowchart LR
   `wasm-bindgen`; gamepad support (gilrs on native, the Gamepad API on web) and
   saving (`localStorage`) are wired in through miniquad plugins a few lines
   long.
-- **406 tests**, including bots that play through every promenade end to end,
+- **416 tests**, including bots that play through every promenade end to end,
   tests that require each dance to use its own engine verb and no one else's,
   and one that plants a motionless player at every point on the screen so that
   no figure leaves a spot where you can stand still without dodging. CI runs
