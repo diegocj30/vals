@@ -546,13 +546,13 @@ textos! {
     // Igual que el prologo: una idea por lamina, dicha tal cual.
     ElFinal: "el final", "the ending";
     Final1: "DE VUELTA EN EL SALÓN", "BACK AT THE BALLROOM";
-    Final1A: "Con las cuatro músicas recuperadas, ella vuelve al gran salón.",
+    Final1A: "Con las cuatro músicas recuperadas, ella regresa al gran salón.",
         "With all four songs won back, she returns to the grand ballroom.";
-    Final1B: "Los cuatro ladrones vuelven con ella.",
-        "The four thieves come back with her.";
+    Final1B: "Los cuatro ladrones la siguen, ya sin ganas de huir.",
+        "The four thieves follow her, done with running away.";
     Final2: "LA MÚSICA VUELVE", "THE MUSIC RETURNS";
-    Final2A: "Cada uno vuelve a su sitio y toca su música otra vez.",
-        "Each one goes back to its place and plays its music again.";
+    Final2A: "Cada uno ocupa su sitio y toca otra vez su música.",
+        "Each one takes its place and plays its music once more.";
     Final2B: "El vals, el tango, el charleston y el cancán suenan en el salón.",
         "The waltz, the tango, the charleston and the can-can fill the ballroom.";
     Final3: "SU PRIMER BAILE", "HER FIRST DANCE";
