@@ -17,6 +17,7 @@ use macroquad::audio::{
     PlaySoundParams, Sound, load_sound_from_bytes, play_sound, set_sound_volume, stop_sound,
 };
 use macroquad::experimental::coroutines::{Coroutine, start_coroutine};
+use macroquad::time::get_frame_time;
 use vals_core::Events;
 
 use crate::music::{self, TEMAS, Tema};
@@ -39,6 +40,8 @@ const MASTER: f32 = 0.6;
 /// La musica va por debajo de los efectos: es el suelo sobre el que pasan las
 /// cosas, no una de las cosas que pasan.
 const MASTER_MUSICA: f32 = 0.34;
+/// Lo que tarda la sala en llegar a su volumen al volver a la pista.
+const SUBIDA_SALA: f32 = 4.0;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Wave {
@@ -369,6 +372,10 @@ pub struct Audio {
     /// Lo que dicen las opciones, de 0 a 1. La musica ya viene agachada si
     /// esta abierto el entreacto.
     volumen_musica: f32,
+    /// La entrada de la sala, de 0 a 1. Al salir de un baile la pista no
+    /// entra de golpe: sube en `SUBIDA_SALA` segundos, que despues del ultimo
+    /// golpe de un jefe un tema entero a todo volumen era un susto.
+    subida: f32,
     volumen_efectos: f32,
 }
 
@@ -440,6 +447,7 @@ impl Audio {
             sonando: None,
             muted: false,
             volumen_musica: 1.0,
+            subida: 1.0,
             volumen_efectos: 1.0,
         }
     }
@@ -493,12 +501,14 @@ impl Audio {
             self.sonando = Some(idx);
             return;
         }
+        // La sala es el indice 0 y es la unica que entra en fundido.
+        self.subida = if idx == 0 { 0.0 } else { 1.0 };
         if let Some(Some(s)) = self.musica.get(idx) {
             play_sound(
                 s,
                 PlaySoundParams {
                     looped: true,
-                    volume: MASTER_MUSICA * self.volumen_musica,
+                    volume: MASTER_MUSICA * self.volumen_musica * self.subida,
                 },
             );
         }
@@ -518,15 +528,21 @@ impl Audio {
     /// cortarla ni volver a empezarla.
     pub fn volumenes(&mut self, musica: f32, efectos: f32) {
         self.volumen_efectos = efectos;
-        if musica == self.volumen_musica {
+        let subiendo = self.subida < 1.0;
+        if musica == self.volumen_musica && !subiendo {
             return;
         }
         self.volumen_musica = musica;
+        if subiendo {
+            self.subida = (self.subida + get_frame_time() / SUBIDA_SALA).min(1.0);
+        }
         if !self.muted
             && let Some(i) = self.sonando
             && let Some(Some(s)) = self.musica.get(i)
         {
-            set_sound_volume(s, MASTER_MUSICA * musica);
+            // Al cuadrado: el oido oye el volumen en escala logaritmica, y
+            // una rampa recta parece que llega entera a mitad de camino.
+            set_sound_volume(s, MASTER_MUSICA * musica * self.subida * self.subida);
         }
     }
 

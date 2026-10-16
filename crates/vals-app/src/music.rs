@@ -615,10 +615,11 @@ fn partitura(t: Tema) -> Partitura {
 
     match t {
         // Cada baile ganado le da un poco mas de prisa: la sala vacia va a
-        // paso de caja de musica, y la llena, a paso de baile.
+        // paso de caja de musica, y la llena, a paso de baile. Poco: es la
+        // musica de descansar entre bailes, no la de uno mas.
         Tema::Sala(bailes) => Partitura {
             titulo: "la sala",
-            bpm: 88.0 + 8.0 * bailes.count_ones() as f32,
+            bpm: 88.0 + 5.0 * bailes.count_ones() as f32,
             tiempos: 3,
             acompanamiento: Acompanamiento::Sala(bailes),
             tonica: 22, // sol
@@ -949,7 +950,7 @@ pub fn tema(t: Tema) -> Vec<Voz> {
                     // Y la trompeta del cancan doblandola: con la banda, la
                     // cancion deja de ser una nana.
                     if bailes & CANCAN != 0 {
-                        v.push(Voz::nota(Wave::Square, f, dur * 0.85, 0.07, decay).tras(cuando));
+                        v.push(Voz::nota(Wave::Square, f, dur * 0.85, 0.03, decay).tras(cuando));
                     }
                 }
             }
@@ -968,7 +969,7 @@ fn bandoneon(v: &mut Vec<Voz>, p: &Partitura, u: f32) {
         let f = frecuencia(p.tonica + nota.tono);
         let dur = nota.unidades as f32 * u * 0.95;
         for f in [f, f * 1.006] {
-            v.push(Voz::nota(Wave::Saw, f, dur, 0.09, 0.7).tras(unidad as f32 * u));
+            v.push(Voz::nota(Wave::Saw, f, dur, 0.05, 0.7).tras(unidad as f32 * u));
         }
         unidad += nota.unidades;
     }
@@ -1065,15 +1066,19 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
                         let cuando = t0 + (paso as f32 + 2.0 / 3.0) * t;
                         for f in triada() {
                             for f in [f, f * 1.008] {
-                                v.push(Voz::nota(Wave::Saw, f, t * 0.4, 0.05, 3.0).tras(cuando));
+                                v.push(Voz::nota(Wave::Saw, f, t * 0.4, 0.025, 3.0).tras(cuando));
                             }
                         }
                     }
                 }
                 // El cancan: el golpe de metales al uno, encima de la pua.
+                //
+                // Las ondas cuadradas y las sierras de la sala van a la mitad
+                // que en los bailes: a su volumen de baile, la sala llena se
+                // oia estridente justo al salir de ganar uno.
                 if bailes & CANCAN != 0 {
                     for f in triada() {
-                        v.push(Voz::nota(Wave::Square, f, t * 0.6, 0.06, 2.5).tras(t0));
+                        v.push(Voz::nota(Wave::Square, f, t * 0.6, 0.03, 2.5).tras(t0));
                     }
                 }
             }
