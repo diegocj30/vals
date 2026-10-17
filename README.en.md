@@ -77,9 +77,10 @@ how the bullets draw it, and a photo of every figure.
 - **Five bosses that are living objects**, each with its own figures
   (phases), its own music and its own bullet grammar: the waltz turns, the
   tango stops dead, the charleston curves.
-- **Four promenades**, run-and-gun levels before each boss: Vienna, a
-  Buenos Aires arrabal, the Chicago rooftops and the climb up Montmartre to the
-  Moulin Rouge.
+- **Five promenades**, run-and-gun levels before each boss: Vienna, a
+  Buenos Aires arrabal, the Chicago rooftops, the climb up Montmartre to the
+  Moulin Rouge and Triana, crossing the river by boat. Each has a set piece
+  halfway along and a doorkeeper guarding the way out.
 - **Tokens and the dressmaker**: each promenade hides dance tokens, some
   along the way and some in hard-to-reach spots, which the shop trades for
   another shot type (fan, castanet, streamer) or a charm.

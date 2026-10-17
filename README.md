@@ -72,9 +72,10 @@ cómo lo dibujan las balas y la foto de cada figura.
 - **Cinco jefes que son objetos vivos**, con sus figuras (fases), su música
   y una gramática de balas propia: el vals gira, el tango frena en seco, el
   charleston curva.
-- **Cuatro paseos** de correr y disparar antes de cada jefe: Viena, un
-  arrabal de Buenos Aires, las azoteas de Chicago y la cuesta de Montmartre
-  hasta el Moulin Rouge.
+- **Cinco paseos** de correr y disparar antes de cada jefe: Viena, un
+  arrabal de Buenos Aires, las azoteas de Chicago, la cuesta de Montmartre
+  hasta el Moulin Rouge y Triana, cruzando el río en barca. Cada uno con su
+  número a mitad de camino y un portero que guarda la puerta.
 - **Fichas y la modista**: cada paseo esconde fichas de baile, unas en el
   camino y otras donde cuesta llegar, que en la tienda se cambian por otro
   tiro (abanico, castañuela, serpentina) o un amuleto.
