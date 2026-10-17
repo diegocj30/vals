@@ -2046,8 +2046,8 @@ pub(crate) mod sitios {
         }
     }
 
-    // Uno por baile para que corran en paralelo: los cuatro juntos son medio
-    // minuto de simulacion.
+    // Uno por baile para que corran en paralelo: los cinco juntos son medio
+    // minuto largo de simulacion.
     #[test]
     fn el_vals_no_tiene_sitios_seguros() {
         sin_sitios_seguros(0);
@@ -2066,6 +2066,11 @@ pub(crate) mod sitios {
     #[test]
     fn el_cancan_no_tiene_sitios_seguros() {
         sin_sitios_seguros(3);
+    }
+
+    #[test]
+    fn el_flamenco_no_tiene_sitios_seguros() {
+        sin_sitios_seguros(4);
     }
 
     /// El mapa de cada figura: cuantas pasadas recibe cada punto en 20 s.

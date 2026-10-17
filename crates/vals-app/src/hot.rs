@@ -41,6 +41,10 @@ const RUTAS: [&str; vals_core::boss::DEFAULT_BOSS_RONS.len()] = [
         env!("CARGO_MANIFEST_DIR"),
         "/../../assets/patterns/boss4.ron"
     ),
+    concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/patterns/boss5.ron"
+    ),
 ];
 
 /// Los paseos, en el orden de `PASEO_RONS`. El tamano sale de esa lista, asi

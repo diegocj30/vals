@@ -50,6 +50,9 @@ pub struct EmitterSpec {
     pub ring_offset: f32,
     pub accel: f32,
     pub spin: f32,
+    /// Radianes que se tuerce la bala en cada acento del compas flamenco, a un
+    /// lado y al otro (`bullets::quiebro`). Cero es que no se quiebra.
+    pub quiebro: f32,
     pub ttl: f32,
     pub kind: u8,
     pub flags: u8,
@@ -67,6 +70,7 @@ impl Default for EmitterSpec {
             ring_offset: 0.0,
             accel: 0.0,
             spin: 0.0,
+            quiebro: 0.0,
             ttl: 30.0,
             kind: KIND_SMALL,
             flags: 0,
@@ -203,6 +207,7 @@ pub fn fire(bullets: &mut Bullets, origin: Vec2, spec: &EmitterSpec, player: Vec
                     vel,
                     accel: spec.accel,
                     spin: spec.spin,
+                    quiebro: spec.quiebro,
                     ttl: spec.ttl,
                     kind: spec.kind,
                     flags: spec.flags,

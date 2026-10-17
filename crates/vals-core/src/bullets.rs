@@ -68,6 +68,34 @@ pub const FLAG_PARRYABLE: u8 = 1 << 0;
 /// Ya se rozo, para no cobrar el graze dos veces por la misma bala.
 pub const FLAG_GRAZED: u8 = 1 << 1;
 
+/// Ticks por tiempo del compas flamenco: 180 negras. Doce tiempos son un
+/// compas de 240 ticks, cuatro segundos.
+pub const TIEMPO_FLAMENCO: u32 = 20;
+
+/// Los acentos del compas de doce, contados desde el 1: el 3, el 6, el 8, el
+/// 10 y el 12. Es el compas de la solea y de la buleria.
+pub const ACENTOS_FLAMENCO: [u32; 5] = [3, 6, 8, 10, 12];
+
+/// Si a una bala con `edad` ticks le cae ahora un acento, hacia que lado se
+/// quiebra: `1.0` o `-1.0`, uno cada vez.
+///
+/// El compas es **el de la bala**, no el de la sala: el uno es el tick en que
+/// sale. El patron dispara en el uno y los quiebros caen en los acentos; si
+/// dispara en otro tiempo, la bala lleva su compas desplazado, y eso tambien
+/// es flamenco. Alterna el lado para que la bala vaya en zigzag alrededor de
+/// su rumbo en vez de dar la vuelta: un quiebro es un requiebro de cadera, no
+/// un giro.
+pub fn quiebro(edad: u32) -> Option<f32> {
+    if edad == 0 || !edad.is_multiple_of(TIEMPO_FLAMENCO) {
+        return None;
+    }
+    let tiempos = edad / TIEMPO_FLAMENCO;
+    let (compas, tiempo) = (tiempos / 12, tiempos % 12 + 1);
+    let k = ACENTOS_FLAMENCO.iter().position(|&a| a == tiempo)? as u32;
+    let n = compas * ACENTOS_FLAMENCO.len() as u32 + k;
+    Some(if n.is_multiple_of(2) { 1.0 } else { -1.0 })
+}
+
 /// Parametros para crear una bala.
 #[derive(Clone, Copy, Debug)]
 pub struct Spawn {
@@ -77,6 +105,9 @@ pub struct Spawn {
     pub accel: f32,
     /// Giro de la velocidad, en rad/s. Es lo que curva los patrones.
     pub spin: f32,
+    /// Lo que se tuerce de golpe en cada acento del compas flamenco, en
+    /// radianes. Ver [`quiebro`].
+    pub quiebro: f32,
     pub ttl: f32,
     pub kind: u8,
     pub flags: u8,
@@ -89,6 +120,7 @@ impl Default for Spawn {
             vel: Vec2::ZERO,
             accel: 0.0,
             spin: 0.0,
+            quiebro: 0.0,
             ttl: 30.0,
             kind: KIND_SMALL,
             flags: 0,
@@ -118,6 +150,10 @@ pub struct Bullets {
     vel_y: Vec<f32>,
     accel: Vec<f32>,
     spin: Vec<f32>,
+    quiebro: Vec<f32>,
+    /// Ticks vividos. Solo cuenta en las que se quiebran, que son las unicas
+    /// que llevan el compas.
+    edad: Vec<u32>,
     ttl: Vec<f32>,
     kind: Vec<u8>,
     flags: Vec<u8>,
@@ -140,6 +176,8 @@ impl Bullets {
             vel_y: vec![0.0; cap],
             accel: vec![0.0; cap],
             spin: vec![0.0; cap],
+            quiebro: vec![0.0; cap],
+            edad: vec![0; cap],
             ttl: vec![0.0; cap],
             kind: vec![0; cap],
             flags: vec![0; cap],
@@ -190,6 +228,8 @@ impl Bullets {
         self.vel_y[i] = s.vel.y;
         self.accel[i] = s.accel;
         self.spin[i] = s.spin;
+        self.quiebro[i] = s.quiebro;
+        self.edad[i] = 0;
         self.ttl[i] = s.ttl;
         self.kind[i] = s.kind;
         self.flags[i] = s.flags;
@@ -230,6 +270,20 @@ impl Bullets {
 
             let mut vx = self.vel_x[i];
             let mut vy = self.vel_y[i];
+
+            // El quiebro va antes que el resto: en el acento la bala cambia de
+            // rumbo de golpe, y desde ahi sigue como venia.
+            let q = self.quiebro[i];
+            if q != 0.0 {
+                let edad = self.edad[i] + 1;
+                self.edad[i] = edad;
+                if let Some(lado) = quiebro(edad) {
+                    let (s, c) = math::sin_cos(q * lado);
+                    let nx = vx * c - vy * s;
+                    vy = vx * s + vy * c;
+                    vx = nx;
+                }
+            }
 
             let spin = self.spin[i];
             if spin != 0.0 {
@@ -408,9 +462,10 @@ impl Bullets {
 
     /// Mezcla el estado de las balas vivas en una huella.
     ///
-    /// Se hashean posicion, velocidad, ttl y tipo, pero no `accel` ni `spin`:
-    /// esos no cambian nunca despues del spawn, y cualquier divergencia en
-    /// ellos se manifiesta en la velocidad al tick siguiente igualmente.
+    /// Se hashean posicion, velocidad, ttl y tipo, pero no `accel`, `spin` ni
+    /// el quiebro: esos no cambian nunca despues del spawn, y cualquier
+    /// divergencia en ellos se manifiesta en la velocidad igualmente. La edad
+    /// tampoco: va a la par que el ttl.
     pub(crate) fn hash_into(&self, h: &mut Fnv1a) {
         h.write_u64(self.live as u64);
         h.write_u64(self.high_water as u64);
@@ -537,6 +592,56 @@ mod tests {
             (v.vel.length() - 100.0).abs() < 0.01,
             "girar no debe cambiar la rapidez"
         );
+    }
+
+    #[test]
+    fn el_quiebro_cae_en_los_acentos_del_compas_de_doce() {
+        // Los acentos en ticks de vida: el 3 empieza a los dos tiempos.
+        let acentos: Vec<u32> = (0..=480).filter(|e| quiebro(*e).is_some()).collect();
+        assert_eq!(
+            acentos,
+            vec![40, 100, 140, 180, 220, 280, 340, 380, 420, 460]
+        );
+        // Y cada uno al lado contrario que el anterior, tambien al pasar de
+        // compas.
+        let lados: Vec<f32> = acentos.iter().filter_map(|e| quiebro(*e)).collect();
+        for par in lados.windows(2) {
+            assert_eq!(par[0], -par[1], "{lados:?}");
+        }
+    }
+
+    #[test]
+    fn el_quiebro_tuerce_de_golpe_y_en_zigzag() {
+        let mut b = Bullets::with_capacity(4);
+        b.spawn(Spawn {
+            pos: centro(),
+            vel: Vec2::new(0.0, 100.0),
+            quiebro: 0.5,
+            ..Default::default()
+        });
+        let rumbo = |b: &Bullets| b.iter_live().next().unwrap().vel.to_angle();
+        let recto = rumbo(&b);
+        for _ in 0..39 {
+            b.update(DT);
+        }
+        assert!(
+            (rumbo(&b) - recto).abs() < 1e-5,
+            "antes del acento va recta"
+        );
+        b.update(DT);
+        assert!(
+            (rumbo(&b) - recto - 0.5).abs() < 1e-3,
+            "en el acento se quiebra"
+        );
+        for _ in 0..60 {
+            b.update(DT);
+        }
+        assert!(
+            (rumbo(&b) - recto).abs() < 1e-3,
+            "y en el siguiente vuelve a su rumbo"
+        );
+        let v = b.iter_live().next().unwrap().vel.length();
+        assert!((v - 100.0).abs() < 0.01, "quebrarse no cambia la rapidez");
     }
 
     #[test]

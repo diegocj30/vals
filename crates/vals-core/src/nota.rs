@@ -74,11 +74,12 @@ impl Nota {
 ///
 /// El charleston es tan corto porque su jefe apenas se mueve: se le acierta
 /// casi todo. Las cifras salen por nombre, como el guardado.
-const PAR: [(&str, u64); 4] = [
+const PAR: [(&str, u64); 5] = [
     ("El Vals", 115),
     ("El Tango", 110),
     ("El Charleston", 55),
     ("El Cancan", 80),
+    ("El Flamenco", 88),
 ];
 
 /// Para un baile que no esta en la tabla: el del medio.

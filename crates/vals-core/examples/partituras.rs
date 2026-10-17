@@ -79,7 +79,7 @@ struct Baile {
     exponer: u32,
 }
 
-const BAILES: [Baile; 4] = [
+const BAILES: [Baile; 5] = [
     Baile {
         slug: "vals",
         tinta: "#5884be",
@@ -102,6 +102,12 @@ const BAILES: [Baile; 4] = [
         slug: "cancan",
         tinta: "#e8608e",
         verbo: "ttl corto \u{b7} la patada se desvanece",
+        exponer: 120,
+    },
+    Baile {
+        slug: "flamenco",
+        tinta: "#d4742a",
+        verbo: "quiebro \u{b7} se tuerce en los acentos",
         exponer: 120,
     },
 ];

@@ -1,0 +1,903 @@
+// EL FLAMENCO. El quinto baile, el ultimo y el mas duro. Una guitarra del
+// salon que se fue a Sevilla, y alli aprendio a quebrarse.
+//
+// SU VERBO ES EL QUIEBRO. El vals gira (`Turn`), el tango frena y vuelve
+// (`accel` negativa), el charleston curva (`spin`) y el cancan se desvanece
+// (`ttl` corto); este usa `quiebro`, y TODAS sus figuras lo llevan. Una bala
+// con quiebro va recta y en cada acento del compas se tuerce de golpe ese
+// angulo, una vez a un lado y la siguiente al otro: va en zigzag alrededor de
+// su rumbo. No es un arco, que eso es del charleston, ni un giro de la mira,
+// que eso es del vals: la bala ya ha salido y cambia de idea en el aire.
+//
+// EL COMPAS ES DE DOCE, y es lo que lo separa de todo lo demas. Doce tiempos
+// con los acentos en el 3, el 6, el 8, el 10 y el 12, el de la solea y la
+// buleria. Va a 180 negras: 20 ticks por tiempo y 240 por compas, cuatro
+// segundos (`TIEMPO_FLAMENCO` en bullets.rs). El compas de cada bala empieza
+// cuando sale, asi que lo que se dispara en el uno se quiebra en los acentos:
+// a los 40, 100, 140, 180 y 220 ticks de vida. Todas las esperas de este
+// fichero salen de esa reja.
+//
+// LO APUNTADO NO SE QUIEBRA. Es el cante: va derecho a ti, y es lo que impide
+// quedarse quieta en un hueco del zigzag. Una bala apuntada que se quebrase no
+// apuntaria a nada.
+//
+// Las figuras son las de un baile por bulerias, en su orden:
+//
+//   1. La llamada       56 b/s  vida 450  el aviso: el compas entero, limpio.
+//   2. El rasgueo       80 b/s  vida 550  la mano barriendo las cuerdas.
+//   3. El zapateado     98 b/s  vida 650  tacon, planta y punta.
+//   4. El remate       149 b/s  vida 800  todo junto, y se cierra.
+//
+// Es el unico baile de nivel `Final`: se abre cuando estan ganados los otros
+// cuatro, el tango el ultimo de ellos. La vida suma 2450, la que mas. Y no
+// es el que mas dispara: el remate echa lo que el fleckerl del vals, muy por
+// debajo de su techo de 245. Lo que lo hace el mas duro es el quiebro, que
+// obliga a leer cada bala dos veces, y no el numero.
+//
+// Guia rapida de pasos:
+//   Wait(n)               espera n ticks (60 ticks = 1 segundo)
+//   Fire(emisor)          dispara una tanda
+//   Turn(radianes)        gira la mira de ESTE hilo; repetido, hace la espiral
+//   Repeat(times:, body:) repite un bloque
+//   Forever([...])        lo repite hasta que acabe la fase
+//   Parallel([[...],...]) lanza cada rama como un hilo aparte, a la vez
+//   MoveTo(pos:,dur:,ease:) mueve al jefe; BLOQUEA su hilo mientras dura
+//
+// En el emisor: arc 6.28 es un anillo completo, menos es un abanico centrado
+// en la mira. aim: Fixed(rad) o AtPlayer; 0 es derecha y 1.57 abajo. kind: 0
+// pequena, 1 media, 2 grande, 3 aguja. quiebro son los radianes que se tuerce
+// la bala en cada acento; negativo, empieza hacia el otro lado. flags: 1 =
+// parryable (aqui son claveles).
+(
+  name: "El Flamenco",
+  // El ultimo. Se abre cuando no queda nada mas por bailar.
+  nivel: Final,
+  suelo: false,
+  pos: (320.0, 150.0),
+  radius: 46.0,
+  phases: [
+    // --- La llamada. La guitarra avisa de que empieza: marca el compas
+    //     entero, sin adornos, para que se oiga donde caen los acentos.
+    //     Un abanico en cada acento y un corro en cada tiempo que no lo
+    //     es. Todo lo que sale se quiebra, y lo que hay que aprender aqui
+    //     es eso: cuando se tuerce una bala que viene hacia ti.
+    (
+      name: "La llamada",
+      hp: 450,
+      steps: [
+        Parallel([
+          [
+            Forever([
+              MoveTo(pos: (260.0, 150.0), dur: 120, ease: InOut),
+              MoveTo(pos: (380.0, 150.0), dur: 120, ease: InOut),
+            ]),
+          ],
+          [
+            // Los cinco acentos del compas, cada uno un abanico de medias
+            // que se quiebra en los acentos de su propio compas.
+            Forever([
+              Wait(40),
+              Fire((
+                count: 11, arc: 1.7, aim: Fixed(1.45), speed: 140.0,
+                rings: 2, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(60),
+              Fire((
+                count: 11, arc: 1.7, aim: Fixed(1.69), speed: 140.0,
+                rings: 2, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 11, arc: 1.7, aim: Fixed(1.45), speed: 140.0,
+                rings: 2, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 11, arc: 1.7, aim: Fixed(1.69), speed: 140.0,
+                rings: 2, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 11, arc: 1.7, aim: Fixed(1.45), speed: 140.0,
+                rings: 2, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(20),
+            ]),
+          ],
+          [
+            // Y en los tiempos sin acento, un corro que se abre despacio,
+            // medio paso girado cada vez para que no se apilen.
+            Forever([
+              Fire((
+                count: 14, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(20),
+              Fire((
+                count: 14, arc: 6.2831855, aim: Fixed(0.2244), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 14, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(20),
+              Fire((
+                count: 14, arc: 6.2831855, aim: Fixed(0.2244), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 14, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 14, arc: 6.2831855, aim: Fixed(0.2244), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 14, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(40),
+            ]),
+          ],
+          [
+            // El cante: a ti, sin quiebro, para que no haya donde quedarse quieta.
+            Forever([
+              Wait(40),
+              Fire((
+                count: 3, arc: 0.2, aim: AtPlayer, speed: 260.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.0, ttl: 30.0, kind: 3, flags: 0,
+              )),
+            ]),
+          ],
+          [
+            // Los claveles, uno por compas. Se parrian.
+            Forever([
+              Wait(240),
+              Fire((
+                count: 3, arc: 1.0, aim: AtPlayer, speed: 200.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.0, ttl: 30.0, kind: 2, flags: 1,
+              )),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+    // --- El rasgueo. La mano abierta barre las cuerdas con todos los dedos
+    //     uno detras de otro: no es un golpe, es una cortina que cruza. Se
+    //     esquiva cruzandola por detras de la ultima cuerda, no esperando
+    //     a que pase.
+    (
+      name: "El rasgueo",
+      hp: 550,
+      steps: [
+        Parallel([
+          [
+            Forever([
+              MoveTo(pos: (230.0, 160.0), dur: 240, ease: InOut),
+              MoveTo(pos: (410.0, 160.0), dur: 240, ease: InOut),
+            ]),
+          ],
+          [
+            // Un rasgueo en cada acento: seis abanicos de seis cuerdas, uno
+            // cada tres ticks, barriendo de un lado al otro. Abajo y arriba,
+            // como la mano que rasguea.
+            Forever([
+              Wait(40),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(2.2), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.948), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.696), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.444), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.192), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(0.94), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(45),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(0.94), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.192), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.444), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.696), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.948), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(2.2), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(25),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(2.2), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.948), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.696), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.444), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.192), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(0.94), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(25),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(0.94), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.192), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.444), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.696), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.948), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(2.2), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(25),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(2.2), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.948), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.696), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.444), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(1.192), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 6, arc: 0.3, aim: Fixed(0.94), speed: 170.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(5),
+            ]),
+          ],
+          [
+            // Y en el uno, el rasgueo grande, con las cuatro cuerdas graves.
+            Forever([
+              Fire((
+                count: 8, arc: 0.42, aim: Fixed(2.54), speed: 150.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 8, arc: 0.42, aim: Fixed(2.152), speed: 150.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 8, arc: 0.42, aim: Fixed(1.764), speed: 150.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 8, arc: 0.42, aim: Fixed(1.376), speed: 150.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 8, arc: 0.42, aim: Fixed(0.988), speed: 150.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 8, arc: 0.42, aim: Fixed(0.6), speed: 150.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(225),
+            ]),
+          ],
+          [
+            // El corro de los tiempos sin acento, menos el uno.
+            Forever([
+              Wait(20),
+              Fire((
+                count: 12, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 12, arc: 6.2831855, aim: Fixed(0.2618), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(20),
+              Fire((
+                count: 12, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 12, arc: 6.2831855, aim: Fixed(0.2618), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 12, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 12, arc: 6.2831855, aim: Fixed(0.2618), speed: 110.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(40),
+            ]),
+          ],
+          [
+            // El cante: a ti, sin quiebro, para que no haya donde quedarse quieta.
+            Forever([
+              Wait(40),
+              Fire((
+                count: 3, arc: 0.2, aim: AtPlayer, speed: 260.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.0, ttl: 30.0, kind: 3, flags: 0,
+              )),
+            ]),
+          ],
+          [
+            // Los claveles, uno por compas. Se parrian.
+            Forever([
+              Wait(240),
+              Fire((
+                count: 3, arc: 1.0, aim: AtPlayer, speed: 200.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.0, ttl: 30.0, kind: 2, flags: 1,
+              )),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+    // --- El zapateado. Los pies solos, sin guitarra: tacon, planta y punta
+    //     a toda velocidad. Aqui el quiebro es mas cerrado que en ninguna
+    //     otra figura, casi medio angulo recto, y lo que baja es una reja
+    //     que se dobla en cada acento.
+    (
+      name: "El zapateado",
+      hp: 650,
+      steps: [
+        Parallel([
+          [
+            // Cambia de sitio en cada acento, de un golpe.
+            Forever([
+              Wait(40),
+              MoveTo(pos: (230.0, 160.0), dur: 20, ease: Out),
+              Wait(40),
+              MoveTo(pos: (410.0, 160.0), dur: 20, ease: Out),
+              Wait(20),
+              MoveTo(pos: (320.0, 130.0), dur: 20, ease: Out),
+              Wait(20),
+              MoveTo(pos: (240.0, 170.0), dur: 20, ease: Out),
+              Wait(20),
+              MoveTo(pos: (400.0, 170.0), dur: 20, ease: Out),
+            ]),
+          ],
+          [
+            // Tacon en cada tiempo y punta a contratiempo. El tacon de un
+            // tiempo se quiebra hacia un lado y el del siguiente hacia el
+            // otro: los dos zigzags se cruzan y dejan rombos entre ellos.
+            Forever([
+              Fire((
+                count: 9, arc: 1.4, aim: Fixed(1.5708), speed: 170.0,
+                rings: 2, speed_step: 35.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.7, ttl: 30.0, kind: 3, flags: 0,
+              )),
+              Wait(10),
+              Fire((
+                count: 5, arc: 0.8, aim: Fixed(1.25), speed: 210.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(10),
+              Fire((
+                count: 9, arc: 1.4, aim: Fixed(1.5708), speed: 170.0,
+                rings: 2, speed_step: 35.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.7, ttl: 30.0, kind: 3, flags: 0,
+              )),
+              Wait(10),
+              Fire((
+                count: 5, arc: 0.8, aim: Fixed(1.89), speed: 210.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(10),
+            ]),
+          ],
+          [
+            // Y en los acentos, el golpe de planta: un corro de medias.
+            Forever([
+              Wait(40),
+              Fire((
+                count: 20, arc: 6.2831855, aim: Fixed(0.0), speed: 130.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.6, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(60),
+              Fire((
+                count: 20, arc: 6.2831855, aim: Fixed(0.157), speed: 130.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.6, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 20, arc: 6.2831855, aim: Fixed(0.0), speed: 130.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.6, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 20, arc: 6.2831855, aim: Fixed(0.157), speed: 130.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.6, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 20, arc: 6.2831855, aim: Fixed(0.0), speed: 130.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.6, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(20),
+            ]),
+          ],
+          [
+            // El cante: a ti, sin quiebro, para que no haya donde quedarse quieta.
+            Forever([
+              Wait(40),
+              Fire((
+                count: 3, arc: 0.2, aim: AtPlayer, speed: 260.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.0, ttl: 30.0, kind: 3, flags: 0,
+              )),
+            ]),
+          ],
+          [
+            // Los claveles, uno por compas. Se parrian.
+            Forever([
+              Wait(240),
+              Fire((
+                count: 3, arc: 1.0, aim: AtPlayer, speed: 200.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.0, ttl: 30.0, kind: 2, flags: 1,
+              )),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+    // --- El remate. El final del baile: guitarra y pies a la vez, todo lo
+    //     de antes junto y cerrado en el ultimo doce, como se cierra una
+    //     buleria.
+    (
+      name: "El remate",
+      hp: 800,
+      steps: [
+        Parallel([
+          [
+            Forever([
+              MoveTo(pos: (260.0, 150.0), dur: 120, ease: InOut),
+              MoveTo(pos: (380.0, 150.0), dur: 120, ease: InOut),
+            ]),
+          ],
+          [
+            // El rasgueo de la segunda figura, con una cuerda mas.
+            Forever([
+              Wait(40),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(2.2), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.948), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.696), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.444), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.192), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(0.94), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(45),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(0.94), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.192), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.444), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.696), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.948), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(2.2), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(25),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(2.2), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.948), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.696), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.444), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.192), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(0.94), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(25),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(0.94), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.192), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.444), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.696), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.948), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(2.2), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(25),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(2.2), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.948), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.696), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.444), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(1.192), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(3),
+              Fire((
+                count: 7, arc: 0.36, aim: Fixed(0.94), speed: 180.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(5),
+            ]),
+          ],
+          [
+            // El taconeo de la tercera, por debajo.
+            Forever([
+              Fire((
+                count: 7, arc: 1.3, aim: Fixed(1.5708), speed: 175.0,
+                rings: 2, speed_step: 35.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.7, ttl: 30.0, kind: 3, flags: 0,
+              )),
+              Wait(10),
+              Fire((
+                count: 6, arc: 0.9, aim: Fixed(1.25), speed: 215.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(10),
+              Fire((
+                count: 7, arc: 1.3, aim: Fixed(1.5708), speed: 175.0,
+                rings: 2, speed_step: 35.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.7, ttl: 30.0, kind: 3, flags: 0,
+              )),
+              Wait(10),
+              Fire((
+                count: 6, arc: 0.9, aim: Fixed(1.89), speed: 215.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.5, ttl: 30.0, kind: 0, flags: 0,
+              )),
+              Wait(10),
+            ]),
+          ],
+          [
+            // Y el golpe de planta en cada acento, quebrado al reves.
+            Forever([
+              Wait(40),
+              Fire((
+                count: 24, arc: 6.2831855, aim: Fixed(0.0), speed: 140.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.6, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(60),
+              Fire((
+                count: 24, arc: 6.2831855, aim: Fixed(0.1309), speed: 140.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.6, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 24, arc: 6.2831855, aim: Fixed(0.0), speed: 140.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.6, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 24, arc: 6.2831855, aim: Fixed(0.1309), speed: 140.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.6, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(40),
+              Fire((
+                count: 24, arc: 6.2831855, aim: Fixed(0.0), speed: 140.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: -0.6, ttl: 30.0, kind: 1, flags: 0,
+              )),
+              Wait(20),
+            ]),
+          ],
+          [
+            // El cante: a ti, sin quiebro, para que no haya donde quedarse quieta.
+            Forever([
+              Wait(20),
+              Fire((
+                count: 3, arc: 0.18, aim: AtPlayer, speed: 280.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.0, ttl: 30.0, kind: 3, flags: 0,
+              )),
+            ]),
+          ],
+          [
+            // Los claveles, uno por compas. Se parrian.
+            Forever([
+              Wait(240),
+              Fire((
+                count: 4, arc: 1.2, aim: AtPlayer, speed: 200.0,
+                rings: 1, speed_step: 30.0, ring_offset: 0.0,
+                accel: 0.0, spin: 0.0, quiebro: 0.0, ttl: 30.0, kind: 2, flags: 1,
+              )),
+            ]),
+          ],
+        ]),
+      ],
+    ),
+  ],
+)

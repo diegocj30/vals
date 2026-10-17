@@ -26,12 +26,18 @@ use crate::pattern::{Pattern, PatternRunner, RunCtx, Step};
 /// El vals entero cabe en `boss1.ron` y el tango en `boss2.ron`, cada uno con
 /// una fase por figura suya. Anadir un baile es anadir su fichero y una linea
 /// aqui: la pista le pone el nodo sola y la musica lo busca por indice.
-pub const DEFAULT_BOSS_RONS: [&str; 4] = [
+pub const DEFAULT_BOSS_RONS: [&str; BAILES] = [
     include_str!("../../../assets/patterns/boss1.ron"),
     include_str!("../../../assets/patterns/boss2.ron"),
     include_str!("../../../assets/patterns/boss3.ron"),
     include_str!("../../../assets/patterns/boss4.ron"),
+    include_str!("../../../assets/patterns/boss5.ron"),
 ];
+
+/// Cuantos bailes hay. Lo que en la app va un elemento por baile (tintas,
+/// gritos del super, sonidos de caida) se mide con esto, asi que un baile
+/// nuevo sin lo suyo no compila.
+pub const BAILES: usize = 5;
 
 /// El primer jefe. Se conserva por comodidad y para los tests.
 pub const DEFAULT_BOSS_RON: &str = DEFAULT_BOSS_RONS[0];
@@ -393,7 +399,7 @@ mod tests {
     fn los_jefes_embebidos_son_validos() {
         let defs = BossDef::default_bosses();
         // Uno por baile.
-        assert_eq!(defs.len(), 4);
+        assert_eq!(defs.len(), BAILES);
         for (i, d) in defs.iter().enumerate() {
             assert!(!d.name.is_empty(), "el jefe {} no tiene nombre", i + 1);
             assert!(!d.phases.is_empty(), "el jefe {} no tiene fases", i + 1);
@@ -460,6 +466,16 @@ mod tests {
         })
     }
 
+    /// Si en algun sitio del arbol sale una bala que se quiebra en los acentos.
+    fn hay_quiebros(steps: &[Step]) -> bool {
+        steps.iter().any(|paso| match paso {
+            Step::Fire(e) => e.quiebro != 0.0,
+            Step::Repeat { body, .. } | Step::Forever(body) => hay_quiebros(body),
+            Step::Parallel(ramas) => ramas.iter().any(|r| hay_quiebros(r)),
+            _ => false,
+        })
+    }
+
     /// Si en algun sitio del arbol sale una bala con trayectoria curva.
     fn hay_curvas(steps: &[Step]) -> bool {
         steps.iter().any(|paso| match paso {
@@ -485,6 +501,9 @@ mod tests {
     ///   cruzan un trozo de pantalla y se van solas. Una patada dura lo que
     ///   dura la patada. Es lo que vacia la pantalla en un compas y deja leer
     ///   donde cae la siguiente, en vez de esquivar una pared.
+    /// - **El flamenco se quiebra**: `quiebro` en todas sus figuras, y es el
+    ///   unico que lo usa. La bala va recta y en los acentos del compas de
+    ///   doce se tuerce de golpe: ni arco, ni giro de la mira, ni parada.
     #[test]
     fn cada_baile_tiene_su_verbo_y_no_el_del_vecino() {
         let defs = BossDef::default_bosses();
@@ -549,6 +568,39 @@ mod tests {
                 );
             }
         }
+
+        let flamenco = &defs[4];
+        assert!(
+            flamenco.phases.iter().all(|f| hay_quiebros(&f.steps)),
+            "el flamenco sin quiebros no se distingue de nadie"
+        );
+        for f in &flamenco.phases {
+            assert!(
+                !hay_espirales(&f.steps) && !hay_curvas(&f.steps) && !hay_patadas(&f.steps),
+                "el flamenco, en {}, esta usando el verbo de otro",
+                f.name
+            );
+        }
+        // Y nadie mas se quiebra: el quiebro es suyo.
+        for otro in &defs[..4] {
+            for f in &otro.phases {
+                assert!(
+                    !hay_quiebros(&f.steps),
+                    "{} quiebra balas en {}, y eso es del flamenco",
+                    otro.name,
+                    f.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn el_flamenco_es_el_ultimo_baile_de_la_pista() {
+        // El unico de nivel final: la pista lo abre cuando no queda nada por
+        // debajo, y eso es despues del tango.
+        let defs = BossDef::default_bosses();
+        assert_eq!(defs[4].nivel, Nivel::Final);
+        assert!(defs[..4].iter().all(|d| d.nivel < Nivel::Final));
     }
 
     #[test]
