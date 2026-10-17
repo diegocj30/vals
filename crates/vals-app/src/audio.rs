@@ -362,7 +362,7 @@ pub struct Audio {
     /// Un tema por baile.
     musica: Vec<Option<Sound>>,
     /// Que sala hay en su hueco, el primero: los bailes ganados con que se
-    /// sintetizo. Hay dieciseis y solo se guarda una.
+    /// sintetizo. Hay treinta y dos y solo se guarda una.
     sala: u8,
     /// La sala que se esta sintetizando porque ha cambiado lo ganado.
     sala_nueva: Option<(u8, Coroutine<Option<Sound>>)>,
@@ -640,9 +640,10 @@ pub fn exportar_musica(dir: &std::path::Path) -> std::io::Result<Vec<std::path::
         std::fs::write(&ruta, wav_tema(b))?;
         hechos.push(ruta);
     }
-    // Y las otras quince salas, con los bailes que las llenan en el nombre.
-    for bailes in 1..16u8 {
-        let quien: Vec<&str> = ["vals", "tango", "charleston", "cancan"]
+    // Y las otras treinta y una salas, con los bailes que las llenan en el
+    // nombre.
+    for bailes in 1..32u8 {
+        let quien: Vec<&str> = ["vals", "tango", "charleston", "cancan", "flamenco"]
             .into_iter()
             .enumerate()
             .filter(|(i, _)| bailes & (1 << i) != 0)
@@ -723,7 +724,7 @@ fn mezcla(t: Tema) -> Vec<i16> {
 }
 
 /// Un efecto ya empaquetado. Los de tono van a la frecuencia de la musica,
-/// como ella: son senos por debajo de 3 kHz, no pierden nada, y catorce
+/// como ella: son senos por debajo de 3 kHz, no pierden nada, y dieciocho
 /// variantes de cada uno ocupan la mitad.
 fn wav_sfx(sfx: Sfx, t: Tema) -> Vec<u8> {
     let rate = if sfx.tematico() {
@@ -845,7 +846,7 @@ mod tests {
     use super::*;
 
     /// Cada sonido con cada tema en que se carga: los de tono, con los
-    /// catorce; los demas, con la sala.
+    /// dieciocho; los demas, con la sala.
     fn todas_las_variantes() -> Vec<(Sfx, Tema)> {
         TODOS
             .into_iter()
@@ -863,7 +864,7 @@ mod tests {
     /// Los temas tal cual se cargan, y la sala con cada combinacion de
     /// bailes ganados, que se sintetiza cuando cambia.
     fn musicas() -> Vec<Tema> {
-        TEMAS.into_iter().chain((1..16).map(Tema::Sala)).collect()
+        TEMAS.into_iter().chain((1..32).map(Tema::Sala)).collect()
     }
 
     fn pico(m: &[i16]) -> f32 {

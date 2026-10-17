@@ -35,10 +35,11 @@
 //!
 //! La pista no toca ningun baile: toca su propia cancion, un vals original
 //! escrito para una caja de musica. Es lo unico que les queda a los salones
-//! cuando los cuatro objetos se llevan la musica, y cada baile ganado le
-//! devuelve su instrumento: el vals, el pah-pah que la hace mecer; el tango,
-//! un bandoneon por debajo; el charleston, un piano a contratiempo; y el
-//! cancan, la banda de metales. Con los cuatro, el salon entero.
+//! cuando los objetos se llevan la musica, y cada baile ganado le devuelve su
+//! instrumento: el vals, el pah-pah que la hace mecer; el tango, un bandoneon
+//! por debajo; el charleston, un piano a contratiempo; el cancan, la banda de
+//! metales; y el flamenco, una guitarra arpegiando. Con los cinco, el salon
+//! entero.
 
 use crate::audio::{Voz, Wave};
 
@@ -94,13 +95,23 @@ pub enum Tema {
     Galop,
     /// Y la primera otra vez, un tono arriba y desbocada.
     Infernal,
+
+    // --- El Flamenco ---
+    /// Asturias, el principio: el si repetido y el pulgar por debajo.
+    Llamada,
+    /// La parte fuerte: la melodia en el bajo y el acorde rasgueado encima.
+    Rasgueo,
+    /// La llamada otra vez, a toda prisa: los pies corriendo.
+    Zapateado,
+    /// Y la cadencia andaluza del rasgueo, un tono arriba, para acabar.
+    Remate,
 }
 
 /// Todos, en el orden en que se sintetizan y se guardan.
 ///
 /// De la sala solo esta la vacia: las demas se sintetizan cuando hacen falta,
 /// y comparten su hueco.
-pub const TEMAS: [Tema; 14] = [
+pub const TEMAS: [Tema; 18] = [
     Tema::Sala(0),
     Tema::PasoBase,
     Tema::Espejo,
@@ -115,6 +126,10 @@ pub const TEMAS: [Tema; 14] = [
     Tema::Cancan,
     Tema::Galop,
     Tema::Infernal,
+    Tema::Llamada,
+    Tema::Rasgueo,
+    Tema::Zapateado,
+    Tema::Remate,
 ];
 
 impl Tema {
@@ -135,9 +150,13 @@ impl Tema {
             (2, 0) => Tema::CharlestonA,
             (2, 1) => Tema::CharlestonB,
             (2, _) => Tema::CharlestonFin,
-            (_, 0) => Tema::Cancan,
-            (_, 1) => Tema::Galop,
-            (_, _) => Tema::Infernal,
+            (3, 0) => Tema::Cancan,
+            (3, 1) => Tema::Galop,
+            (3, _) => Tema::Infernal,
+            (_, 0) => Tema::Llamada,
+            (_, 1) => Tema::Rasgueo,
+            (_, 2) => Tema::Zapateado,
+            (_, _) => Tema::Remate,
         }
     }
 
@@ -231,6 +250,12 @@ enum Acompanamiento {
     /// marcato en donde caen los golpes y no se parece en nada al oirlo,
     /// porque el bajo se mueve en vez de repetirse.
     Stride,
+    /// La guitarra de Asturias: grave al uno y, entre nota y nota del pulgar,
+    /// la cuerda de si al aire dos veces. Va en semicorcheas de tres en tres.
+    Toque,
+    /// El acorde en cada tiempo, cuerda a cuerda. El bajo no lo pone el
+    /// acompanamiento: aqui lo lleva la melodia.
+    Rasgueo,
     /// La caja de musica, con una pua grave por compas, y encima lo que
     /// hayan devuelto los bailes ganados (los bits de `Tema::Sala`).
     Sala(u8),
@@ -241,6 +266,7 @@ const VALS: u8 = 1;
 const TANGO: u8 = 1 << 1;
 const CHARLESTON: u8 = 1 << 2;
 const CANCAN: u8 = 1 << 3;
+const FLAMENCO: u8 = 1 << 4;
 
 impl Acorde {
     fn intervalos(self) -> &'static [i32] {
@@ -556,6 +582,86 @@ const GALOP_B_ACORDES: [Acorde; 8] = [
     may(7), sep(7), may(0), sep(7),
 ];
 
+/// **Asturias (Leyenda)**, Isaac Albeniz (1892), el principio.
+///
+/// Es una pieza de piano en sol menor, pero la que todo el mundo tiene en la
+/// cabeza es la version de guitarra en mi, y es la que se transcribe: una
+/// guitarra en Sevilla. Albeniz murio en 1909.
+///
+/// En mi: los tonos son semitonos sobre el mi. Va en 3/4, pero por dentro en
+/// grupos de tres semicorcheas: una del pulgar, que es esta tabla, y dos de la
+/// cuerda de si al aire, que las pone el acompanamiento. Por eso aqui cada
+/// nota vale tres unidades y caben cuatro por compas.
+///
+/// Lo que se reconoce a la primera es el si que no para y, por debajo, el
+/// pulgar bordando: si, la sostenido, si, sol. Los dos primeros compases el
+/// pulgar toca el mismo si que la cuerda al aire, y suena a campana.
+#[rustfmt::skip]
+const ASTURIAS_A: [Nota; 64] = [
+    n(7, 3), n(7, 3), n(7, 3), n(7, 3),                 // 1  si, al unisono
+    n(7, 3), n(7, 3), n(7, 3), n(7, 3),                 // 2
+    n(7, 3), n(6, 3), n(7, 3), n(3, 3),                 // 3  si la# si sol
+    n(7, 3), n(6, 3), n(7, 3), n(3, 3),                 // 4
+    n(7, 3), n(6, 3), n(7, 3), n(3, 3),                 // 5
+    n(7, 3), n(6, 3), n(7, 3), n(2, 3),                 // 6  ... y fa#
+    n(7, 3), n(8, 3), n(7, 3), n(5, 3),                 // 7  si do si la
+    n(7, 3), n(5, 3), n(3, 3), n(2, 3),                 // 8
+    n(7, 3), n(6, 3), n(7, 3), n(3, 3),                 // 9
+    n(7, 3), n(6, 3), n(7, 3), n(3, 3),                 // 10
+    n(7, 3), n(8, 3), n(7, 3), n(5, 3),                 // 11
+    n(8, 3), n(7, 3), n(5, 3), n(3, 3),                 // 12
+    n(5, 3), n(3, 3), n(2, 3), n(0, 3),                 // 13
+    n(1, 3), n(0, 3), n(-1, 3), n(0, 3),                // 14 fa mi re# mi
+    n(1, 3), n(0, 3), n(1, 3), n(0, 3),                 // 15 el fa frigio
+    n(0, 3), n(0, 3), n(0, 3), n(0, 3),                 // 16
+];
+
+#[rustfmt::skip]
+const ASTURIAS_A_ACORDES: [Acorde; 16] = [
+    men(0), men(0), men(0), men(0),
+    men(0), may(7), men(5), may(7),
+    men(0), men(0), men(5), may(8),
+    men(5), may(1), may(1), men(0),
+];
+
+/// La parte fuerte: la melodia baja al bajo y encima se rasguea el acorde que
+/// la sigue. Mi, fa, sol, fa, mi, que es el modo frigio en cinco notas, y
+/// luego la cadencia andaluza: la menor, sol, fa, mi mayor.
+///
+/// Dos octavas por debajo de la tonica: el bajo de una guitarra, que aqui
+/// ademas canta.
+#[rustfmt::skip]
+const ASTURIAS_B: [Nota; 32] = [
+    n(-24, 8), n(-23, 4),                               // 1  mi menor
+    n(-23, 8), n(-21, 4),                               // 2  fa
+    n(-21, 8), n(-23, 4),                               // 3  sol
+    n(-23, 8), n(-24, 4),                               // 4  fa
+    n(-24, 8), n(-23, 4),                               // 5  mi menor
+    n(-23, 8), n(-21, 4),                               // 6  fa
+    n(-21, 4), n(-19, 4), n(-21, 4),                    // 7  sol
+    n(-23, 12),                                         // 8  fa
+    // --- MITAD: la cadencia andaluza, que es lo que toca el remate.
+    n(-19, 8), n(-21, 4),                               // 9  la menor
+    n(-21, 8), n(-23, 4),                               // 10 sol
+    n(-23, 12),                                         // 11 fa
+    n(-24, 12),                                         // 12 mi mayor
+    n(-19, 4), n(-17, 4), n(-16, 4),                    // 13 la menor
+    n(-17, 4), n(-19, 4), n(-21, 4),                    // 14 sol
+    n(-23, 4), n(-21, 4), n(-23, 4),                    // 15 fa
+    n(-24, 12),                                         // 16 mi mayor
+];
+
+/// Donde empieza la cadencia andaluza del rasgueo.
+const ASTURIAS_B_MITAD: usize = 16;
+
+#[rustfmt::skip]
+const ASTURIAS_B_ACORDES: [Acorde; 16] = [
+    men(0), may(1), may(3), may(1),
+    men(0), may(1), may(3), may(1),
+    men(5), may(3), may(1), may(0),
+    men(5), may(3), may(1), may(0),
+];
+
 /// Todo lo que hace falta para sonar.
 struct Partitura {
     titulo: &'static str,
@@ -611,6 +717,18 @@ fn partitura(t: Tema) -> Partitura {
         acordes,
         espejo: false,
         swing: true,
+    };
+    // El flamenco: tres tiempos, como el vals, y una guitarra en vez de banda.
+    let guitarra = |titulo, bpm, acompanamiento, tonica, melodia, acordes| Partitura {
+        titulo,
+        bpm,
+        tiempos: 3,
+        acompanamiento,
+        tonica,
+        melodia,
+        acordes,
+        espejo: false,
+        swing: false,
     };
 
     match t {
@@ -754,6 +872,44 @@ fn partitura(t: Tema) -> Partitura {
             22,
             &RAG_A,
             &RAG_A_ACORDES,
+        ),
+
+        Tema::Llamada => guitarra(
+            "Asturias (Leyenda) - Isaac Albeniz, 1892",
+            150.0,
+            Acompanamiento::Toque,
+            19, // mi
+            &ASTURIAS_A,
+            &ASTURIAS_A_ACORDES,
+        ),
+        Tema::Rasgueo => guitarra(
+            "Asturias, rasgueado",
+            132.0,
+            Acompanamiento::Rasgueo,
+            19,
+            &ASTURIAS_B,
+            &ASTURIAS_B_ACORDES,
+        ),
+        // La llamada otra vez, mas deprisa: con el si sin parar, a esta
+        // velocidad ya no llama, taconea.
+        Tema::Zapateado => guitarra(
+            "Asturias, zapateado",
+            184.0,
+            Acompanamiento::Toque,
+            19,
+            &ASTURIAS_A,
+            &ASTURIAS_A_ACORDES,
+        ),
+        // Y se cierra como los otros cuatro, volviendo a lo que ya ha sonado,
+        // un tono arriba y mas rapido. Lo que vuelve es la cadencia andaluza,
+        // que es como acaba casi todo el flamenco: en mi mayor.
+        Tema::Remate => guitarra(
+            "Asturias, remate",
+            168.0,
+            Acompanamiento::Rasgueo,
+            21, // fa#
+            &ASTURIAS_B[ASTURIAS_B_MITAD..],
+            &ASTURIAS_B_ACORDES[8..],
         ),
     }
 }
@@ -910,6 +1066,10 @@ pub fn tema(t: Tema) -> Vec<Voz> {
         Acompanamiento::Sala(bailes) => Some(bailes),
         _ => None,
     };
+    let guitarra = matches!(
+        p.acompanamiento,
+        Acompanamiento::Toque | Acompanamiento::Rasgueo
+    );
     if sala.is_some_and(|b| b & TANGO != 0) {
         bandoneon(&mut v, &p, u);
     }
@@ -941,6 +1101,7 @@ pub fn tema(t: Tema) -> Vec<Voz> {
             let f = frecuencia(p.tonica + tono);
             let cuando = (unidad as f32 + atraso) * u;
             match sala {
+                None if guitarra => pulsar(&mut v, f, dur * 0.92, 0.22, decay, cuando),
                 None => v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.22, decay).tras(cuando)),
                 // La caja de musica: el mismo seno, y su octava apagandose
                 // enseguida, que es la pua.
@@ -959,6 +1120,14 @@ pub fn tema(t: Tema) -> Vec<Voz> {
     }
 
     v
+}
+
+/// Una cuerda pulsada: el seno, y una sierra por debajo que se apaga mucho
+/// antes, que es el chasquido del dedo contra la cuerda. Sin ella, la guitarra
+/// es la caja de musica.
+fn pulsar(v: &mut Vec<Voz>, f: f32, dur: f32, vol: f32, decay: f32, cuando: f32) {
+    v.push(Voz::nota(Wave::Sine, f, dur, vol, decay).tras(cuando));
+    v.push(Voz::nota(Wave::Saw, f, dur * 0.3, vol * 0.2, 4.0).tras(cuando));
 }
 
 /// El bandoneon que el tango devuelve a la sala. Dos sierras casi a la par:
@@ -1042,6 +1211,31 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
                     }
                 }
             }
+            // El si de Asturias: dos de cada tres semicorcheas, siempre la
+            // misma cuerda al aire, cambie lo que cambie el acorde. Es la
+            // dominante repetida por debajo de todo, y se reconoce antes que
+            // el pulgar.
+            Acompanamiento::Toque => {
+                let u = t / UNIDADES_POR_TIEMPO as f32;
+                let largo = p.tiempos as f32 * t;
+                v.push(Voz::nota(Wave::Sine, grave, largo * 0.9, 0.30, 1.6).tras(t0));
+                let si = frecuencia(p.tonica + 7);
+                for k in (0..unidades_por_compas(p)).filter(|k| !k.is_multiple_of(3)) {
+                    pulsar(v, si, u * 0.9, 0.08, 3.0, t0 + k as f32 * u);
+                }
+            }
+            // El acorde en cada tiempo, mas fuerte en el uno, y cuerda a
+            // cuerda con unos milisegundos entre una y otra: un rasgueado no
+            // cae de golpe como el acorde de un piano, se arrastra.
+            Acompanamiento::Rasgueo => {
+                for paso in 0..p.tiempos {
+                    let cuando = t0 + paso as f32 * t;
+                    let vol = if paso == 0 { 0.14 } else { 0.09 };
+                    for (i, f) in triada().enumerate() {
+                        pulsar(v, f, t * 0.6, vol, 2.0, cuando + i as f32 * 0.012);
+                    }
+                }
+            }
             // La caja sola no marca el compas: una pua grave al uno y nada
             // mas. Lo demas lo traen los bailes, cada uno en su sitio del
             // compas, para que se sumen sin pisarse.
@@ -1081,6 +1275,16 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
                         v.push(Voz::nota(Wave::Square, f, t * 0.6, 0.03, 2.5).tras(t0));
                     }
                 }
+                // El flamenco: la guitarra arpegiando el acorde hacia arriba,
+                // una cuerda a contratiempo de cada tiempo. Senos solos y
+                // bajito: es la guitarra que se oye desde la otra punta del
+                // patio, no la del tablao.
+                if bailes & FLAMENCO != 0 {
+                    for (paso, f) in triada().take(p.tiempos).enumerate() {
+                        let cuando = t0 + (paso as f32 + 0.5) * t;
+                        v.push(Voz::nota(Wave::Sine, f, t * 0.45, 0.05, 3.0).tras(cuando));
+                    }
+                }
             }
         }
     }
@@ -1092,7 +1296,7 @@ mod tests {
 
     /// Todos los temas, y la sala con cada combinacion de bailes ganados.
     fn todos() -> Vec<Tema> {
-        TEMAS.into_iter().chain((1..16).map(Tema::Sala)).collect()
+        TEMAS.into_iter().chain((1..32).map(Tema::Sala)).collect()
     }
 
     #[test]
@@ -1319,6 +1523,7 @@ mod tests {
             let esperado = match t {
                 Tema::Cancan | Tema::Galop | Tema::Infernal => 2,
                 Tema::Sala(_) | Tema::PasoBase | Tema::Espejo | Tema::Molinete | Tema::Coda => 3,
+                Tema::Llamada | Tema::Rasgueo | Tema::Zapateado | Tema::Remate => 3,
                 _ => 4,
             };
             assert_eq!(partitura(t).tiempos, esperado, "{t:?}");
@@ -1355,7 +1560,7 @@ mod tests {
         assert_eq!(voces.len(), graves + 2 * notas, "algo suena de mas");
         // Y lo que se le sume despues no le cambia el bajo: una pua por
         // compas, con los bailes que sean.
-        for bailes in 0..16 {
+        for bailes in 0..32 {
             let p = partitura(Tema::Sala(bailes));
             assert_eq!(graves_por_compas(Tema::Sala(bailes)).len(), p.acordes.len());
         }
@@ -1377,15 +1582,15 @@ mod tests {
                 .sum();
             (voces.len() as f32 / duracion(t), energia / duracion(t))
         };
-        for antes in 0..16u8 {
-            for baile in [VALS, TANGO, CHARLESTON, CANCAN] {
+        for antes in 0..32u8 {
+            for baile in [VALS, TANGO, CHARLESTON, CANCAN, FLAMENCO] {
                 if antes & baile != 0 {
                     continue;
                 }
                 let (n0, e0) = lleno(antes);
                 let (n1, e1) = lleno(antes | baile);
-                assert!(n1 > n0, "{antes:04b} + {baile:04b}: no hay mas notas");
-                assert!(e1 > e0, "{antes:04b} + {baile:04b}: no suena mas");
+                assert!(n1 > n0, "{antes:05b} + {baile:05b}: no hay mas notas");
+                assert!(e1 > e0, "{antes:05b} + {baile:05b}: no suena mas");
                 assert!(
                     partitura(Tema::Sala(antes | baile)).bpm > partitura(Tema::Sala(antes)).bpm
                 );
@@ -1417,11 +1622,14 @@ mod tests {
         assert_eq!(Tema::de(0, 99), Tema::Coda);
         assert_eq!(Tema::de(1, 99), Tema::Quebrada);
         assert_eq!(Tema::de(2, 99), Tema::CharlestonFin);
+        assert_eq!(Tema::de(4, 0), Tema::Llamada);
+        assert_eq!(Tema::de(4, 2), Tema::Zapateado);
+        assert_eq!(Tema::de(4, 99), Tema::Remate);
         // Cada tema tiene su hueco, y todas las salas comparten el suyo.
         for (i, t) in TEMAS.into_iter().enumerate() {
             assert_eq!(t.indice(), i);
         }
-        assert_eq!(Tema::Sala(15).indice(), Tema::Sala(0).indice());
+        assert_eq!(Tema::Sala(31).indice(), Tema::Sala(0).indice());
     }
 
     #[test]
@@ -1474,12 +1682,67 @@ mod tests {
         for t in TEMAS {
             let menor = matches!(
                 t,
-                Tema::Espejo | Tema::Caminata | Tema::Corte | Tema::Quebrada
+                Tema::Espejo
+                    | Tema::Caminata
+                    | Tema::Corte
+                    | Tema::Quebrada
+                    | Tema::Llamada
+                    | Tema::Rasgueo
+                    | Tema::Zapateado
             );
             let [r, iii, v] = triada_tonica(t);
             assert_eq!(r, partitura(t).tonica, "{t:?}");
             assert_eq!(iii - r, if menor { 3 } else { 4 }, "{t:?}");
             assert_eq!(v - r, 7, "{t:?}");
+        }
+    }
+
+    #[test]
+    fn asturias_empieza_por_donde_tiene_que_empezar() {
+        // Dos compases de si al unisono con la cuerda al aire, y el pulgar
+        // bordando: si, la#, si, sol. Todo en notas de tres semicorcheas.
+        assert!(ASTURIAS_A[..8].iter().all(|n| n.tono == 7));
+        let tonos: Vec<i32> = ASTURIAS_A[8..12].iter().map(|n| n.tono).collect();
+        assert_eq!(tonos, vec![7, 6, 7, 3]);
+        assert!(ASTURIAS_A.iter().all(|n| n.unidades == 3));
+    }
+
+    #[test]
+    fn en_asturias_el_si_no_para() {
+        // La cuerda al aire, dos de cada tres semicorcheas y de principio a
+        // fin. Sin ella es otra pieza.
+        for t in [Tema::Llamada, Tema::Zapateado] {
+            let p = partitura(t);
+            let u = 60.0 / p.bpm / UNIDADES_POR_TIEMPO as f32;
+            let si = frecuencia(p.tonica + 7);
+            let golpes = tema(t)
+                .iter()
+                .filter(|v| matches!(v.forma(), Wave::Sine) && v.frecuencia() == si)
+                .filter(|v| !((v.inicio() / u).round() as u32).is_multiple_of(3))
+                .count();
+            assert_eq!(golpes, p.acordes.len() * 8, "{t:?}");
+        }
+    }
+
+    #[test]
+    fn en_el_rasgueo_la_melodia_va_en_el_bajo_y_el_acorde_se_arrastra() {
+        // El bajo canta por debajo de 150 Hz, y el acorde va cuerda a cuerda:
+        // ninguna nota suya empieza a la vez que otra.
+        for t in [Tema::Rasgueo, Tema::Remate] {
+            let p = partitura(t);
+            assert!(
+                p.melodia
+                    .iter()
+                    .all(|n| frecuencia(p.tonica + n.tono) < 150.0)
+            );
+            let mut inicios: Vec<f32> = tema(t)
+                .iter()
+                .filter(|v| matches!(v.forma(), Wave::Sine) && v.frecuencia() > 200.0)
+                .map(|v| v.inicio())
+                .collect();
+            let antes = inicios.len();
+            inicios.dedup_by(|a, b| (*a - *b).abs() < 0.001);
+            assert_eq!(inicios.len(), antes, "{t:?}: un acorde cae de golpe");
         }
     }
 

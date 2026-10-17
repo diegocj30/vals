@@ -167,6 +167,10 @@ fn en_espanol(clave: &str) -> Option<&'static str> {
         "El galop infernal - Offenbach, 1858" => "El galop infernal - Offenbach, 1858",
         "El galop infernal, segunda parte" => "El galop infernal, segunda parte",
         "El galop infernal, desbocado" => "El galop infernal, desbocado",
+        "Asturias (Leyenda) - Isaac Albeniz, 1892" => "Asturias (Leyenda) - Isaac Albéniz, 1892",
+        "Asturias, rasgueado" => "Asturias, rasgueado",
+        "Asturias, zapateado" => "Asturias, zapateado",
+        "Asturias, remate" => "Asturias, remate",
         // Las ciudades del prologo.
         "VIENA" => "VIENA",
         "BUENOS AIRES" => "BUENOS AIRES",
@@ -223,6 +227,10 @@ fn en_ingles(es: &str) -> Option<&'static str> {
         "El galop infernal - Offenbach, 1858" => "The Infernal Galop - Offenbach, 1858",
         "El galop infernal, segunda parte" => "The Infernal Galop, second part",
         "El galop infernal, desbocado" => "The Infernal Galop, runaway",
+        "Asturias (Leyenda) - Isaac Albeniz, 1892" => "Asturias (Leyenda) - Isaac Albeniz, 1892",
+        "Asturias, rasgueado" => "Asturias, strummed",
+        "Asturias, zapateado" => "Asturias, zapateado",
+        "Asturias, remate" => "Asturias, finale",
         // Las ciudades del prologo.
         "VIENA" => "VIENNA",
         "BUENOS AIRES" => "BUENOS AIRES",
