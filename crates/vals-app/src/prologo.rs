@@ -19,9 +19,9 @@
 //! `escenarios`. Lo unico nuevo es como se colocan en cada lamina.
 //!
 //! **El final es lo mismo con otras laminas**: ella vuelve al salon con las
-//! cuatro musicas, los cuatro tocan otra vez, baila por fin, y los creditos con
+//! cinco musicas, los cinco tocan otra vez, baila por fin, y los creditos con
 //! lo que se lleva de la temporada. Sale solo al volver a la pista con los
-//! cuatro bailes ganados, el ultimo que sea, y desde el menu se vuelve a ver.
+//! cinco bailes ganados, el ultimo que sea, y desde el menu se vuelve a ver.
 
 use macroquad::prelude::*;
 use vals_core::boss::BossDef;
@@ -68,37 +68,47 @@ const FINAL: [[Texto; 3]; 4] = [
 ];
 
 /// Los creditos de la musica, en el orden en que suena en el juego.
-const PIEZAS: [Texto; 5] = [
+const PIEZAS: [Texto; 6] = [
     Texto::CreditoDanubio,
     Texto::CreditoOlas,
     Texto::CreditoCumparsita,
     Texto::CreditoRag,
     Texto::CreditoGalop,
+    Texto::CreditoAsturias,
 ];
 
 /// Adonde se fue cada baile, en el orden de `paleta::TINTAS`. Se traducen con
 /// `idioma::nombre`, como los bailes.
-const CIUDADES: [&str; 4] = ["VIENA", "BUENOS AIRES", "CHICAGO", "PARIS"];
+const CIUDADES: [&str; 5] = ["VIENA", "BUENOS AIRES", "CHICAGO", "PARIS", "SEVILLA"];
 /// Los numeros del programa, en el mismo orden.
-const NUMEROS: [&str; 4] = ["El Vals", "El Tango", "El Charleston", "El Cancan"];
-const ROMANOS: [&str; 4] = ["I.", "II.", "III.", "IV."];
-/// El orden de la pista: por nivel, con el tango al fondo (`Pista::new`).
-const ORDEN_DE_LA_NOCHE: [usize; 4] = [0, 2, 3, 1];
+const NUMEROS: [&str; 5] = [
+    "El Vals",
+    "El Tango",
+    "El Charleston",
+    "El Cancan",
+    "El Flamenco",
+];
+const ROMANOS: [&str; 5] = ["I.", "II.", "III.", "IV.", "V."];
+/// El orden de la pista: por nivel, con el tango en el dificil y el flamenco
+/// al fondo (`Pista::new`).
+const ORDEN_DE_LA_NOCHE: [usize; 5] = [0, 2, 3, 1, 4];
 
 /// Una linea por jefe, para su cartela de entrada.
-const LEMAS_BAILE: [Texto; 4] = [
+const LEMAS_BAILE: [Texto; 5] = [
     Texto::LemaVals,
     Texto::LemaTango,
     Texto::LemaCharleston,
     Texto::LemaCancan,
+    Texto::LemaFlamenco,
 ];
 
 /// Una linea por paseo, por el jefe al que lleva.
-const LEMAS_PASEO: [Texto; 4] = [
+const LEMAS_PASEO: [Texto; 5] = [
     Texto::LemaViena,
     Texto::LemaArrabal,
     Texto::LemaChicago,
     Texto::LemaMontmartre,
+    Texto::LemaTriana,
 ];
 
 /// El lema de un jefe. Uno que no exista se queda sin lema: es adorno.
@@ -130,7 +140,7 @@ const DURA_CREDITOS: f32 = DURA + 6.0;
 /// Lo que tarda en bajar el telon al final de los creditos.
 const TELON: f32 = 1.6;
 
-/// Si al volver a la pista toca el final: los cuatro bailes ganados, en el
+/// Si al volver a la pista toca el final: los cinco bailes ganados, en el
 /// orden que sea, y sin haberlo visto todavia.
 pub fn toca_el_final(pista: &Pista, visto: bool) -> bool {
     pista.todo_vencido() && !visto
@@ -425,7 +435,7 @@ fn el_salon(l: &Layout, s: f32, ella: &Player) {
     bailarina(l, &ella, vec2(x, 405.0), 4.6, s * 60.0, guino);
 }
 
-/// II. Las doce en el reloj del salon, y los cuatro objetos despertandose uno
+/// II. Las doce en el reloj del salon, y los cinco objetos despertandose uno
 /// detras de otro: de silueta a su tinta, con un respingo de muelle.
 fn medianoche(l: &Layout, s: f32) {
     rect(l, 0.0, 0.0, VISTA_W, VISTA_H, PARED);
@@ -458,27 +468,28 @@ fn medianoche(l: &Layout, s: f32) {
         draw_circle_lines(p.x, p.y, l.len(r + 90.0 * onda), 3.0, fade(ORO, 1.0 - onda));
     }
 
-    for baile in 0..4 {
-        let despierta = 1.4 + 0.55 * baile as f32;
+    for baile in 0..CIUDADES.len() {
+        let despierta = 1.4 + 0.5 * baile as f32;
         let k = ((s - despierta) / 0.5).clamp(0.0, 1.0);
         let (cuerpo, ropa) = paleta::del_baile(baile);
         let colores = (mezcla(TINTA, cuerpo, k), mezcla(TINTA, ropa, k));
         // Dormido no se mueve: el reloj de su dibujo se para.
         let t = s.max(despierta) * 60.0;
-        let alto = 170.0 * (0.82 + 0.18 * jefes::boing(k));
-        let c = vec2(150.0 + 220.0 * baile as f32, 330.0 - alto * 0.44);
+        let alto = 150.0 * (0.82 + 0.18 * jefes::boing(k));
+        let c = vec2(120.0 + 180.0 * baile as f32, 330.0 - alto * 0.44);
         jefe(l, baile, c, alto, t, colores);
     }
 }
 
-/// III. Las cuatro ciudades, cuatro carteles en fila que caen uno detras de
+/// III. Las cinco ciudades, cinco carteles en fila que caen uno detras de
 /// otro: el decorado de cada baile, su jefe bailando en el y el nombre.
 fn ciudades(l: &Layout, s: f32) {
     rect(l, 0.0, 0.0, VISTA_W, VISTA_H, PARED);
-    let (ancho, alto, hueco) = (214.0, 386.0, 18.0);
-    let x_ini = (VISTA_W - 4.0 * ancho - 3.0 * hueco) * 0.5;
+    let (ancho, alto, hueco) = (172.0, 386.0, 14.0);
+    let n = CIUDADES.len() as f32;
+    let x_ini = (VISTA_W - n * ancho - (n - 1.0) * hueco) * 0.5;
     for (baile, ciudad) in CIUDADES.iter().enumerate() {
-        let k = jefes::bote(((s - 0.3 - 0.4 * baile as f32) / 0.7).clamp(0.0, 1.0));
+        let k = jefes::bote(((s - 0.3 - 0.35 * baile as f32) / 0.7).clamp(0.0, 1.0));
         if k <= 0.0 {
             continue;
         }
@@ -543,7 +554,7 @@ fn ella_sola(l: &Layout, s: f32, ella: &Player) {
     pinta(true);
 }
 
-/// V. La pagina del programa: los cuatro numeros de la noche, que salen uno
+/// V. La pagina del programa: los cinco numeros de la noche, que salen uno
 /// detras de otro, cada uno con su jefe y su tinta. La letra va en tinta negra
 /// y el color en un filete debajo: la Poiret es tan fina que en mostaza sobre
 /// papel no se leia.
@@ -551,14 +562,15 @@ fn programa(l: &Layout, s: f32) {
     hoja(l, 84.0);
 
     // En el orden en que se bailan, no en el de los ficheros: el vals abre, el
-    // charleston y el cancan van en medio y el tango, el mas dificil, cierra.
+    // charleston y el cancan van en medio, luego el tango y el flamenco, el mas
+    // dificil, cierra.
     for (fila, &i) in ORDEN_DE_LA_NOCHE.iter().enumerate() {
         let titulo = nombre(NUMEROS[i]);
         let a = ((s - 0.5 - 0.45 * fila as f32) / 0.4).clamp(0.0, 1.0);
         if a <= 0.0 {
             continue;
         }
-        let y = 160.0 + 66.0 * fila as f32;
+        let y = 150.0 + 60.0 * fila as f32;
         let (tinta, ropa) = paleta::del_baile(i);
         jefe(
             l,
@@ -632,7 +644,7 @@ fn corchea(l: &Layout, x: f32, y: f32, tam: f32, c: Color) {
 }
 
 /// I. Como la primera del prologo: ella entra en el salon de Viena, pero con
-/// las cuatro musicas dando vueltas a su alrededor y los cuatro detras, en
+/// las cinco musicas dando vueltas a su alrededor y los cinco detras, en
 /// fila y pequenos. No la persiguen: vuelven con ella.
 fn de_vuelta(l: &Layout, s: f32, ella: &Player) {
     let suelo = 300.0;
@@ -648,36 +660,37 @@ fn de_vuelta(l: &Layout, s: f32, ella: &Player) {
     let andar = jefes::suave(s / 3.2);
     let x = -80.0 + (VISTA_W * 0.5 + 80.0) * andar;
     foco(l, VISTA_W * 0.5, 405.0, 130.0, 0.4 + 0.6 * andar);
-    for baile in 0..4 {
+    for baile in 0..CIUDADES.len() {
         let alto = 92.0;
-        let c = vec2(x - 120.0 - 84.0 * baile as f32, 405.0 - alto * 0.44);
+        let c = vec2(x - 120.0 - 80.0 * baile as f32, 405.0 - alto * 0.44);
         jefe(l, baile, c, alto, s * 60.0, paleta::del_baile(baile));
     }
     let mut ella = ella.clone();
     ella.vel.x = PLAYER_SPEED * 0.6 * (1.0 - andar);
     let guino = (4.0..4.4).contains(&s).then_some(Expresion::Guino);
     bailarina(l, &ella, vec2(x, 405.0), 4.6, s * 60.0, guino);
-    for i in 0..4 {
-        let a = s * 1.6 + i as f32 / 4.0 * std::f32::consts::TAU;
+    let n = CIUDADES.len();
+    for i in 0..n {
+        let a = s * 1.6 + i as f32 / n as f32 * std::f32::consts::TAU;
         let (cx, cy) = (x + a.cos() * 80.0, 250.0 + a.sin() * 24.0);
         corchea(l, cx, cy, 26.0, paleta::del_baile(i).0);
     }
 }
 
-/// II. Los cuatro en fila en la tarima, como en la medianoche del prologo,
+/// II. Los cinco en fila en la tarima, como en la medianoche del prologo,
 /// pero cada uno en su sitio: se le enciende el foco, se pone a tocar y le
 /// salen corcheas de su tinta. Uno detras de otro, hasta que suenan todos.
 fn la_musica_vuelve(l: &Layout, s: f32) {
     rect(l, 0.0, 0.0, VISTA_W, VISTA_H, PARED);
     tarima(l, 330.0);
-    for baile in 0..4 {
-        let empieza = 0.5 + 0.6 * baile as f32;
+    for baile in 0..CIUDADES.len() {
+        let empieza = 0.5 + 0.55 * baile as f32;
         let k = ((s - empieza) / 0.5).clamp(0.0, 1.0);
-        let x = 150.0 + 220.0 * baile as f32;
+        let x = 120.0 + 180.0 * baile as f32;
         foco(l, x, 330.0, 95.0, k);
         // Callado no se mueve, como dormido en el prologo.
         let t = s.max(empieza) * 60.0;
-        let alto = 170.0 * (0.82 + 0.18 * jefes::boing(k));
+        let alto = 150.0 * (0.82 + 0.18 * jefes::boing(k));
         let c = vec2(x, 330.0 - alto * 0.44);
         let colores = paleta::del_baile(baile);
         jefe(l, baile, c, alto, t, colores);
@@ -691,7 +704,7 @@ fn la_musica_vuelve(l: &Layout, s: f32) {
 }
 
 /// III. Su primer baile: ella en el centro del salon, yendo y viniendo bajo
-/// el foco, con los cuatro tocando a los lados, dos y dos, como una orquesta.
+/// el foco, con los cinco tocando a los lados, tres y dos, como una orquesta.
 /// Y por los ventanales va entrando el amanecer.
 fn su_primer_baile(l: &Layout, s: f32, ella: &Player) {
     let suelo = 300.0;
@@ -706,7 +719,8 @@ fn su_primer_baile(l: &Layout, s: f32, ella: &Player) {
     rect(l, 0.0, 0.0, VISTA_W, suelo, fade(ALBA, 0.38 * alba));
     tarima(l, suelo);
 
-    for (baile, x) in [(0, 90.0), (1, 200.0), (2, 760.0), (3, 870.0)] {
+    // La guitarra, junto al bandoneon: las cuerdas de un lado.
+    for (baile, x) in [(0, 80.0), (1, 180.0), (4, 280.0), (2, 760.0), (3, 870.0)] {
         let alto = 100.0;
         let c = vec2(x, 400.0 - alto * 0.44);
         jefe(l, baile, c, alto, s * 60.0, paleta::del_baile(baile));
@@ -747,16 +761,16 @@ fn creditos(l: &Layout, s: f32, r: &Resumen) {
         tinta(a(0.0)),
     );
     for (i, t) in PIEZAS.iter().enumerate() {
-        let y = 162.0 + 24.0 * i as f32;
+        let y = 162.0 + 22.0 * i as f32;
         centrado(tx(*t), izq, y, 16.0, Cara::Cuerpo, tinta(a(0.0)));
     }
     let tipos = tx(Texto::LasTipografias);
-    centrado(tipos, izq, 300.0, 21.0, Cara::Titulo, tinta(a(1.0)));
+    centrado(tipos, izq, 306.0, 21.0, Cara::Titulo, tinta(a(1.0)));
     for (i, t) in [Texto::CreditoPoiret, Texto::CreditoBarlow]
         .iter()
         .enumerate()
     {
-        let y = 328.0 + 24.0 * i as f32;
+        let y = 332.0 + 22.0 * i as f32;
         centrado(tx(*t), izq, y, 16.0, Cara::Cuerpo, tinta(a(1.0)));
     }
 
@@ -770,14 +784,14 @@ fn creditos(l: &Layout, s: f32, r: &Resumen) {
         tinta(a(2.0)),
     );
     for (i, (baile, nota, mejor)) in r.bailes.iter().enumerate() {
-        let y = 176.0 + 44.0 * i as f32;
+        let y = 172.0 + 38.0 * i as f32;
         let k = a(2.0 + 0.3 * i as f32);
         let (cuerpo, ropa) = paleta::del_baile(i);
         jefe(
             l,
             i,
             vec2(540.0, y - 6.0),
-            38.0,
+            34.0,
             s * 60.0,
             (fade(cuerpo, k), fade(ropa, k)),
         );
@@ -793,13 +807,13 @@ fn creditos(l: &Layout, s: f32, r: &Resumen) {
         }
     }
     let jugado = txf(Texto::Jugado, &[&libro::horas(r.jugado)]);
-    centrado(&jugado, der, 352.0, 16.0, Cara::Cuerpo, tenue(a(3.0)));
+    centrado(&jugado, der, 360.0, 16.0, Cara::Cuerpo, tenue(a(3.0)));
 
     let hecho = tx(Texto::HechoEnRust);
     centrado(
         hecho,
         VISTA_W * 0.5,
-        394.0,
+        400.0,
         16.0,
         Cara::Cuerpo,
         tenue(a(4.0)),
@@ -838,7 +852,7 @@ fn intertitulo(l: &Layout, textos: &[Texto; 3], s: f32) {
 /// Dibuja `pinta` recortado a un rectangulo de la lamina.
 ///
 /// Los decorados se salen de su franja a proposito (el sol del club, la
-/// bambalina del Moulin Rouge) y con cuatro en fila se pisarian. El paspartu
+/// bambalina del Moulin Rouge) y con cinco en fila se pisarian. El paspartu
 /// no sirve aqui, porque entre cartel y cartel no hay papel sino pared. La
 /// ovacion del super tambien lo usa: su onda llega a las esquinas y no puede
 /// salirse al papel.

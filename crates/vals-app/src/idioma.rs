@@ -519,21 +519,21 @@ textos! {
     Lamina2: "A MEDIANOCHE", "AT THE STROKE OF MIDNIGHT";
     Lamina2A: "Al dar las doce, el salón cobra vida:",
         "As the clock strikes twelve, the ballroom comes alive:";
-    Lamina2B: "una caja de música, un bandoneón, un gramófono y las coristas pintadas en un cartel.",
-        "a music box, a bandoneon, a gramophone and the chorus girls painted on a poster.";
+    Lamina2B: "una caja de música, un bandoneón, un gramófono, una guitarra y las coristas de un cartel.",
+        "a music box, a bandoneon, a gramophone, a guitar and the chorus girls on a poster.";
     Lamina3: "Y SE LLEVAN LA MÚSICA", "AND THEY TAKE THE MUSIC WITH THEM";
     Lamina3A: "Dicen que aquí nadie sabe bailar lo suyo, y se van a sus ciudades:",
         "They say no one here can dance their dance, and leave for their cities:";
-    Lamina3B: "Viena, Buenos Aires, Chicago y París. El salón se queda en silencio.",
-        "Vienna, Buenos Aires, Chicago and Paris. The ballroom falls silent.";
+    Lamina3B: "Viena, Buenos Aires, Chicago, París y Sevilla. El salón se queda en silencio.",
+        "Vienna, Buenos Aires, Chicago, Paris and Seville. The ballroom falls silent.";
     Lamina4: "EL RETO", "THE CHALLENGE";
     Lamina4A: "Ella sale tras ellos, de ciudad en ciudad.",
         "She sets off after them, from city to city.";
     Lamina4B: "Si les gana bailando lo suyo, volverán al salón.",
         "If she beats them at their own dance, they will come back to the ballroom.";
     Lamina5: "PROGRAMA DE LA NOCHE", "TONIGHT'S PROGRAMME";
-    Lamina5A: "Cuatro ciudades, cuatro bailes, cuatro rivales.",
-        "Four cities, four dances, four rivals.";
+    Lamina5A: "Cinco ciudades, cinco bailes, cinco rivales.",
+        "Five cities, five dances, five rivals.";
     Lamina5B: "Que empiece la función.", "Let the show begin.";
     LemaVals: "Se llevó el vals a Viena, y gira sin que nadie le dé cuerda.",
         "It took the waltz to Vienna, and spins with no one to wind it.";
@@ -543,6 +543,8 @@ textos! {
         "It took the jazz to Chicago, and plays it over and over again.";
     LemaCancan: "Se llevaron el galop a París, y patean sin parar.",
         "They took the galop to Paris, and kick without end.";
+    LemaFlamenco: "Se llevó el flamenco a Sevilla, y rasguea a contratiempo.",
+        "It took flamenco to Seville, and strums against the beat.";
     LemaViena: "Las calles de Viena todavía silban el vals que se llevaron.",
         "The streets of Vienna still whistle the waltz it carried off.";
     LemaArrabal: "En La Boca hasta los compadritos buscan al bandoneón.",
@@ -551,20 +553,22 @@ textos! {
         "In Chicago the music plays over the rooftops: up you go.";
     LemaMontmartre: "Cuesta arriba, hasta el molino rojo donde patean las coristas.",
         "Uphill, to the red mill where the chorus girls kick.";
+    LemaTriana: "Al otro lado del río, Triana entera marca el compás.",
+        "Across the river, all of Triana keeps the beat.";
 
     // --- El final ---
     // Igual que el prologo: una idea por lamina, dicha tal cual.
     ElFinal: "el final", "the ending";
     Final1: "DE VUELTA EN EL SALÓN", "BACK AT THE BALLROOM";
-    Final1A: "Les ha ganado a los cuatro, a cada uno en su baile.",
-        "She has beaten all four, each one at its own dance.";
+    Final1A: "Les ha ganado a los cinco, a cada uno en su baile.",
+        "She has beaten all five, each one at its own dance.";
     Final1B: "Cumplen su palabra y vuelven con ella al gran salón.",
         "They keep their word and return with her to the grand ballroom.";
     Final2: "LA MÚSICA VUELVE", "THE MUSIC RETURNS";
     Final2A: "Cada uno ocupa su sitio en el escenario.",
         "Each one takes its place on the stage.";
-    Final2B: "El vals, el tango, el charleston y el cancán vuelven a sonar.",
-        "The waltz, the tango, the charleston and the can-can ring out once more.";
+    Final2B: "El vals, el tango, el charleston, el cancán y el flamenco vuelven a sonar.",
+        "The waltz, the tango, the charleston, the can-can and flamenco ring out once more.";
     Final3: "SU PRIMER BAILE", "HER FIRST DANCE";
     Final3A: "Por fin, ella baila por primera vez en el gran salón.",
         "At last, she dances in the grand ballroom for the very first time.";
@@ -581,6 +585,7 @@ textos! {
         "La Cumparsita - Gerardo Matos Rodriguez";
     CreditoRag: "Maple Leaf Rag - Scott Joplin", "Maple Leaf Rag - Scott Joplin";
     CreditoGalop: "El galop infernal - Jacques Offenbach", "The Infernal Galop - Jacques Offenbach";
+    CreditoAsturias: "Asturias (Leyenda) - Isaac Albéniz", "Asturias (Leyenda) - Isaac Albeniz";
     LasTipografias: "LAS TIPOGRAFÍAS (SIL OFL)", "THE TYPEFACES (SIL OFL)";
     CreditoPoiret: "Poiret One - The Poiret One Project Authors",
         "Poiret One - The Poiret One Project Authors";
