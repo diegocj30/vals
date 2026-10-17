@@ -12,7 +12,7 @@ Every boss is a dance, and its bullets are the choreography.
 [![CI](https://github.com/diegocj30/vals/actions/workflows/ci.yml/badge.svg)](https://github.com/diegocj30/vals/actions/workflows/ci.yml)
 ![Rust](https://img.shields.io/badge/Rust-stable-1a1418?logo=rust)
 ![WebAssembly](https://img.shields.io/badge/WebAssembly-no_wasm--bindgen-654ff0?logo=webassembly&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-472-2f7d5b)
+![Tests](https://img.shields.io/badge/tests-499-2f7d5b)
 
 [Español](README.md) · **English**
 
@@ -32,16 +32,17 @@ Keyboard, gamepad or touchscreen, nothing to install. It also builds natively fo
 ## The story
 
 > The year is 1900, and tonight is the grand ball. At midnight the ballroom
-> comes alive: a music box, a bandoneon, a gramophone and the chorus girls
-> painted on a poster. They say no one there can dance their dance, and each takes
-> its music away to its own city: **Vienna, Buenos Aires, Chicago and Paris**.
+> comes alive: a music box, a bandoneon, a gramophone, a guitar and the chorus
+> girls on a poster. They say no one there can dance their dance, and each takes
+> its music away to its own city: **Vienna, Buenos Aires, Chicago, Paris and
+> Seville**.
 >
 > The dancer with the scarlet bow sets off after them, street by street, and
 > challenges each one at its own dance. Beat it, and it comes back to the
 > ballroom.
 
 It is told in a five-plate prologue that can be replayed from the menu with
-`X` (Square). Win all four dances and the ending follows.
+`X` (Square). Win all five dances and the ending follows.
 
 ## Every boss is a dance
 
@@ -51,27 +52,29 @@ beat of its music**. A test stops any dance from using another dance's verb.
 
 <table>
 <tr>
-<td align="center" width="25%"><img src="docs/media/partituras/vals-4.svg" alt="The fleckerl"></td>
-<td align="center" width="25%"><img src="docs/media/partituras/tango-2.svg" alt="The ochos"></td>
-<td align="center" width="25%"><img src="docs/media/partituras/charleston-2.svg" alt="Bee's knees"></td>
-<td align="center" width="25%"><img src="docs/media/partituras/cancan-3.svg" alt="The cartwheel and the grand écart"></td>
+<td align="center" width="20%"><img src="docs/media/partituras/vals-4.svg" alt="The fleckerl"></td>
+<td align="center" width="20%"><img src="docs/media/partituras/tango-2.svg" alt="The ochos"></td>
+<td align="center" width="20%"><img src="docs/media/partituras/charleston-2.svg" alt="Bee's knees"></td>
+<td align="center" width="20%"><img src="docs/media/partituras/cancan-3.svg" alt="The cartwheel and the grand écart"></td>
+<td align="center" width="20%"><img src="docs/media/partituras/flamenco-3.svg" alt="The zapateado"></td>
 </tr>
 <tr>
 <td align="center"><b>The Waltz</b><br><sub>Vienna · a music box</sub><br><br><code>Turn</code>: the aim rotates and a spiral comes out</td>
 <td align="center"><b>The Tango</b><br><sub>Buenos Aires · a bandoneon</sub><br><br>negative <code>accel</code>: the bullet stops dead and comes back, like the corte</td>
 <td align="center"><b>The Charleston</b><br><sub>Chicago · a gramophone</sub><br><br><code>spin</code>: the bullet curves, on the 3-3-2 clave</td>
 <td align="center"><b>The Can-can</b><br><sub>Paris · the chorus girls</sub><br><br>short <code>ttl</code>: the kick fires and fades away</td>
+<td align="center"><b>Flamenco</b><br><sub>Seville · a guitar</sub><br><br><code>quiebro</code>: the bullet snaps aside on the accents of the twelve-beat compás</td>
 </tr>
 </table>
 
 <sub>Long-exposure photos of one figure from each dance, taken from the real simulation: every dot is a bullet, and the coloured line is the boss's path.</sub>
 
-**[The four dances, figure by figure →](docs/BAILES.en.md)** The real step,
+**[The five dances, figure by figure →](docs/BAILES.en.md)** The real step,
 how the bullets draw it, and a photo of every figure.
 
 ## What's inside
 
-- **Four bosses that are living objects**, each with its own figures
+- **Five bosses that are living objects**, each with its own figures
   (phases), its own music and its own bullet grammar: the waltz turns, the
   tango stops dead, the charleston curves.
 - **Four promenades**, run-and-gun levels before each boss: Vienna, a
@@ -97,7 +100,7 @@ how the bullets draw it, and a photo of every figure.
 
 ## How it's built
 
-| 0 images | 32,000 bullets at 144 fps | 4 KB per 30 s of play | 472 tests |
+| 0 images | 32,000 bullets at 144 fps | 4 KB per 30 s of play | 499 tests |
 |:---:|:---:|:---:|:---:|
 | Everything is drawn in code, and the music is synthesized at startup | Instanced rendering; with macroquad's primitives, 30 fps | A run is a seed plus the list of inputs | Including bots that play every promenade end to end |
 

@@ -12,7 +12,7 @@ Cada jefe es un baile, y sus balas son la coreografía.
 [![CI](https://github.com/diegocj30/vals/actions/workflows/ci.yml/badge.svg)](https://github.com/diegocj30/vals/actions/workflows/ci.yml)
 ![Rust](https://img.shields.io/badge/Rust-stable-1a1418?logo=rust)
 ![WebAssembly](https://img.shields.io/badge/WebAssembly-sin_wasm--bindgen-654ff0?logo=webassembly&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-472-2f7d5b)
+![Tests](https://img.shields.io/badge/tests-499-2f7d5b)
 
 **Español** · [English](README.en.md)
 
@@ -29,15 +29,15 @@ Teclado, mando o pantalla táctil, sin instalar nada. También compila en nativo
 ## La historia
 
 > Corre el año 1900 y esta noche hay gran baile. A medianoche el salón cobra
-> vida: una caja de música, un bandoneón, un gramófono y las coristas
-> pintadas en un cartel. Dicen que allí nadie sabe bailar lo suyo, y cada uno se lleva su
-> música a su ciudad: **Viena, Buenos Aires, Chicago y París**.
+> vida: una caja de música, un bandoneón, un gramófono, una guitarra y las
+> coristas de un cartel. Dicen que allí nadie sabe bailar lo suyo, y cada uno se
+> lleva su música a su ciudad: **Viena, Buenos Aires, Chicago, París y Sevilla**.
 >
 > La bailarina del lazo escarlata sale tras ellos, calle a calle, y a cada uno
 > lo reta en su propio baile. Si le gana, vuelve al salón.
 
 Se cuenta en un prólogo de cinco láminas, que se vuelve a ver desde el menú con
-`X` (cuadrado). Al ganar los cuatro bailes llega el final.
+`X` (cuadrado). Al ganar los cinco bailes llega el final.
 
 ## Cada jefe es un baile
 
@@ -47,27 +47,29 @@ de su música**. Un test impide que un baile use el verbo de otro.
 
 <table>
 <tr>
-<td align="center" width="25%"><img src="docs/media/partituras/vals-4.svg" alt="El fleckerl"></td>
-<td align="center" width="25%"><img src="docs/media/partituras/tango-2.svg" alt="Los ochos"></td>
-<td align="center" width="25%"><img src="docs/media/partituras/charleston-2.svg" alt="Bee's knees"></td>
-<td align="center" width="25%"><img src="docs/media/partituras/cancan-3.svg" alt="La rueda y el grand écart"></td>
+<td align="center" width="20%"><img src="docs/media/partituras/vals-4.svg" alt="El fleckerl"></td>
+<td align="center" width="20%"><img src="docs/media/partituras/tango-2.svg" alt="Los ochos"></td>
+<td align="center" width="20%"><img src="docs/media/partituras/charleston-2.svg" alt="Bee's knees"></td>
+<td align="center" width="20%"><img src="docs/media/partituras/cancan-3.svg" alt="La rueda y el grand écart"></td>
+<td align="center" width="20%"><img src="docs/media/partituras/flamenco-3.svg" alt="El zapateado"></td>
 </tr>
 <tr>
 <td align="center"><b>El Vals</b><br><sub>Viena · una caja de música</sub><br><br><code>Turn</code>: la mira gira y sale la espiral</td>
 <td align="center"><b>El Tango</b><br><sub>Buenos Aires · un bandoneón</sub><br><br><code>accel</code> negativa: la bala frena en seco y vuelve, como el corte</td>
 <td align="center"><b>El Charleston</b><br><sub>Chicago · un gramófono</sub><br><br><code>spin</code>: la bala curva en la clave 3-3-2</td>
 <td align="center"><b>El Cancán</b><br><sub>París · las coristas</sub><br><br><code>ttl</code> corto: la patada sale y se desvanece</td>
+<td align="center"><b>El Flamenco</b><br><sub>Sevilla · una guitarra</sub><br><br><code>quiebro</code>: la bala se tuerce en los acentos del compás de doce</td>
 </tr>
 </table>
 
 <sub>Fotos de larga exposición de una figura de cada baile, sacadas de la simulación real: cada punto es una bala, y la línea de color, el camino del jefe.</sub>
 
-**[Los cuatro bailes, figura a figura →](docs/BAILES.md)** El paso de verdad,
+**[Los cinco bailes, figura a figura →](docs/BAILES.md)** El paso de verdad,
 cómo lo dibujan las balas y la foto de cada figura.
 
 ## Qué hay dentro
 
-- **Cuatro jefes que son objetos vivos**, con sus figuras (fases), su música
+- **Cinco jefes que son objetos vivos**, con sus figuras (fases), su música
   y una gramática de balas propia: el vals gira, el tango frena en seco, el
   charleston curva.
 - **Cuatro paseos** de correr y disparar antes de cada jefe: Viena, un
@@ -92,7 +94,7 @@ cómo lo dibujan las balas y la foto de cada figura.
 
 ## Cómo está hecho
 
-| 0 imágenes | 32.000 balas a 144 fps | 4 KB por 30 s de partida | 472 tests |
+| 0 imágenes | 32.000 balas a 144 fps | 4 KB por 30 s de partida | 499 tests |
 |:---:|:---:|:---:|:---:|
 | Todo se dibuja con código, y la música se sintetiza al arrancar | Render instanciado; con las primitivas de macroquad, 30 fps | Una partida es una semilla y la lista de inputs | Entre ellos, bots que recorren cada paseo de punta a punta |
 

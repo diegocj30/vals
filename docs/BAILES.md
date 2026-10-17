@@ -1,6 +1,6 @@
 **Espanol** | [English](BAILES.en.md)
 
-# Los cuatro bailes
+# Los cinco bailes
 
 En VALS cada jefe es un baile de verdad, y sus balas siguen las reglas de ese
 baile. No es decoracion: cada uno tiene **un verbo del motor que es solo suyo**,
@@ -13,6 +13,7 @@ las esperas del patron caen **en el compas de su musica**.
 | **El Tango** | `accel` negativa | salen, frenan en seco y vuelven por donde vinieron | 4/4 marcado |
 | **El Charleston** | `spin` | vuelan en arco | clave 3-3-2 |
 | **El Cancan** | `ttl` corto | cortan un trozo de sala y se desvanecen | 2/4, el galop |
+| **El Flamenco** | `quiebro` | van rectas y se tuercen en zigzag en cada acento | doce tiempos |
 
 Que ningun baile use el verbo del vecino no es una intencion: lo vigila un test,
 `cada_baile_tiene_su_verbo_y_no_el_del_vecino` en
@@ -171,3 +172,35 @@ todas las esperas son multiplos de 12.
 | <img src="media/partituras/cancan-1.svg" width="300" alt="El battement"> | **1. El battement.** En la pista: la patada alta, la primera que se aprende, y a una con toda la fila.<br><br>En el juego: cinco coristas, cinco piernas, cinco radios de agujas abiertos hacia abajo. Un tiempo con la izquierda y otro con la derecha, y cada pierna cae en el hueco de la anterior: el hueco de este tiempo es la patada del siguiente. |
 | <img src="media/partituras/cancan-2.svg" width="300" alt="El port d'armes"> | **2. El port d'armes.** En la pista: la pierna cogida por el tobillo, casi vertical, girando a la pata coja sobre la otra.<br><br>En el juego: el jefe da la vuelta en ocho saltos alrededor de una elipse. En cada salto la pierna en alto cae recta como una columna de agujas y el pie de apoyo suelta un corro que se apaga enseguida. Las columnas barren la sala al ritmo del giro. |
 | <img src="media/partituras/cancan-3.svg" width="300" alt="La rueda y el grand ecart"> | **3. La rueda y el grand ecart.** En la pista: la voltereta lateral y el salto que cae al suelo abierto de piernas, el final de siempre.<br><br>En el juego: dos compases de patadas a la corchea; luego la rueda cruza la sala en cuatro saltos, un anillo de ocho radios girado medio radio cada vez, que es lo que la hace rodar. Y el espagat: dos abanicos a las esquinas, y el sitio libre es justo entre sus piernas. |
+
+## El Flamenco
+
+**Sevilla, los cafes cantantes de finales del XIX.** El baile por bulerias:
+la guitarra llama, el baile responde, y todo se mide en un compas de doce
+tiempos que no se parece a ningun otro de la noche.
+
+**El verbo: `quiebro`.** La bala sale recta y en cada acento del compas se
+tuerce de golpe, una vez a un lado y la siguiente al otro: va en zigzag
+alrededor de su rumbo. No es un arco, que eso es del charleston, ni un giro de
+la mira, que eso es del vals: la bala ya ha salido y cambia de idea en el aire.
+Lo apuntado no se quiebra, y es lo que impide quedarse quieta en un hueco del
+zigzag.
+
+```ron
+quiebro: 0.5,   // radianes que se tuerce en cada acento
+```
+
+**El objeto: una guitarra**, con la boca en la roseta, un clavel en el
+clavijero y volantes de lunares. Se tensa al ir perdiendo vida, y al caer se le
+saltan las cuerdas una a una.
+
+**La musica:** *Asturias (Leyenda)* de Albeniz (1892). El compas es de doce,
+con los acentos en el 3, el 6, el 8, el 10 y el 12: 20 ticks por tiempo y 240
+por compas.
+
+| | |
+|---|---|
+| <img src="media/partituras/flamenco-1.svg" width="300" alt="La llamada"> | **1. La llamada.** En la pista: el aviso de la guitarra de que empieza el baile.<br><br>En el juego: el compas entero, sin adornos. Un abanico en cada acento y un corro en cada tiempo que no lo es, y todo se quiebra: lo que se aprende aqui es cuando se tuerce una bala que viene hacia ti. |
+| <img src="media/partituras/flamenco-2.svg" width="300" alt="El rasgueo"> | **2. El rasgueo.** En la pista: la mano abierta barriendo las cuerdas con todos los dedos, uno detras de otro.<br><br>En el juego: no es un golpe, es una cortina que cruza la sala. Se esquiva cruzandola por detras de la ultima cuerda, no esperando a que pase. |
+| <img src="media/partituras/flamenco-3.svg" width="300" alt="El zapateado"> | **3. El zapateado.** En la pista: los pies solos, tacon, planta y punta a toda velocidad.<br><br>En el juego: el quiebro mas cerrado de todos, casi medio angulo recto. Lo que baja es una reja que se dobla en cada acento. |
+| <img src="media/partituras/flamenco-4.svg" width="300" alt="El remate"> | **4. El remate.** En la pista: el cierre de la buleria, guitarra y pies a la vez.<br><br>En el juego: todo lo de antes junto, cerrado en el ultimo doce. Es el unico baile de nivel `Final`, y se abre al ganar los otros cuatro. |

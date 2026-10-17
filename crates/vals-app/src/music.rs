@@ -874,9 +874,11 @@ fn partitura(t: Tema) -> Partitura {
             &RAG_A_ACORDES,
         ),
 
+        // A 180, veinte ticks por tiempo: el compas del quiebro y el del paseo
+        // de Triana (`tiempo: 20`), que suena con ella.
         Tema::Llamada => guitarra(
             "Asturias (Leyenda) - Isaac Albeniz, 1892",
-            150.0,
+            180.0,
             Acompanamiento::Toque,
             19, // mi
             &ASTURIAS_A,

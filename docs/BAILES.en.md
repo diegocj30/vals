@@ -1,6 +1,6 @@
 [Espanol](BAILES.md) | **English**
 
-# The four dances
+# The five dances
 
 In VALS every boss is a real dance, and its bullets follow that dance's rules.
 It isn't decoration: each one has **an engine verb that belongs to it alone**,
@@ -13,6 +13,7 @@ the pattern's waits land **on the beat of its music**.
 | **The Tango** | negative `accel` | they fly out, stop dead and come back the way they came | accented 4/4 |
 | **The Charleston** | `spin` | they fly in arcs | 3-3-2 clave |
 | **The Can-can** | short `ttl` | they cut across a slice of the floor and fade away | 2/4, the galop |
+| **Flamenco** | `quiebro` | they fly straight and zigzag on every accent | twelve beats |
 
 No dance borrowing its neighbor's verb isn't just an intention: a test enforces
 it, `cada_baile_tiene_su_verbo_y_no_el_del_vecino` ("each dance has its own
@@ -176,3 +177,34 @@ wait is a multiple of 12.
 | <img src="media/partituras/cancan-1.svg" width="300" alt="The battement"> | **1. The battement.** On the floor: the high kick, the first one learned, in unison with the whole line.<br><br>In the game: five chorus girls, five legs, five spokes of needles fanning downward. One beat with the left and one with the right, and each leg lands in the previous one's gap: this beat's gap is the next beat's kick. |
 | <img src="media/partituras/cancan-2.svg" width="300" alt="The port d'armes"> | **2. The port d'armes.** On the floor: the leg held by the ankle, almost vertical, spinning while hopping on the other foot.<br><br>In the game: the boss circles in eight hops around an ellipse. At each hop the raised leg drops straight down as a column of needles and the supporting foot releases a ring that quickly fades out. The columns sweep the floor to the rhythm of the spin. |
 | <img src="media/partituras/cancan-3.svg" width="300" alt="The cartwheel and the grand ecart"> | **3. The cartwheel and the grand ecart.** On the floor: the sideways cartwheel and the leap that lands in the splits, the classic finale.<br><br>In the game: two bars of kicks on the eighth note; then the cartwheel crosses the floor in four hops, an eight-spoke ring rotated half a spoke each time, which is what makes it roll. And the splits: two fans to the corners, and the safe spot is right between its legs. |
+
+## Flamenco
+
+**Seville, the cafes cantantes of the late 19th century.** Dancing por
+bulerias: the guitar calls, the dance answers, and everything is measured in a
+twelve-beat compas unlike anything else in the night.
+
+**The verb: `quiebro`.** The bullet flies straight and on every accent of the
+compas it snaps aside, one way and then the other: it zigzags around its
+heading. It isn't an arc, that belongs to the charleston, nor a turn of the
+aim, that belongs to the waltz: the bullet is already out and changes its mind
+in mid-air. Aimed shots never snap, which is what stops you from resting in a
+gap of the zigzag.
+
+```ron
+quiebro: 0.5,   // radians it snaps on each accent
+```
+
+**The object: a guitar**, its mouth in the soundhole, a carnation on the
+headstock and polka-dot ruffles. It tenses as it loses health, and when it
+falls its strings snap one by one.
+
+**The music:** Albeniz's *Asturias (Leyenda)* (1892). The compas has twelve
+beats, accented on 3, 6, 8, 10 and 12: 20 ticks per beat and 240 per bar.
+
+| | |
+|---|---|
+| <img src="media/partituras/flamenco-1.svg" width="300" alt="La llamada"> | **1. La llamada (the call).** On the floor: the guitar announcing that the dance begins.<br><br>In the game: the whole compas, plain. A fan on every accent and a ring on every beat that isn't one, and everything snaps: what you learn here is when a bullet coming at you will turn. |
+| <img src="media/partituras/flamenco-2.svg" width="300" alt="El rasgueo"> | **2. El rasgueo (the strum).** On the floor: the open hand sweeping the strings with every finger, one after another.<br><br>In the game: not a blow but a curtain crossing the room. You dodge it by crossing behind the last string, not by waiting for it to pass. |
+| <img src="media/partituras/flamenco-3.svg" width="300" alt="El zapateado"> | **3. El zapateado (the footwork).** On the floor: the feet alone, heel, sole and toe at full speed.<br><br>In the game: the tightest quiebro of all, almost half a right angle. What comes down is a lattice that bends on every accent. |
+| <img src="media/partituras/flamenco-4.svg" width="300" alt="El remate"> | **4. El remate (the finish).** On the floor: the close of the buleria, guitar and feet together.<br><br>In the game: everything before, together, closed on the last twelve. It is the only dance at level `Final`, and it opens once the other four are won. |
