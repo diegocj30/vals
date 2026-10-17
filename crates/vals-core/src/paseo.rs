@@ -130,9 +130,9 @@ pub const DETRAS_HUSAR: f32 = 420.0;
 const PASO_LARGO_HUSAR: f32 = 560.0;
 const PASO_CORTO_HUSAR: f32 = 230.0;
 /// El director, portero de Viena: con la aguja (15 por segundo si entran
-/// todos) son unos 13 segundos de fuego, y con lo que se esquiva, unos veinte.
+/// todos) son unos 11 segundos de fuego, y con lo que se esquiva, unos quince.
 /// Con 330 eran 22 y se hacia largo: un portero es un jefe pequeno.
-const VIDA_DIRECTOR: i32 = 200;
+const VIDA_DIRECTOR: i32 = 160;
 /// La espiral de la batuta: cuantas notas suelta en el uno y el dos de cada
 /// compas, y a que velocidad, por fase.
 pub const BRAZOS_ESPIRAL: [usize; 3] = [3, 4, 5];
@@ -269,9 +269,9 @@ pub const DANO_DEVUELTA: i32 = 20;
 const VEL_DEVUELTA: f32 = 720.0;
 const ALCANCE_DEVUELTA: f32 = 560.0;
 
-/// El guapo aguanta unos 15 segundos de aguja sin fallar una; esquivando,
-/// unos veinte.
-pub const VIDA_GUAPO: i32 = 220;
+/// El guapo aguanta unos 12 segundos de aguja sin fallar una; esquivando,
+/// unos quince.
+pub const VIDA_GUAPO: i32 = 175;
 /// La estocada del guapo: unas 380 unidades, casi media arena. La finta es la
 /// misma estocada en pequeno, unas 50: sale y se clava enseguida.
 const ESTOCADA_GUAPO: f32 = 1500.0;
@@ -696,17 +696,17 @@ impl Tipo {
             Tipo::Saltarin => 7,
             Tipo::Canotier => 3,
             Tipo::Fila => 6,
-            // Unos 13 segundos de aguja sin fallar uno: con lo que se esquiva,
-            // unos veinte.
-            Tipo::Contrabajista => 200,
+            // Unos 11 segundos de aguja sin fallar uno: con lo que se esquiva,
+            // unos quince.
+            Tipo::Contrabajista => 160,
             Tipo::Corista => 7,
             Tipo::Botella => 3,
             Tipo::Pintor => 6,
             Tipo::Confeti => 2,
             Tipo::Apache => 6,
-            // Unos 16 segundos de aguja sin fallar uno: con lo que se esquiva,
-            // unos veinte.
-            Tipo::Loyal => 240,
+            // Unos 13 segundos de aguja sin fallar uno: con lo que se esquiva,
+            // unos quince.
+            Tipo::Loyal => 192,
         }
     }
 
@@ -1214,9 +1214,9 @@ pub struct Paseo {
     /// `boss_hit` es "un disparo ha dado a un enemigo", `player_died` "te han
     /// dado" y `victory` "has llegado a la puerta".
     ///
-    /// `boss_down` no se usa: en el combate es el final de un jefe, con la
-    /// sacudida y el frenazo mas gordos del juego, y aqui caen veinte enemigos
-    /// por calle. Para eso esta `caidos`.
+    /// `boss_down` es solo para el portero: en el combate es el final de un
+    /// jefe, con la sacudida y el frenazo mas gordos del juego, y aqui caen
+    /// veinte enemigos por calle. Para los demas esta `caidos`.
     pub events: Events,
     /// Enemigos que han caido en el ultimo tick. Como `events`, no es estado.
     pub caidos: u32,
@@ -2999,18 +2999,25 @@ impl Paseo {
     /// Quita a los enemigos sin vida, avisando de cada caida.
     fn retirar_caidos(&mut self) {
         let mut caido = None;
+        let mut portero = None;
         let mut n = 0;
         self.enemigos.retain(|e| {
             if e.vida <= 0 {
                 caido = Some(e.pos);
+                if e.portero {
+                    portero = Some(e.pos);
+                }
                 n += 1;
             }
             e.vida > 0
         });
         self.caidos += n;
-        if let Some(pos) = caido {
+        // El portero cae como un jefe: el estallido sale de el aunque en el
+        // mismo tick caiga otro.
+        if let Some(pos) = portero.or(caido) {
             self.impacto = pos;
         }
+        self.events.boss_down |= portero.is_some();
     }
 
     /// Si la capsula de la jugadora toca un circulo.
@@ -4241,10 +4248,10 @@ mod tests {
             assert!(ticks < 60 * 60, "no cae");
         }
         assert_eq!(fases, [0, 1, 2], "pasa por las tres fases");
-        // Con la aguja y sin fallar una, unos 13 segundos: con lo que se
-        // esquiva, unos veinte.
+        // Con la aguja y sin fallar una, unos 11 segundos: con lo que se
+        // esquiva, unos quince.
         let segundos = ticks as f32 * DT;
-        assert!((12.0..20.0).contains(&segundos), "{segundos} s");
+        assert!((9.0..16.0).contains(&segundos), "{segundos} s");
         assert!(p.cierre().is_none(), "la arena sigue cerrada");
         assert!(p.ficha_visible(0), "sin su ficha");
     }
@@ -4591,7 +4598,7 @@ mod tests {
             );
         }
         let segundos = (p.tick - empieza) as f32 * DT;
-        assert!(segundos > 12.0, "dura poco: {segundos} s");
+        assert!(segundos > 9.0, "dura poco: {segundos} s");
         assert!(p.cierre().is_none(), "tumbado, se abre");
         while !p.terminado() {
             p.step(pulsar(DERECHA));
@@ -5435,7 +5442,7 @@ mod tests {
     fn monsieur_loyal_cambia_de_numeros_con_la_vida() {
         // Quieta e invulnerable en la pista, una vuelta entera de numeros en
         // cada fase: cuantas palomas por chistera, y si saca el baston.
-        for (fase, vida) in [(0, 240), (1, 120), (2, 60)] {
+        for (fase, vida) in [(0, 192), (1, 96), (2, 48)] {
             let mut p = Paseo::new(con_loyal(), 1);
             hasta_la_pista(&mut p);
             p.enemigos[0].vida = vida;
@@ -5471,7 +5478,7 @@ mod tests {
         // el tiempo de un portero, y al caer se abre la pista y sale la ficha.
         let mut p = Paseo::new(con_loyal(), 1);
         hasta_la_pista(&mut p);
-        assert_eq!(p.portero().map(|e| e.vida_max()), Some(240));
+        assert_eq!(p.portero().map(|e| e.vida_max()), Some(192));
         let desde = p.tick;
         while p.portero_vivo() {
             p.jugadora.iframes = 5;
@@ -5484,7 +5491,7 @@ mod tests {
             assert!(p.tick - desde < 60 * 45, "no cae");
         }
         let segundos = (p.tick - desde) as f32 * DT;
-        assert!((14.0..25.0).contains(&segundos), "dura {segundos} s");
+        assert!((10.0..20.0).contains(&segundos), "dura {segundos} s");
         assert!(p.cierre().is_none() && p.ficha_visible(0));
         correr(&mut p, DERECHA, 300);
         assert!(p.completado.is_some());
@@ -5906,6 +5913,7 @@ mod tests {
         p.enemigos.iter_mut().for_each(|e| e.vida = 0);
         p.step(InputFrame::NONE);
         assert!(p.cierre().is_none() && p.ficha_visible(0));
+        assert!(p.events.boss_down, "el portero cae como un jefe");
         correr(&mut p, InputFrame::LEFT, 120);
         assert!(p.jugadora.pos.x >= 1000.0, "lo de detras no vuelve");
         while !p.terminado() {

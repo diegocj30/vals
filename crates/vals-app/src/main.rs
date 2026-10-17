@@ -950,6 +950,11 @@ async fn run_game() {
             (Escena::Paseo, _) => {
                 audio.play_events(&eventos);
                 zumo.reaccionar(&eventos);
+                // El portero cae con el golpe de su jefe: sacudida, paron y
+                // el gran estallido salen de `boss_down` como en el combate.
+                if eventos.boss_down {
+                    audio.play(Sfx::caida(pista.nodos[nodo_actual].jefe), 1.0);
+                }
             }
             (Escena::Menu, Some(a)) => chispas.reaccionar(&eventos, &a.world),
             _ => {}
