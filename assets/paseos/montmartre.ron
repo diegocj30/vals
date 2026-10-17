@@ -172,20 +172,13 @@
     // --- La pista ---
     (tipo: Loyal, x: 8550.0, portero: true),
   ],
-  porteria: Some((desde: 7850.0, ficha: Some(5))),
+  porteria: Some((desde: 7850.0, ficha: Some(2))),
   // Las fichas. Se quedan al llegar a la puerta, no al cogerlas.
   fichas: [
     // En el boulevard.
     (600.0, 435.0),
-    // En el balcon del pintor de la escalera, detras de el.
-    (2945.0, 60.0),
-    // Sobre el primer vacio de los tejados, a ras de tejado: el salto pasa
-    // por encima, y se coge con un dash desde el borde.
-    (3875.0, 190.0),
     // En la mesa de la terraza del Tertre, detras de la botella.
     (5710.0, 20.0),
-    // En la cumbre, detras del ultimo pintor.
-    (6990.0, -165.0),
     // La de Monsieur Loyal: sale en medio de la pista al tumbarlo.
     (8330.0, -50.0),
   ],

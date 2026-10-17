@@ -162,6 +162,10 @@ impl Guardado {
         if self.final_visto {
             poner("", FINAL);
         }
+        // Sin fichas no hay nada que renumerar, y no hace falta decirlo.
+        if !self.fichas.is_empty() {
+            poner("", FICHAS_DE_TRES);
+        }
         for o in self.opciones.a_texto() {
             poner(OPCION, &o);
         }
@@ -177,6 +181,7 @@ impl Guardado {
             return Self::default();
         }
         let mut g = Self::default();
+        let mut de_tres = false;
         for n in trozos.map(str::trim).filter(|n| !n.is_empty()) {
             if let Some(f) = n.strip_prefix(FICHA) {
                 g.fichas.push(f.to_owned());
@@ -192,6 +197,8 @@ impl Guardado {
                 g.prologo_visto = true;
             } else if n == FINAL {
                 g.final_visto = true;
+            } else if n == FICHAS_DE_TRES {
+                de_tres = true;
             } else if let Some(m) = n.strip_prefix(MARCA) {
                 g.marcas.leer(m);
             } else if let Some(j) = n.strip_prefix(JUGADO) {
@@ -201,6 +208,9 @@ impl Guardado {
             } else {
                 g.bailados.push(n.to_owned());
             }
+        }
+        if !de_tres {
+            g.fichas = g.fichas.iter().filter_map(|c| renumerar(c)).collect();
         }
         g
     }
@@ -218,6 +228,39 @@ const OPCION: &str = "opcion:";
 
 fn clave_ficha(paseo: &str, i: usize) -> String {
     format!("{paseo}:{i}")
+}
+
+/// Los guardados nuevos lo llevan: sus fichas ya van con la lista de tres por
+/// paseo. Sin el, son de cuando habia mas y se renumeran al leer.
+const FICHAS_DE_TRES: &str = "visto:fichas3";
+
+/// De la lista vieja de cada paseo a la de tres: el sitio nuevo de cada
+/// ficha, o `None` si ya no esta. Las que se quitan se pierden, y lo comprado
+/// con ellas se queda.
+const RENUMERA: [(&str, &[Option<usize>]); 4] = [
+    ("El paseo de Viena", &[Some(0), None, Some(1), Some(2)]),
+    (
+        "El paseo del arrabal",
+        &[None, Some(0), Some(1), None, Some(2)],
+    ),
+    (
+        "El paseo de Chicago",
+        &[Some(0), None, None, Some(1), Some(2)],
+    ),
+    (
+        "El paseo de Montmartre",
+        &[Some(0), None, None, Some(1), None, Some(2)],
+    ),
+];
+
+/// La clave de una ficha de antes con su sitio de ahora, o `None` si se quito.
+fn renumerar(clave: &str) -> Option<String> {
+    let (paseo, i) = clave.rsplit_once(':')?;
+    let Some((_, tabla)) = RENUMERA.iter().find(|(p, _)| *p == paseo) else {
+        return Some(clave.to_owned());
+    };
+    let nuevo = (*tabla.get(i.parse::<usize>().ok()?)?)?;
+    Some(clave_ficha(paseo, nuevo))
 }
 
 // ---------------------------------------------------------------------------
@@ -429,8 +472,24 @@ mod tests {
         // Un guardado de antes del libro: todo lo demas igual, y el libro en
         // blanco.
         let viejo = Guardado::desde_texto("VALS1;El Vals;ficha:El paseo de Viena:2;tiro:Abanico");
-        assert!(viejo.tiene("El Vals") && viejo.tiene_ficha("El paseo de Viena", 2));
+        assert!(viejo.tiene("El Vals") && viejo.tiene_ficha("El paseo de Viena", 1));
         assert_eq!(viejo.marcas, crate::libro::Marcas::default());
+    }
+
+    #[test]
+    fn las_fichas_de_antes_pasan_a_la_lista_de_tres() {
+        // Las de cuando habia cuatro, cinco y seis por paseo: las que siguen
+        // cambian de sitio y las quitadas se van.
+        let viejo = Guardado::desde_texto(
+            "VALS1;ficha:El paseo de Viena:1;ficha:El paseo de Viena:3;             ficha:El paseo de Montmartre:3;ficha:El paseo del arrabal:0",
+        );
+        assert_eq!(
+            viejo.fichas,
+            ["El paseo de Viena:2", "El paseo de Montmartre:1"]
+        );
+        // Y lo ya renumerado no se vuelve a renumerar.
+        let leido = Guardado::desde_texto(&viejo.a_texto());
+        assert_eq!(leido, viejo);
     }
 
     #[test]

@@ -3920,7 +3920,7 @@ mod tests {
         assert_eq!(p.vidas, VIDAS, "no se ha caido de ningun tejado");
         // Ha subido al tren y ha tumbado al contrabajista disparando de
         // frente: sin el no se abre la puerta, y su ficha estaba de camino.
-        assert!(p.fichas[4], "sin la ficha del contrabajista");
+        assert!(p.fichas[2], "sin la ficha del contrabajista");
     }
 
     #[test]
@@ -4315,7 +4315,7 @@ mod tests {
         assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
         assert!(tumbado, "el director tenia que caer a tiros");
         assert_eq!(p.fichas_cogidas(), 2, "la del camino y la del director");
-        assert!(p.fichas[3], "la del director, al pasar por su tarima");
+        assert!(p.fichas[2], "la del director, al pasar por su tarima");
         assert_eq!(p.vidas, VIDAS, "no ha caido a ningun foso");
     }
 
@@ -5571,7 +5571,7 @@ mod tests {
         assert_eq!(p.vidas, VIDAS, "no ha caido a ningun foso");
         assert!(p.jugadora.pos.y < SUELO_Y - 400.0, "no ha llegado arriba");
         assert!(
-            !p.portero_vivo() && p.ficha_visible(5),
+            !p.portero_vivo() && p.ficha_visible(2),
             "Loyal sigue en pie"
         );
     }
@@ -5593,9 +5593,10 @@ mod tests {
         let mut total = 0;
         for def in PaseoDef::de_serie() {
             let n = def.fichas.len();
-            assert!((3..=6).contains(&n), "{}: {n} fichas", def.nombre);
-            // La del portero es de propina: no cuenta para la modista.
-            total += n - usize::from(def.porteria.and_then(|po| po.ficha).is_some());
+            // Una del camino, otra que hay que buscar y la del portero.
+            assert_eq!(n, 3, "{}: {n} fichas", def.nombre);
+            assert_eq!(def.porteria.and_then(|po| po.ficha), Some(n - 1));
+            total += n;
             for &(x, y) in &def.fichas {
                 assert!(
                     x > def.salida && x < def.puerta,
@@ -5610,9 +5611,10 @@ mod tests {
                 );
             }
         }
-        // Las de los porteros van aparte: sobran para la modista, no faltan.
+        // La modista cuesta 16: las tres de cada paseo y una mas en el
+        // quinto. Hasta que llegue, faltan esas cuatro.
         assert!(
-            total >= 16,
+            total <= 16,
             "los precios de la modista cuentan con 16: {total}"
         );
     }

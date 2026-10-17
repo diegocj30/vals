@@ -167,17 +167,13 @@
     // --- La milonga ---
     (tipo: Guapo, x: 8800.0, portero: true),
   ],
-  porteria: Some((desde: 8100.0, ficha: Some(4))),
+  porteria: Some((desde: 8100.0, ficha: Some(2))),
   // Las fichas. Se quedan al llegar a la puerta, no al cogerlas.
   fichas: [
-    // En el techo de la marquesina del tranvia.
-    (850.0, 300.0),
     // En la acera, entre dos compadritos.
     (1450.0, 435.0),
     // En el bote amarrado sobre el Riachuelo: hay que caer en el, no saltarlo.
     (3970.0, 395.0),
-    // Detras de la ultima florista, en su balcon de Caminito.
-    (7575.0, 305.0),
     // La que suelta el guapo al caer, en medio de la arena.
     (8580.0, 435.0),
   ],

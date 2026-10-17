@@ -136,16 +136,13 @@
     // --- El templete ---
     (tipo: Director, x: 7350.0, y: 458.0, portero: true),
   ],
-  porteria: Some((desde: 6600.0, ficha: Some(3))),
-  // Las fichas. Una en el camino, una que pide subir, otra que pide
-  // arriesgar y la del director. Se quedan al llegar a la puerta, no al
+  porteria: Some((desde: 6600.0, ficha: Some(2))),
+  // Las fichas. Una en el camino, otra que pide arriesgar y la del
+  // director. Se quedan al llegar a la puerta, no al
   // cogerlas.
   fichas: [
     // En la acera del Ring, para que la primera se coja sin buscarla.
     (620.0, 435.0),
-    // Encima del balcon del Ring: desde la acera no se llega, desde el
-    // balcon si.
-    (1055.0, 245.0),
     // A ras de agua, en mitad del primer canal. El salto pasa por encima:
     // hay que saltar y dar el dash enseguida.
     (3440.0, 410.0),
