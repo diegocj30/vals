@@ -765,6 +765,16 @@ async fn run_game() {
             intento.trampa = true;
             aviso = Some((tx(Texto::PaseoSaltado).to_owned(), false, 120));
         }
+        // F5, solo con `--pruebas`: a la puerta del portero del paseo.
+        if libre
+            && con_pruebas
+            && is_key_pressed(KeyCode::F5)
+            && escena == Escena::Paseo
+            && let Some((_, p)) = paseo.as_mut()
+        {
+            p.a_la_porteria();
+            intento.trampa = true;
+        }
         if libre && is_key_pressed(KeyCode::F3) && escena == Escena::Combate && !world.is_over() {
             world.saltar_el_baile();
             intento.trampa = true;

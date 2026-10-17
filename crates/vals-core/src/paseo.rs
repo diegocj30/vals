@@ -1339,6 +1339,33 @@ impl Paseo {
         self.llegar();
     }
 
+    /// Planta a la jugadora a la entrada de la arena del portero, con lo de
+    /// antes sin despertar. Es para probar porteros sin andar la calle: lo
+    /// llama F5 con `--pruebas`. Sin porteria no hace nada.
+    pub fn a_la_porteria(&mut self) {
+        let Some(po) = self.def.porteria else { return };
+        if self.terminado() {
+            return;
+        }
+        let x = po.desde + 40.0;
+        let p = Vec2::new(x, self.def.altura(x) - PIES);
+        self.jugadora.pos = p;
+        self.jugadora.prev_pos = p;
+        self.jugadora.vel = Vec2::ZERO;
+        self.seguro = p;
+        self.enemigos.retain(|e| e.portero);
+        self.proyectiles.clear();
+        self.fugaces.clear();
+        while self
+            .def
+            .enemigos
+            .get(self.siguiente)
+            .is_some_and(|a| a.x < po.desde && !a.portero)
+        {
+            self.siguiente += 1;
+        }
+    }
+
     /// Avanza un tick. Mismo estado mas mismo input, mismo resultado.
     pub fn step(&mut self, input: InputFrame) {
         self.events = Events::default();
@@ -5805,6 +5832,18 @@ mod tests {
         def.fichas = vec![(1500.0, 435.0)];
         def.puerta = 2500.0;
         def
+    }
+
+    #[test]
+    fn la_tecla_de_pruebas_lleva_a_la_puerta_del_portero() {
+        let mut p = Paseo::new(con_portero(), 1);
+        p.a_la_porteria();
+        assert!(p.jugadora.pos.x > 1000.0 && p.portero_vivo());
+        for _ in 0..90 {
+            p.jugadora.iframes = 5;
+            p.step(pulsar(DERECHA));
+        }
+        assert_eq!(p.cierre(), Some(1000.0), "y la arena se cierra al andar");
     }
 
     #[test]

@@ -365,6 +365,9 @@ textos! {
     ReintentarPaseo: "{} o {}  reintentar el paseo", "{} or {}  retry the promenade";
     EstaNoche: "ESTA NOCHE", "TONIGHT";
     ElDirector: "El director de orquesta", "The conductor";
+    ElGuapo: "El guapo del barrio", "The neighbourhood tough";
+    ElContrabajista: "El contrabajista", "The double bass player";
+    MonsieurLoyal: "Monsieur Loyal", "Monsieur Loyal";
 
     // --- La pista ---
     LaPista: "LA PISTA", "THE DANCE FLOOR";

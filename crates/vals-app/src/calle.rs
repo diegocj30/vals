@@ -226,15 +226,20 @@ pub fn encima(p: &Paseo, l: &Layout, n: &Nombres) {
     if p.cierre().is_some()
         && let Some(e) = p.portero()
     {
+        // Debajo del camino a la puerta, que va arriba del todo.
         let ancho = l.len(VISTA_W * 0.4);
         let frac = e.vida as f32 / e.vida_max().max(1) as f32;
-        draw::barra_de_vida(o.x + (w - ancho) * 0.5, o.y + 14.0, ancho, 7.0, frac);
+        let y = o.y + l.len(48.0);
+        draw::barra_de_vida(o.x + (w - ancho) * 0.5, y, ancho, l.len(7.0), frac);
         let quien = match e.tipo {
             Tipo::Director => Some(tx(Texto::ElDirector)),
+            Tipo::Guapo => Some(tx(Texto::ElGuapo)),
+            Tipo::Contrabajista => Some(tx(Texto::ElContrabajista)),
+            Tipo::Loyal => Some(tx(Texto::MonsieurLoyal)),
             _ => None,
         };
         if let Some(quien) = quien {
-            let y = o.y + l.len(62.0);
+            let y = y + l.len(26.0);
             fuentes::centrado(
                 quien,
                 o.x + w * 0.5 + 1.4,
