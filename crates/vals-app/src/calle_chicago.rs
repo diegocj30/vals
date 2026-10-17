@@ -36,6 +36,7 @@ use crate::escenarios::{Instrumento, arco, circulo, linea, musico, rect, tri};
 use crate::fuentes::{self, Cara};
 use crate::idioma::{Texto, nombre, tx};
 use crate::paleta::{LUZ, ORO, TINTA};
+use crate::skeleton;
 
 // La noche del club: verde botella, no azul de Prusia. Y un horizonte que
 // clarea hacia el ambar, que es lo que hace una ciudad con luz electrica.
@@ -90,11 +91,16 @@ enum Pieza {
     Via,
     /// Encima de otra plataforma y sobre el vacio: un deposito de agua.
     Deposito,
+    /// La que se mueve: un vagon del tren, y lo que se pisa es su techo.
+    Vagon,
 }
 
 fn pieza(p: &Paseo, i: usize) -> Pieza {
     let d = &p.def;
     let pl = d.plataformas[i];
+    if pl.mueve.is_some() {
+        return Pieza::Vagon;
+    }
     let cx = pl.x + pl.ancho * 0.5;
     if d.hay_suelo(cx) {
         return Pieza::Rellano;
@@ -516,7 +522,7 @@ fn pegado_a_la_acera(p: &Paseo, l: &Layout, cam: f32, t: f32, pulso: f32) {
             bloque(l, a, b, arriba, pulso);
         }
     }
-    for x in [1440.0, 5880.0] {
+    for x in [1440.0, 6520.0] {
         if ve(x - 60.0, x + 60.0) && p.def.hay_suelo(x) {
             ford(l, x, pulso);
         }
@@ -808,8 +814,29 @@ fn farolas(p: &Paseo, l: &Layout, cam: f32, pulso: f32) {
 pub fn calle(p: &Paseo, l: &Layout, alpha: f32, cam: f32, t: f32, pulso: f32) {
     acera(p, l, cam, t);
     let n = p.def.plataformas.len();
+    // La via del tren va por debajo de los vagones, una vez por hueco.
+    let mut vias: Vec<(f32, f32)> = Vec::new();
+    for i in 0..n {
+        if pieza(p, i) == Pieza::Vagon {
+            let h = hueco_del_tren(p, i);
+            if !vias.contains(&h) {
+                vias.push(h);
+            }
+        }
+    }
+    for (a, b) in vias {
+        if b > cam - 40.0 && a < cam + VISTA_W + 40.0 {
+            via_del_tren(l, a, b, pulso);
+        }
+    }
     // Primero los edificios, luego lo que va encima de ellos.
-    for fase in [Pieza::Azotea, Pieza::Via, Pieza::Deposito, Pieza::Rellano] {
+    for fase in [
+        Pieza::Azotea,
+        Pieza::Via,
+        Pieza::Vagon,
+        Pieza::Deposito,
+        Pieza::Rellano,
+    ] {
         for i in 0..n {
             let pl = p.def.plataformas[i];
             if pl.x > cam + VISTA_W + 40.0 || pl.x + pl.ancho < cam - 40.0 || pieza(p, i) != fase {
@@ -823,6 +850,7 @@ pub fn calle(p: &Paseo, l: &Layout, alpha: f32, cam: f32, t: f32, pulso: f32) {
                     deposito(l, pl.x, pl.y, pl.ancho, abajo);
                 }
                 Pieza::Rellano => rellano(p, l, i),
+                Pieza::Vagon => vagon(l, pl.x, pl.y, pl.ancho, t, pulso),
             }
         }
     }
@@ -1331,6 +1359,9 @@ pub fn enemigo(
         Tipo::Flapper => flapper(e, l, t, tiempo, tintas, tinte),
         Tipo::Saxo => saxo(e, l, tick, tiempo, tintas, tinte),
         Tipo::Saltarin => saltarin(e, l, tick, t, tiempo, tintas, tinte),
+        Tipo::Canotier => canotier(e, l, tick, t, tiempo, tintas, tinte),
+        Tipo::Fila => de_la_fila(e, l, tick, t, tiempo, tintas, tinte),
+        Tipo::Contrabajista => contrabajista(e, l, tick, t, tiempo, tintas, tinte),
         _ => {}
     }
 }
@@ -1690,12 +1721,16 @@ fn saltarin(
     );
 }
 
-/// Lo que vuela en Chicago: perlas del collar y corcheas del saxo. Las rosas
-/// llevan el anillo que late, que es como se dice "parry" en este juego.
+/// Lo que vuela en Chicago: perlas del collar, corcheas del saxo y lo del
+/// contrabajista. Las rosas llevan el anillo que late, que es como se dice
+/// "parry" en este juego.
 pub fn proyectil(q: &Proyectil, l: &Layout, t: f32) {
     let (x, y) = (q.pos.x, q.pos.y);
     let (mostaza, _) = paleta_charleston();
     match q.forma {
+        Forma::Negra => negra(q, l, mostaza),
+        Forma::Onda => onda(q, l, t),
+
         Forma::Perla => {
             let c = if q.rosa { ROSA } else { PERLA };
             circulo(l, x, y, 8.4, TINTA);
@@ -1729,5 +1764,672 @@ pub fn proyectil(q: &Proyectil, l: &Layout, t: f32) {
             2.0,
             fade(WHITE, 0.4 + 0.4 * k),
         );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// El tren
+// ---------------------------------------------------------------------------
+
+/// Donde van los carriles del tren: por debajo del techo de los vagones, a
+/// la altura de un tercer piso. Lejos de los pies a proposito: lo que se pisa
+/// es el techo, y unos carriles a la altura de un tejado se querrian pisar.
+const RIEL: f32 = 485.0;
+/// El granate de los vagones, que contra la noche verde se despega solo.
+const GRANATE: Color = color_u8!(128, 42, 40, 255);
+const GRANATE_OSCURO: Color = color_u8!(84, 28, 30, 255);
+
+/// El hueco por el que va el tren de la plataforma `i`: de la pared del
+/// tejado de su izquierda a la del de su derecha.
+fn hueco_del_tren(p: &Paseo, i: usize) -> (f32, f32) {
+    let pl = p.def.plataformas[i];
+    let fijas = || p.def.plataformas.iter().filter(|o| o.mueve.is_none());
+    let a = fijas()
+        .map(|o| o.x + o.ancho)
+        .filter(|&b| b <= pl.x + 1.0)
+        .fold(f32::MIN, f32::max);
+    let b = fijas()
+        .map(|o| o.x)
+        .filter(|&a| a >= pl.x + pl.ancho - 1.0)
+        .fold(f32::MAX, f32::min);
+    (
+        if a == f32::MIN { pl.x - 20.0 } else { a },
+        if b == f32::MAX {
+            pl.x + pl.ancho + 20.0
+        } else {
+            b
+        },
+    )
+}
+
+/// La via del elevado entre dos edificios: carriles con sus traviesas, la
+/// viga de celosia remachada y las columnas que bajan al callejon, con las
+/// mensulas clavadas en las dos paredes. Es el hierro de Chicago.
+fn via_del_tren(l: &Layout, a: f32, b: f32, pulso: f32) {
+    let fondo = VISTA_H + 10.0;
+    let (viga, canto) = (RIEL + 6.0, 34.0);
+    let bajo = viga + canto;
+    // Las columnas, con su cartela contra la viga.
+    let n = ((b - a) / 200.0).max(1.0) as i32;
+    for i in 1..n {
+        let cx = a + (b - a) * i as f32 / n as f32;
+        caja(l, cx - 8.0, bajo, 16.0, fondo - bajo, ACERO, 2.0);
+        rect(l, cx - 8.0, bajo, 4.0, fondo - bajo, ACERO_CLARO);
+        for lado in [-1.0, 1.0] {
+            tri(
+                l,
+                (cx + lado * 8.0, bajo),
+                (cx + lado * 30.0, bajo),
+                (cx + lado * 8.0, bajo + 16.0),
+                TINTA,
+            );
+        }
+    }
+    // Las mensulas de las paredes: la via sale de un edificio y entra en otro.
+    for (x, hacia) in [(a, 1.0), (b, -1.0)] {
+        tri(
+            l,
+            (x, viga),
+            (x + hacia * 40.0, bajo),
+            (x, bajo + 30.0),
+            TINTA,
+        );
+        tri(
+            l,
+            (x + hacia * 3.0, viga + 6.0),
+            (x + hacia * 30.0, bajo),
+            (x + hacia * 3.0, bajo + 20.0),
+            ACERO,
+        );
+    }
+    // La viga, en celosia y con remaches.
+    caja(l, a, viga, b - a, canto, ACERO, 2.5);
+    rect(l, a, viga, b - a, 5.0, ACERO_CLARO);
+    rect(l, a, bajo - 5.0, b - a, 5.0, ACERO_CLARO);
+    let mut x = a;
+    while x < b - 1.0 {
+        let x1 = (x + 30.0).min(b);
+        linea(l, (x, viga + 5.0), (x1, bajo - 5.0), 1.6, fade(TINTA, 0.7));
+        linea(l, (x, bajo - 5.0), (x1, viga + 5.0), 1.6, fade(TINTA, 0.7));
+        circulo(l, x + 3.0, viga + 2.5, 1.4, TINTA);
+        circulo(l, x + 3.0, bajo - 2.5, 1.4, TINTA);
+        x += 30.0;
+    }
+    // Traviesas, el tercer carril con su luz y el carril.
+    rect(l, a, RIEL, b - a, 6.0, TINTA);
+    let mut x = a;
+    while x < b {
+        rect(l, x + 1.0, RIEL + 1.0, 9.0, 4.0, MADERA);
+        x += 14.0;
+    }
+    linea(
+        l,
+        (a, RIEL + 3.0),
+        (b, RIEL + 3.0),
+        1.2,
+        fade(LUZ, 0.25 + 0.2 * pulso),
+    );
+    rect(l, a, RIEL - 3.0, b - a, 3.0, RAIL);
+    linea(l, (a, RIEL - 3.0), (b, RIEL - 3.0), 1.5, TINTA);
+}
+
+/// Un vagon del elevado de los anos veinte: caja granate, plataformas
+/// abiertas en las puntas con su barandilla, ventanillas encendidas con
+/// gente dentro, el letrero de la linea y dos bojes con las ruedas girando.
+/// El techo, claro y con canto de tinta, es lo que se pisa.
+fn vagon(l: &Layout, x: f32, y: f32, w: f32, t: f32, pulso: f32) {
+    // Los vagones se solapan para que no haya rendija: se pinta mas estrecho.
+    let (a, b) = (x + 3.0, x + w - 3.0);
+    let suelo = RIEL - 16.0;
+    let techo = y + 8.0;
+    // Los bojes, con las ruedas girando segun avanza: el angulo sale de x.
+    let (s, c) = sin_cos(x / 9.0);
+    for bx in [a + 40.0, b - 40.0] {
+        caja(l, bx - 28.0, suelo, 56.0, 6.0, HIERRO, 1.5);
+        for dx in [-16.0, 16.0] {
+            let (cx, cy) = (bx + dx, RIEL - 9.0);
+            circulo(l, cx, cy, 9.5, TINTA);
+            circulo(l, cx, cy, 7.5, HIERRO);
+            let r = 7.0;
+            linea(
+                l,
+                (cx - c * r, cy - s * r),
+                (cx + c * r, cy + s * r),
+                1.5,
+                TINTA,
+            );
+            linea(
+                l,
+                (cx + s * r, cy - c * r),
+                (cx - s * r, cy + c * r),
+                1.5,
+                TINTA,
+            );
+            circulo(l, cx, cy, 2.0, RAIL);
+        }
+    }
+    // El enganche, que tapa el solape con el siguiente.
+    rect(l, b - 2.0, suelo - 20.0, 10.0, 6.0, TINTA);
+    // La caja, con la franja de debajo de las ventanillas y el filete de oro.
+    let (pa, pb) = (a + 22.0, b - 22.0);
+    caja(l, pa, techo, pb - pa, suelo - techo, GRANATE, 2.5);
+    rect(l, pa, suelo - 34.0, pb - pa, 34.0, GRANATE_OSCURO);
+    linea(l, (pa, suelo - 34.0), (pb, suelo - 34.0), 2.0, TINTA);
+    rect(l, pa, techo + 12.0, pb - pa, 4.0, fade(ORO, 0.7));
+    // Las ventanillas, con gente que cabecea con el rag.
+    let ventanas = ((pb - pa - 20.0) / 26.0) as i32;
+    let mut rng = Pcg32::new(0x7AE4);
+    for k in 0..ventanas {
+        let vx = pa + 12.0 + k as f32 * 26.0;
+        let vy = techo + 30.0;
+        caja(l, vx, vy, 18.0, 34.0, fade(VENTANA, 0.8 + 0.2 * pulso), 1.8);
+        if rng.next_f32() < 0.6 {
+            let bote = pulso * 1.5 + (t * 0.05 + k as f32).sin() * 0.8;
+            let sombra = fade(TINTA, 0.75);
+            circulo(l, vx + 9.0, vy + 20.0 + bote, 4.5, sombra);
+            rect(l, vx + 3.0, vy + 25.0 + bote, 12.0, 9.0, sombra);
+            rect(l, vx + 3.5, vy + 15.0 + bote, 11.0, 2.0, sombra);
+        }
+    }
+    // El letrero de la linea, debajo de las ventanillas del medio.
+    let cx = (pa + pb) * 0.5;
+    caja(
+        l,
+        cx - 26.0,
+        techo + 72.0,
+        52.0,
+        16.0,
+        color_u8!(246, 232, 196, 255),
+        1.5,
+    );
+    rotulo(l, "LOOP", cx, techo + 85.0, 13.0, TINTA);
+    // Las plataformas de las puntas: suelo, barandilla y el farol.
+    for (p0, p1, farol) in [(a, pa, a + 4.0), (pb, b, b - 4.0)] {
+        caja(l, p0, suelo - 8.0, p1 - p0, 8.0, HIERRO, 1.5);
+        linea(l, (p0, suelo - 36.0), (p1, suelo - 36.0), 2.0, HIERRO);
+        for bx in [p0 + 2.0, (p0 + p1) * 0.5, p1 - 2.0] {
+            linea(l, (bx, suelo - 36.0), (bx, suelo - 8.0), 1.5, HIERRO);
+        }
+        linea(l, (farol, techo), (farol, suelo - 36.0), 2.0, TINTA);
+        circulo(l, farol, techo + 20.0, 5.0, TINTA);
+        circulo(l, farol, techo + 20.0, 3.5, fade(LUZ, 0.8 + 0.2 * pulso));
+    }
+    // El techo, de punta a punta: es lo que se pisa.
+    caja(l, x + 1.0, y, w - 2.0, 8.0, PIEDRA, 2.0);
+    linea(l, (x, y), (x + w, y), 3.5, TINTA);
+    for vx in [a + 50.0, b - 50.0] {
+        caja(l, vx - 10.0, y + 9.0, 20.0, 5.0, HIERRO, 1.0);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Los numeros de Chicago: el canotier, la fila y el contrabajista
+// ---------------------------------------------------------------------------
+
+/// Un trazo curvo de `a` a `b`, como los brazos de manguera de los jefes: la
+/// Bezier de `skeleton::trazo` hecha de tramos rectos.
+fn manga(l: &Layout, a: (f32, f32), b: (f32, f32), arqueo: f32, g: f32, c: Color) {
+    const PASOS: usize = 6;
+    let (va, vb) = (vec2(a.0, a.1), vec2(b.0, b.1));
+    let mut antes = va;
+    for i in 1..=PASOS {
+        let p = skeleton::trazo(va, vb, arqueo, i as f32 / PASOS as f32);
+        linea(l, (antes.x, antes.y), (p.x, p.y), g, c);
+        circulo(l, p.x, p.y, g * 0.5, c);
+        antes = p;
+    }
+}
+
+/// Un canotier volando: ala de paja, copa baja y la cinta verde. Se ve de
+/// plano o de canto segun gira, y en el tiron deja estela.
+fn canotier(
+    e: &Enemigo,
+    l: &Layout,
+    tick: u64,
+    t: f32,
+    tiempo: u32,
+    (_, verde): (Color, Color),
+    tinte: &dyn Fn(Color) -> Color,
+) {
+    let (x, y) = (e.pos.x, e.pos.y);
+    let giro = paseo::giro_canotier(tick, tiempo);
+    let (_, dentro, _) = paseo::clave(tick, tiempo);
+    // La estela del tiron: donde estaba hace un poco, en la misma vuelta.
+    if dentro < paseo::TIRON_CANOTIER {
+        let (rx, ry) = paseo::VUELTA_CANOTIER;
+        let sitio = |a: f32| {
+            let (s, c) = sin_cos(a);
+            (-rx * s, -ry * c)
+        };
+        let ahora = sitio(giro);
+        for k in 1..4 {
+            let (dx, dy) = sitio(giro - 0.22 * k as f32);
+            let f = k as f32;
+            circulo(
+                l,
+                x - ahora.0 + dx,
+                y - ahora.1 + dy,
+                9.0 - f * 2.0,
+                fade(PAJA, 0.35 - 0.08 * f),
+            );
+        }
+    }
+    let (s, c) = sin_cos(giro * 1.5);
+    let canto = 0.35 + 0.65 * s.abs();
+    let inclina = 22.0 * c;
+    let paja = tinte(PAJA);
+    let cinta = tinte(if e.rosa { ROSA } else { verde });
+    let p = l.to_screen(x, y + 3.0);
+    // El ala, con su canto de tinta, y la copa encima.
+    draw_ellipse(
+        p.x,
+        p.y,
+        l.len(19.0),
+        l.len(3.5 + 4.0 * canto),
+        inclina,
+        TINTA,
+    );
+    draw_ellipse(
+        p.x,
+        p.y,
+        l.len(17.0),
+        l.len(2.0 + 4.0 * canto),
+        inclina,
+        paja,
+    );
+    let (si, ci) = sin_cos(inclina * PI / 180.0);
+    let rota = |dx: f32, dy: f32| (x + dx * ci - dy * si, y + 3.0 + dx * si + dy * ci);
+    con_tinta(|g, es_tinta| {
+        let (cp, cc) = if es_tinta {
+            (TINTA, TINTA)
+        } else {
+            (paja, cinta)
+        };
+        let (a, b, c, d) = (
+            rota(-10.0 - g, 0.0),
+            rota(10.0 + g, 0.0),
+            rota(9.0 + g, -12.0 - g),
+            rota(-9.0 - g, -12.0 - g),
+        );
+        tri(l, a, b, c, cp);
+        tri(l, a, c, d, cp);
+        let (a, b, c, d) = (
+            rota(-10.0, -2.0),
+            rota(10.0, -2.0),
+            rota(9.5, -6.0),
+            rota(-9.5, -6.0),
+        );
+        tri(l, a, b, c, cc);
+        tri(l, a, c, d, cc);
+    });
+    // El trenzado de la paja: una raya de tinta en el ala.
+    linea(l, rota(-14.0, 1.0), rota(14.0, 1.0), 1.0, fade(TINTA, 0.5));
+    if e.rosa {
+        let k = 0.5 + 0.5 * (t * 0.2).sin();
+        let q = l.to_screen(x, y);
+        draw_circle_lines(
+            q.x,
+            q.y,
+            l.len(22.0 + 4.0 * k),
+            2.0,
+            fade(WHITE, 0.4 + 0.4 * k),
+        );
+    }
+}
+
+/// Una chica de la fila: flapper de talle bajo, de dos tintas alternas, con
+/// los brazos enlazados con las de su lado. Patean todas a la vez en cada
+/// golpe de clave, y las dos del hueco levantan el brazo de fuera cuando se
+/// abre: es el aviso de por donde se pasa.
+fn de_la_fila(
+    e: &Enemigo,
+    l: &Layout,
+    tick: u64,
+    t: f32,
+    tiempo: u32,
+    (mostaza, verde): (Color, Color),
+    tinte: &dyn Fn(Color) -> Color,
+) {
+    let (x, y) = (e.pos.x, e.pos.y);
+    let pies = y + 38.0;
+    let k = e.en_la_fila();
+    let (golpe, _, _) = paseo::clave(tick, tiempo);
+    let patada = golpe_de_clave(tick, tiempo);
+    let (s, _) = sin_cos(TAU * t / (2 * tiempo.max(1)) as f32);
+    let hueco = paseo::hueco_fila(tick, tiempo);
+    let vestido = tinte(if k.is_multiple_of(2) { mostaza } else { verde });
+    let cinta = tinte(if k.is_multiple_of(2) { verde } else { mostaza });
+    let piel = tinte(PIEL);
+    // La pierna que patea va cambiando con el golpe.
+    let lado_patada = if golpe.is_multiple_of(2) { -1.0 } else { 1.0 };
+    let cadera = (x, y + 12.0);
+    // Hacia que lado esta el hueco, si es una de las del medio.
+    let al_hueco = if k + 1 == paseo::FILA / 2 {
+        Some(1.0)
+    } else if k == paseo::FILA / 2 {
+        Some(-1.0)
+    } else {
+        None
+    };
+    con_tinta(|g, es_tinta| {
+        let (v, pi) = if es_tinta {
+            (TINTA, TINTA)
+        } else {
+            (vestido, piel)
+        };
+        for lado in [-1.0, 1.0] {
+            let (rodilla, talon) = if lado == lado_patada && patada > 0.0 {
+                (
+                    (x + lado * (6.0 + 10.0 * patada), pies - 14.0 - 8.0 * patada),
+                    (x + lado * (8.0 + 20.0 * patada), pies - 6.0 - 20.0 * patada),
+                )
+            } else {
+                (
+                    (x + s * 3.0, pies - 16.0),
+                    (x + lado * (9.0 + 7.0 * s * lado), pies),
+                )
+            };
+            let arranque = (cadera.0 + lado * 4.0, cadera.1);
+            linea(l, arranque, rodilla, 4.5 + 2.0 * g, pi);
+            linea(l, rodilla, talon, 4.0 + 2.0 * g, pi);
+        }
+        rect(l, x - 11.0 - g, y - 22.0 - g, 22.0 + 2.0 * g, 30.0 + g, v);
+        rect(l, x - 14.0 - g, y + 4.0, 28.0 + 2.0 * g, 12.0 + g, v);
+        circulo(l, x - 2.0, y - 32.0, 9.0 + g, pi);
+        // Los brazos: enlazados con la de al lado, salvo el del hueco, que
+        // sube con la mano abierta cuando se abre.
+        for lado in [-1.0, 1.0] {
+            let hombro = (x + lado * 9.0, y - 18.0);
+            let mano = if al_hueco == Some(lado) {
+                (x + lado * (22.0 - 6.0 * hueco), y - 14.0 - 34.0 * hueco)
+            } else {
+                (x + lado * paseo::ESPACIO_FILA * 0.5, y - 10.0)
+            };
+            manga(l, hombro, mano, lado * 6.0, 3.5 + 2.0 * g, pi);
+        }
+    });
+    // Los flecos, la melena con la cinta y la pluma.
+    for i in 0..7 {
+        let fx = x - 12.0 + i as f32 * 4.0;
+        linea(l, (fx, y + 14.0), (fx - s * 4.0, y + 22.0), 1.5, TINTA);
+    }
+    circulo(l, x - 3.5, y - 35.0, 9.5, TINTA);
+    tri(
+        l,
+        (x - 10.0, y - 34.0),
+        (x - 4.0, y - 26.0),
+        (x + 4.0, y - 30.0),
+        TINTA,
+    );
+    circulo(l, x - 6.5, y - 31.0, 5.0, piel);
+    linea(l, (x - 11.0, y - 38.0), (x + 7.0, y - 38.0), 2.5, cinta);
+    tri(
+        l,
+        (x + 3.0, y - 39.0),
+        (x + 7.0, y - 39.0),
+        (x + 10.0, y - 56.0 + patada * 3.0),
+        cinta,
+    );
+    if hueco > 0.5
+        && let Some(lado) = al_hueco
+    {
+        // La mano abierta, en jazz hands.
+        let m = (x + lado * (22.0 - 6.0 * hueco), y - 14.0 - 34.0 * hueco);
+        for d in [-4.0, 0.0, 4.0] {
+            linea(l, m, (m.0 + d, m.1 - 7.0), 1.5, TINTA);
+        }
+    }
+}
+
+/// El contrabajista: bombin, bigote, chaleco a rayas en las dos tintas y el
+/// contrabajo delante, mas alto que el. Una mano en el mastil y la otra
+/// pellizcando las cuerdas; en el slap la echa atras y el contrabajo se
+/// mece, y en la ultima fase lo hace girar sobre la pica, que es lo que se
+/// hacia en los clubs.
+fn contrabajista(
+    e: &Enemigo,
+    l: &Layout,
+    tick: u64,
+    t: f32,
+    tiempo: u32,
+    (mostaza, verde): (Color, Color),
+    tinte: &dyn Fn(Color) -> Color,
+) {
+    let (x, y, d) = (e.pos.x, e.pos.y, e.dir);
+    let pies = y + 48.0;
+    let cabeceo = golpe_de_clave(tick, tiempo) * 3.0;
+    let slap = e.gesto;
+    let negro = tinte(color_u8!(30, 28, 34, 255));
+    let camisa = tinte(HUESO);
+    let chaleco = tinte(mostaza);
+    let piel = tinte(PIEL);
+    let madera = tinte(color_u8!(150, 84, 44, 255));
+    let cadera = (x - d * 12.0, pies - 52.0);
+    let hombros = (x - d * 12.0 + d * cabeceo * 0.3, pies - 92.0 + cabeceo);
+    let cabeza = (hombros.0 + d * 2.0, hombros.1 - 17.0);
+
+    // El, detras del contrabajo.
+    con_tinta(|g, es_tinta| {
+        let (ne, ca, ch, pi) = if es_tinta {
+            (TINTA, TINTA, TINTA, TINTA)
+        } else {
+            (negro, camisa, chaleco, piel)
+        };
+        for lado in [-1.0, 1.0] {
+            let pie = (cadera.0 + lado * 11.0, pies - 4.0);
+            linea(
+                l,
+                (cadera.0 + lado * 6.0, cadera.1),
+                pie,
+                10.0 + 2.0 * g,
+                ne,
+            );
+        }
+        // La camisa y el chaleco encima.
+        tri(
+            l,
+            (hombros.0 - 18.0 - g, hombros.1 - g),
+            (hombros.0 + 18.0 + g, hombros.1 - g),
+            (cadera.0 + 15.0 + g, cadera.1 + g),
+            ca,
+        );
+        tri(
+            l,
+            (hombros.0 - 18.0 - g, hombros.1 - g),
+            (cadera.0 + 15.0 + g, cadera.1 + g),
+            (cadera.0 - 15.0 - g, cadera.1 + g),
+            ca,
+        );
+        rect(
+            l,
+            cadera.0 - 14.0 - g,
+            hombros.1 + 6.0 - g,
+            28.0 + 2.0 * g,
+            cadera.1 - hombros.1 - 4.0 + g,
+            ch,
+        );
+        circulo(l, cabeza.0, cabeza.1, 12.0 + g, pi);
+    });
+    // Las rayas del chaleco, la pajarita, los zapatos y la cara.
+    for i in 0..5 {
+        let sx = cadera.0 - 11.0 + i as f32 * 5.5;
+        linea(
+            l,
+            (sx, hombros.1 + 7.0),
+            (sx, cadera.1 + 1.0),
+            2.0,
+            tinte(verde),
+        );
+    }
+    for lado in [-1.0, 1.0] {
+        tri(
+            l,
+            (hombros.0 + lado * 6.0, hombros.1 - 1.0),
+            (hombros.0, hombros.1 + 2.0),
+            (hombros.0 + lado * 6.0, hombros.1 + 5.0),
+            TINTA,
+        );
+        rect(
+            l,
+            cadera.0 + lado * 11.0 - 8.0 + d * 3.0,
+            pies - 5.0,
+            14.0,
+            5.0,
+            TINTA,
+        );
+    }
+    linea(
+        l,
+        (cabeza.0 + d * 3.0, cabeza.1 + 5.0),
+        (cabeza.0 + d * 12.0, cabeza.1 + 6.0),
+        3.0,
+        TINTA,
+    );
+    circulo(l, cabeza.0 + d * 6.0, cabeza.1 - 2.0, 1.6, TINTA);
+    // El bombin: ala corta y copa redonda, con la cinta verde.
+    rect(l, cabeza.0 - 16.0, cabeza.1 - 11.0, 32.0, 4.0, TINTA);
+    circulo(l, cabeza.0, cabeza.1 - 13.0, 11.0, TINTA);
+    rect(l, cabeza.0 - 11.0, cabeza.1 - 13.0, 22.0, 2.5, tinte(verde));
+
+    // El contrabajo, inclinado hacia el, sobre la pica. Se mece en el slap y
+    // en la ultima fase gira: se estrecha y enseguida vuelve a abrirse.
+    let pica = (x + d * 22.0, pies);
+    let mece = -d * (0.12 + 0.12 * slap);
+    let ancho = if e.fase() == 2 {
+        0.25 + 0.75 * (t * 0.12).cos().abs()
+    } else {
+        1.0
+    };
+    let (sm, cm) = sin_cos(mece);
+    let en = |dx: f32, dy: f32| {
+        let dx = dx * ancho;
+        (pica.0 + dx * cm - dy * sm, pica.1 + dx * sm + dy * cm)
+    };
+    con_tinta(|g, es_tinta| {
+        let (m, ne) = if es_tinta {
+            (TINTA, TINTA)
+        } else {
+            (madera, negro)
+        };
+        for (dy, r) in [(-30.0, 22.0), (-62.0, 17.0)] {
+            let c = en(0.0, dy);
+            let q = l.to_screen(c.0, c.1);
+            draw_ellipse(
+                q.x,
+                q.y,
+                l.len(r * ancho + g),
+                l.len(r + g),
+                mece * 180.0 / PI,
+                m,
+            );
+        }
+        linea(l, en(0.0, -12.0), en(0.0, -76.0), 20.0 * ancho + 2.0 * g, m);
+        // El mastil y la voluta, por encima de su cabeza, y la pica.
+        linea(l, en(0.0, -76.0), en(0.0, -128.0), 5.0 + 2.0 * g, ne);
+        let v = en(0.0, -132.0);
+        circulo(l, v.0, v.1, 5.0 + g, m);
+        linea(l, en(0.0, -8.0), pica, 3.0 + g, ne);
+    });
+    // Las efes, el puente y las cuerdas, que tiemblan tras el slap.
+    if ancho > 0.5 {
+        for lado in [-1.0, 1.0] {
+            linea(l, en(lado * 9.0, -40.0), en(lado * 8.0, -26.0), 1.5, TINTA);
+        }
+        let puente = en(0.0, -34.0);
+        rect(l, puente.0 - 6.0, puente.1 - 1.0, 12.0, 3.0, TINTA);
+        for k in [-3.0, -1.0, 1.0, 3.0] {
+            let vibra = slap * 1.5 * (t * 1.7 + k).sin();
+            linea(
+                l,
+                en(k * 0.8, -20.0),
+                en(k * 0.5 + vibra, -126.0),
+                0.8,
+                fade(HUESO, 0.8),
+            );
+        }
+    }
+
+    // Los brazos, delante: el de atras en el mastil y el de delante en las
+    // cuerdas, que en el slap se echa hacia fuera.
+    let mastil = en(0.0, -100.0);
+    let cuerdas = if slap > 0.0 {
+        (pica.0 + d * (16.0 + 22.0 * slap), pies - 54.0 - 10.0 * slap)
+    } else {
+        let c = en(0.0, -48.0);
+        (c.0 + d * cabeceo, c.1)
+    };
+    let brazos = [
+        ((hombros.0 - d * 10.0, hombros.1 + 4.0), mastil, -d * 10.0),
+        ((hombros.0 + d * 10.0, hombros.1 + 4.0), cuerdas, d * 8.0),
+    ];
+    con_tinta(|g, es_tinta| {
+        let (ca, pi) = if es_tinta {
+            (TINTA, TINTA)
+        } else {
+            (camisa, piel)
+        };
+        for (hombro, mano, arqueo) in brazos {
+            manga(l, hombro, mano, arqueo, 6.0 + 2.0 * g, ca);
+            circulo(l, mano.0, mano.1, 4.5 + g, pi);
+        }
+    });
+    // Las rayas del golpe del slap.
+    if slap > 0.2 {
+        for k in [-1.0, 0.0, 1.0] {
+            let a = (pica.0 + d * 30.0, pies - 54.0 + k * 10.0);
+            let b = (a.0 + d * 16.0 * slap, a.1 + k * 6.0 * slap);
+            linea(l, a, b, 2.0, fade(TINTA, slap));
+        }
+    }
+}
+
+/// Una negra del contrabajista: cabeza llena y plica, sin corchete, con un
+/// rastro de dos puntos por donde viene, que es lo que dice que se tuerce.
+fn negra(q: &Proyectil, l: &Layout, mostaza: Color) {
+    let (x, y) = (q.pos.x, q.pos.y);
+    let v = q.vel.normalize_or_zero();
+    for k in 1..3 {
+        let f = k as f32;
+        circulo(
+            l,
+            x - v.x * 12.0 * f,
+            y - v.y * 12.0 * f,
+            4.0 - f,
+            fade(PAJA, 0.5 - 0.15 * f),
+        );
+    }
+    let c = if q.rosa { ROSA } else { mostaza };
+    con_tinta(|g, es_tinta| {
+        let c = if es_tinta { TINTA } else { c };
+        let p = l.to_screen(x - 2.0, y + 5.0);
+        draw_ellipse(p.x, p.y, l.len(7.5 + g), l.len(5.5 + g), -22.0, c);
+        linea(l, (x + 4.5, y + 4.0), (x + 4.5, y - 15.0), 2.4 + 2.0 * g, c);
+    });
+}
+
+/// La onda del slap: tres arcos que corren por la acera hacia donde va, con
+/// polvo levantado detras. Es baja: se salta.
+fn onda(q: &Proyectil, l: &Layout, t: f32) {
+    let (x, y) = (q.pos.x, q.pos.y);
+    let d = q.vel.x.signum();
+    // El centro va a un radio por encima de la acera.
+    let pies = y + 12.0;
+    for k in 0..3 {
+        let cx = x - d * 9.0 * k as f32;
+        let r = 20.0 - 4.0 * k as f32;
+        let mut antes = (cx, pies - r);
+        for i in 1..=6 {
+            let a = PI * 0.5 - PI * 0.5 * i as f32 / 6.0;
+            let (s, c) = sin_cos(a);
+            let p = (cx + d * c * r * 0.7, pies - s * r);
+            linea(l, antes, p, 5.5, TINTA);
+            linea(l, antes, p, 3.0, fade(LUZ, 0.95 - 0.25 * k as f32));
+            antes = p;
+        }
+    }
+    for i in 0..3 {
+        let fx = x - d * (20.0 + 8.0 * i as f32);
+        let fy = pies - 3.0 - (t * 0.3 + i as f32).sin().abs() * 4.0;
+        circulo(l, fx, fy, 2.2, fade(HORMIGON, 0.6));
     }
 }

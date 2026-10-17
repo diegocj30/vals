@@ -4,9 +4,10 @@
 // caballete de acero y una puerta de sotano por la que se sale el jazz. Viena
 // era una calle; esto es una ciudad que se cruza **por arriba**. La calle se
 // corta al borde del terraplen, y para seguir hay que subir por la escalera de
-// incendios, correr por las azoteas y bajar por las vias del elevado.
+// incendios, correr por las azoteas, subirse al techo del elevado y bajar por
+// sus vias.
 //
-// Cuatro tramos, de izquierda a derecha (la puerta esta en x 7000):
+// Cinco tramos, de izquierda a derecha (la puerta esta en x 9100):
 //
 //   1. State Street        0 - 2280   la calle, con el saxo en su escalera de
 //                                     incendios y la primera flapper. Al final,
@@ -14,9 +15,15 @@
 //   2. Las azoteas      2360 - 4280   cuatro tejados con el vacio entre medias.
 //                                     Caer es caer a la calle de abajo: una
 //                                     vida, y vuelves al ultimo tejado pisado.
-//   3. El elevado       4440 - 5800   las vias, cortadas por la mitad.
-//   4. El club          5700 - 7400   otra vez en la calle, hasta la puerta del
-//                                     sotano.
+//   3. El tren          4280 - 5620   EL NUMERO: entre dos edificios hay mil
+//                                     unidades de vacio, y por el pasa el
+//                                     elevado de un lado a otro. Se baja al
+//                                     techo de los vagones, se cruza con el y
+//                                     se salta al tejado de enfrente.
+//   4. El elevado       5780 - 6420   las vias, que bajan a la calle.
+//   5. El club          6320 - 9500   otra vez en la calle: la fila del
+//                                     charleston y, antes de la puerta del
+//                                     sotano, la arena del contrabajista.
 //
 // En nativo hay HOT-RELOAD, igual que con los jefes: guarda y el nivel se
 // rehace sin recompilar, con la jugadora donde estaba.
@@ -35,25 +42,44 @@
 //                   sobre el vacio, y < 320   azotea: el edificio entero debajo
 //                   sobre el vacio, y >= 320  las vias del elevado
 //                   encima de otra            deposito de agua en su tejado
+//                   con `mueve`               un vagon del tren: el techo es
+//                                             lo que se pisa, y la via va por
+//                                             debajo, de tejado a tejado.
+//                 Los vagones se solapan un poco: pasar de uno a otro no
+//                 puede ser caer por la rendija.
 //   enemigos      tipo: Flapper (planta; el collar suelta perlas en la clave,
 //                                y = superficie donde baila),
 //                       Saxo (en una escalera; rafagas de 3-3-2 notas a ti),
 //                       Saltarin (brinca hacia ti: alto, alto, bajo; no se
 //                                 tira de su tejado),
-//                       Nota (el jazz que se sale del sotano; y = altura).
-//                 rosa: true solo en notas. La flapper y el saxo sueltan su
-//                 rosa solos, en el golpe de dos.
+//                       Canotier (vuela hacia ti dando una vuelta por compas,
+//                                 a tirones en la clave: arriba, en picado
+//                                 por delante, por detras. y = el centro de
+//                                 la vuelta, que sube 64 y baja 32),
+//                       Fila (la fila del charleston: una aparicion son
+//                             cuatro chicas, con x en el centro. Avanza un
+//                             paso en cada golpe; el hueco del medio se
+//                             abre en el segundo y se cierra en el uno),
+//                       Contrabajista (el portero: negras en arco 3-3-2,
+//                                      y con menos vida el slap, una onda
+//                                      a ras de acera que se salta).
+//                 rosa: true solo en canotieres. La flapper, el saxo y el
+//                 contrabajista sueltan su rosa solos, en el golpe de dos.
+//                 portero: true en el contrabajista.
+//   porteria      la arena del portero: una vista entera desde `desde`. Se
+//                 cierra al llegar y se abre al tumbarlo, y entonces sale la
+//                 ficha `ficha` (su indice en `fichas`).
 (
   nombre: "El paseo de Chicago",
   jefe: "El Charleston",
   subtitulo: "Por encima de la ciudad",
   tiempo: 36,
-  largo: 7400.0,
+  largo: 9500.0,
   salida: 140.0,
-  puerta: 7000.0,
+  puerta: 9100.0,
   suelo: [
     (0.0, 2280.0),
-    (5700.0, 7400.0),
+    (6320.0, 9500.0),
   ],
   plataformas: [
     // State Street: la escalera del saxo, que se puede subir a por el.
@@ -70,47 +96,56 @@
     (x: 3060.0, y: 200.0, ancho: 80.0),
     (x: 3500.0, y: 240.0, ancho: 300.0),
     (x: 3960.0, y: 200.0, ancho: 320.0),
-    // El elevado, cortado.
-    (x: 4440.0, y: 330.0, ancho: 560.0),
-    (x: 5160.0, y: 330.0, ancho: 640.0),
+    // El tren: dos vagones que van y vienen de 4290 a 5270, ocho segundos la
+    // ida y la vuelta. Frenan en los extremos, que es cuando se sube y se baja.
+    (x: 4290.0, y: 330.0, ancho: 200.0, mueve: Some(Vaiven(dx: 584.0, dy: 0.0, periodo: 480))),
+    (x: 4486.0, y: 330.0, ancho: 200.0, mueve: Some(Vaiven(dx: 584.0, dy: 0.0, periodo: 480))),
+    // El tejado de enfrente, 90 por encima del techo del tren.
+    (x: 5280.0, y: 240.0, ancho: 340.0),
+    // El elevado, que baja a la calle del club.
+    (x: 5780.0, y: 330.0, ancho: 640.0),
     // El club: la otra escalera, con otro saxo.
-    (x: 6250.0, y: 400.0, ancho: 130.0),
-    (x: 6250.0, y: 330.0, ancho: 130.0),
+    (x: 6870.0, y: 400.0, ancho: 130.0),
+    (x: 6870.0, y: 330.0, ancho: 130.0),
   ],
   enemigos: [
     // --- State Street ---
     (tipo: Saltarin, x: 700.0),
-    (tipo: Nota, x: 950.0, y: 330.0),
-    (tipo: Nota, x: 1010.0, y: 290.0),
-    (tipo: Nota, x: 1070.0, y: 330.0),
+    (tipo: Canotier, x: 980.0, y: 390.0),
+    (tipo: Canotier, x: 1060.0, y: 390.0),
     (tipo: Saxo, x: 1215.0, y: 330.0),
     (tipo: Flapper, x: 1560.0),
     (tipo: Saltarin, x: 1760.0),
-    (tipo: Nota, x: 2080.0, y: 180.0, rosa: true),
+    (tipo: Canotier, x: 2080.0, y: 200.0, rosa: true),
     // --- Las azoteas ---
     (tipo: Flapper, x: 2680.0, y: 230.0),
     (tipo: Saltarin, x: 3260.0, y: 280.0),
     (tipo: Saxo, x: 3100.0, y: 200.0),
-    (tipo: Nota, x: 3410.0, y: 200.0),
-    (tipo: Nota, x: 3470.0, y: 160.0, rosa: true),
+    (tipo: Canotier, x: 3420.0, y: 190.0, rosa: true),
     (tipo: Flapper, x: 3680.0, y: 240.0),
     (tipo: Saltarin, x: 4180.0, y: 200.0),
-    (tipo: Nota, x: 4340.0, y: 260.0),
-    (tipo: Nota, x: 4400.0, y: 220.0),
+    // Los dos que molestan mientras se espera al tren.
+    (tipo: Canotier, x: 4400.0, y: 150.0),
+    (tipo: Canotier, x: 4480.0, y: 150.0, rosa: true),
+    // --- El tren ---
+    // Uno sobre el vacio, que baja en picado al techo de los vagones.
+    (tipo: Canotier, x: 5000.0, y: 250.0),
+    (tipo: Flapper, x: 5450.0, y: 240.0),
     // --- El elevado ---
-    (tipo: Saltarin, x: 4720.0, y: 330.0),
-    (tipo: Flapper, x: 4920.0, y: 330.0),
-    (tipo: Nota, x: 5080.0, y: 250.0, rosa: true),
-    (tipo: Saltarin, x: 5400.0, y: 330.0),
-    (tipo: Flapper, x: 5660.0, y: 330.0),
+    (tipo: Saltarin, x: 5900.0, y: 330.0),
+    (tipo: Canotier, x: 6050.0, y: 250.0, rosa: true),
+    (tipo: Flapper, x: 6250.0, y: 330.0),
     // --- El club ---
-    (tipo: Saltarin, x: 6000.0),
-    (tipo: Saxo, x: 6315.0, y: 330.0),
-    (tipo: Flapper, x: 6560.0),
-    (tipo: Nota, x: 6660.0, y: 330.0),
-    (tipo: Nota, x: 6720.0, y: 290.0, rosa: true),
-    (tipo: Nota, x: 6780.0, y: 330.0),
-    (tipo: Saltarin, x: 6870.0),
+    (tipo: Saltarin, x: 6600.0),
+    (tipo: Flapper, x: 6760.0),
+    (tipo: Saxo, x: 6935.0, y: 330.0),
+    // La fila sale del club y viene por la acera, con el saxo tocando encima.
+    (tipo: Fila, x: 7430.0),
+    (tipo: Saltarin, x: 7680.0),
+    (tipo: Canotier, x: 7800.0, y: 390.0),
+    (tipo: Canotier, x: 7860.0, y: 390.0, rosa: true),
+    // --- La arena ---
+    (tipo: Contrabajista, x: 8760.0, portero: true),
   ],
   // Las fichas. Se quedan al llegar a la puerta, no al cogerlas.
   fichas: [
@@ -121,7 +156,10 @@
     // En el hueco entre las dos primeras azoteas, a la altura del tejado. El
     // salto pasa muy por encima: se coge con un dash desde el borde.
     (2880.0, 205.0),
-    // Al final del primer tramo del elevado, detras de la flapper.
-    (4975.0, 295.0),
+    // Al final del elevado, detras de la flapper.
+    (6380.0, 295.0),
+    // La del contrabajista: sale donde estaba al tumbarlo.
+    (8760.0, 430.0),
   ],
+  porteria: Some((desde: 8000.0, ficha: Some(4))),
 )

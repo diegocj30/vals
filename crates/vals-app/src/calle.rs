@@ -851,11 +851,15 @@ fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tiempo: u32, tintas: (Col
     crate::trazo::hervir(centro, l.len(40.0), e.nacio, || match e.tipo {
         Tipo::Pareja => pareja(e, l, edad, tintas, &tinte),
         Tipo::Camarero => camarero(e, l, &tinte),
-        Tipo::Nota => nota(e, l, t, &tinte),
         Tipo::Hoja => calle_viena::hoja(e, l, edad, tiempo, t, &tinte),
         Tipo::Husar => calle_viena::husar(e, l, edad, tiempo, tintas, &tinte),
         Tipo::Director => calle_viena::director(e, l, tick, t, tiempo, tintas, &tinte),
-        Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin => {
+        Tipo::Flapper
+        | Tipo::Saxo
+        | Tipo::Saltarin
+        | Tipo::Canotier
+        | Tipo::Fila
+        | Tipo::Contrabajista => {
             calle_chicago::enemigo(e, l, tick, t, tiempo, tintas, &tinte);
         }
         Tipo::Corista => calle_montmartre::corista(e, l, edad, tintas, &tinte),
@@ -1071,39 +1075,6 @@ fn camarero(e: &Enemigo, l: &Layout, tinte: &dyn Fn(Color) -> Color) {
             rect(l, bx - 10.0, y, 20.0, 4.0, TINTA);
             rect(l, bx - 9.0, y + 0.8, 18.0, 2.4, blanco);
         }
-    }
-}
-
-/// Una corchea que vuela: cabeza, plica y corchete. Las rosas llevan el anillo
-/// que late de las balas parryables, que es como se dice "parry" en este
-/// juego.
-fn nota(e: &Enemigo, l: &Layout, t: f32, tinte: &dyn Fn(Color) -> Color) {
-    let (x, y) = (e.pos.x, e.pos.y);
-    let color = tinte(if e.rosa { ROSA } else { HUESO });
-    let aleteo = (t * 0.25 + x * 0.01).sin() * 4.0;
-    con_tinta(|g, es_tinta| {
-        let c = if es_tinta { TINTA } else { color };
-        let p = l.to_screen(x - 3.0, y + 8.0);
-        draw_ellipse(p.x, p.y, l.len(9.5 + g), l.len(7.0 + g), -22.0, c);
-        linea(l, (x + 5.0, y + 6.0), (x + 5.0, y - 22.0), 3.0 + 2.0 * g, c);
-        tri(
-            l,
-            (x + 5.0 - g, y - 23.0 - g),
-            (x + 17.0 + g, y - 10.0 + aleteo),
-            (x + 5.0 - g, y - 12.0 + g),
-            c,
-        );
-    });
-    if e.rosa {
-        let k = 0.5 + 0.5 * (t * 0.2).sin();
-        let p = l.to_screen(x, y);
-        draw_circle_lines(
-            p.x,
-            p.y,
-            l.len(20.0 + 4.0 * k),
-            2.0,
-            fade(WHITE, 0.4 + 0.4 * k),
-        );
     }
 }
 

@@ -187,6 +187,31 @@ const BRINCO_CORTO: f32 = 45.0;
 const AVANCE_LARGO: f32 = 150.0;
 const AVANCE_CORTO: f32 = 50.0;
 pub const EN_EL_SUELO: u64 = 6;
+/// El canotier: lo que avanza hacia ti por segundo, y lo ancho y lo alto de
+/// la vuelta que da alrededor de su centro.
+const VEL_CANOTIER: f32 = 110.0;
+pub const VUELTA_CANOTIER: (f32, f32) = (46.0, 64.0);
+/// Los ticks del tiron de cada golpe: un tercio de vuelta, de golpe y
+/// frenando. El resto del golpe planea.
+pub const TIRON_CANOTIER: u64 = 14;
+/// La fila: cuantas son, de centro a centro con el hueco cerrado, y cuanto
+/// se abre el hueco del medio. Abierto, entre las dos del medio quedan unas
+/// 110 unidades libres: cabe ella y sobra.
+pub const FILA: u32 = 4;
+pub const ESPACIO_FILA: f32 = 46.0;
+pub const HUECO_FILA: f32 = 120.0;
+/// Lo que tarda el hueco en abrirse o cerrarse.
+pub const TICKS_HUECO: u64 = 12;
+/// El paso de la fila: avanza esto en los primeros ticks de cada golpe.
+const PASO_FILA: f32 = 30.0;
+const TICKS_PASO_FILA: u64 = 12;
+/// Las negras del contrabajista: salen a esto y se tuercen hacia el suelo
+/// tantos radianes por segundo. Es un arco de circulo, no una parabola: el
+/// charleston gira.
+const VEL_NEGRA: f32 = 340.0;
+const GIRO_NEGRA: f32 = 1.0;
+/// La onda del slap: a ras de acera, a esto por segundo.
+const VEL_ONDA: f32 = 340.0;
 
 // El arrabal. El verbo del tango en el jefe es la **aceleracion negativa**:
 // balas que salen disparadas, frenan en seco y se quedan. Sus enemigos se
@@ -478,7 +503,8 @@ pub enum Mueve {
     },
     /// Da vueltas alrededor de donde dice el RON sin volcar, como la cabina de
     /// una noria: las aspas del molino. `fase` reparte varias por el mismo
-    /// circulo, y el signo de `radio` da el sentido.
+    /// circulo. Gira siempre en el sentido de las agujas del reloj (y hacia
+    /// abajo): un `radio` negativo solo la adelanta media vuelta.
     Gira {
         radio: f32,
         periodo: u32,
@@ -555,8 +581,6 @@ pub enum Tipo {
     /// Un camarero plantado que tira platos en arco a donde estas. Uno de cada
     /// tres es rosa y se puede parriar.
     Camarero,
-    /// Una nota que cruza volando en onda. Las rosas se parrian.
-    Nota,
     /// Una hoja de castano del Prater que baja girando, una vuelta por compas.
     /// Las rosas se parrian.
     Hoja,
@@ -607,6 +631,22 @@ pub enum Tipo {
     /// altos y uno bajo por compas. Por debajo de los altos se pasa corriendo;
     /// el bajo se salta o se tumba.
     Saltarin,
+    /// Un canotier que vuela solo, como lanzado al aire en el charleston. Da
+    /// una vuelta por compas alrededor de su centro, a tirones: casi toda en
+    /// los primeros ticks de cada golpe de clave, que es cuando baja en picado.
+    /// Viene hacia ti. Los rosas se parrian.
+    Canotier,
+    /// Una chica de la fila del charleston. La fila sale entera de una sola
+    /// aparicion (`FILA` chicas) y avanza a pasos en la clave; el hueco del
+    /// medio se abre en el segundo golpe y se cierra en el uno siguiente. Se
+    /// pasa saltando a la pareja de delante, cayendo en el hueco y saltando a
+    /// la de detras, o se tumba a tiros una a una.
+    Fila,
+    /// El contrabajista, el portero de Chicago. Plantado en su arena, tira
+    /// negras que se tuercen en arco hacia el suelo en la clave 3-3-2, la
+    /// ultima del dos rosa. Con menos vida da el slap: una onda que corre por
+    /// la acera y se salta.
+    Contrabajista,
     // --- Montmartre. El cancan patea y lo que suelta se
     // apaga enseguida, y sus tres enemigos tambien.
     /// Una corista del cancan. Baja a por ti con su chasse, se planta y da la
@@ -641,7 +681,6 @@ impl Tipo {
         match self {
             Tipo::Pareja => 6,
             Tipo::Camarero => 8,
-            Tipo::Nota => 2,
             Tipo::Hoja => 2,
             Tipo::Husar => 6,
             Tipo::Director => VIDA_DIRECTOR,
@@ -654,6 +693,11 @@ impl Tipo {
             Tipo::Flapper => 8,
             Tipo::Saxo => 10,
             Tipo::Saltarin => 7,
+            Tipo::Canotier => 3,
+            Tipo::Fila => 6,
+            // Unos 22 segundos de aguja sin fallar uno: con lo que se esquiva,
+            // medio minuto largo.
+            Tipo::Contrabajista => 330,
             Tipo::Corista => 7,
             Tipo::Botella => 3,
             Tipo::Pintor => 6,
@@ -670,7 +714,6 @@ impl Tipo {
         match self {
             Tipo::Pareja => 24.0,
             Tipo::Camarero => 22.0,
-            Tipo::Nota => 14.0,
             Tipo::Hoja => 14.0,
             Tipo::Husar => 24.0,
             Tipo::Director => 30.0,
@@ -681,6 +724,9 @@ impl Tipo {
             Tipo::Malevo => 22.0,
             Tipo::Guapo => 26.0,
             Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin => 22.0,
+            Tipo::Canotier => 15.0,
+            Tipo::Fila => 20.0,
+            Tipo::Contrabajista => 32.0,
             Tipo::Corista => 20.0,
             Tipo::Botella => 14.0,
             Tipo::Pintor => 20.0,
@@ -695,7 +741,7 @@ impl Tipo {
         match self {
             Tipo::Pareja => 38.0,
             Tipo::Camarero => 36.0,
-            Tipo::Nota | Tipo::Rosa => 0.0,
+            Tipo::Rosa => 0.0,
             Tipo::Hoja => 0.0,
             Tipo::Husar => 38.0,
             Tipo::Director => 48.0,
@@ -706,6 +752,9 @@ impl Tipo {
             Tipo::Guapo => 44.0,
             Tipo::Flapper => 38.0,
             Tipo::Saxo | Tipo::Saltarin => 36.0,
+            Tipo::Canotier => 0.0,
+            Tipo::Fila => 38.0,
+            Tipo::Contrabajista => 48.0,
             Tipo::Corista => 44.0,
             Tipo::Botella => 18.0,
             Tipo::Pintor => 36.0,
@@ -719,13 +768,15 @@ impl Tipo {
         match self {
             Tipo::Pareja => 0,
             Tipo::Camarero => 1,
-            Tipo::Nota => 2,
             Tipo::Hoja => 20,
             Tipo::Husar => 21,
             Tipo::Director => 22,
             Tipo::Flapper => 3,
             Tipo::Saxo => 4,
             Tipo::Saltarin => 5,
+            Tipo::Canotier => 18,
+            Tipo::Fila => 19,
+            Tipo::Contrabajista => 23,
             Tipo::Corista => 6,
             Tipo::Botella => 7,
             Tipo::Pintor => 8,
@@ -769,6 +820,37 @@ pub fn giro_collar(t: f32, tiempo: u32) -> f32 {
     TAU * 0.7 * t / (4 * tiempo.max(1)) as f32
 }
 
+/// Por donde va la vuelta del canotier en el tick `tick`: un tercio en cada
+/// golpe de clave, casi todo en los `TIRON_CANOTIER` primeros ticks. Va con
+/// el tick del paseo, asi que todos los canotieres vuelan a la par.
+pub fn giro_canotier(tick: u64, tiempo: u32) -> f32 {
+    let (golpe, dentro, _) = clave(tick, tiempo);
+    let f = (dentro as f32 / TIRON_CANOTIER as f32).min(1.0);
+    TAU / 3.0 * (golpe as f32 + 1.0 - (1.0 - f) * (1.0 - f))
+}
+
+/// Lo abierto que esta el hueco de la fila, de 0 a 1: se cierra en el primer
+/// golpe del compas, se abre en el segundo y sigue abierto en el de dos.
+pub fn hueco_fila(tick: u64, tiempo: u32) -> f32 {
+    let (golpe, dentro, _) = clave(tick, tiempo);
+    let f = (dentro as f32 / TICKS_HUECO as f32).min(1.0);
+    let suave = f * f * (3.0 - 2.0 * f);
+    match golpe {
+        0 => 1.0 - suave,
+        1 => suave,
+        _ => 1.0,
+    }
+}
+
+/// Donde va la chica `k` de la fila respecto al centro, con el hueco abierto
+/// `hueco`: las de la izquierda del hueco se apartan a la izquierda y las
+/// otras a la derecha.
+pub fn sitio_en_la_fila(k: u32, hueco: f32) -> f32 {
+    let medio = (FILA - 1) as f32 * 0.5;
+    let lado = if k < FILA / 2 { -1.0 } else { 1.0 };
+    (k as f32 - medio) * ESPACIO_FILA + lado * hueco * HUECO_FILA * 0.5
+}
+
 /// Que es lo que vuela. El dibujo lo necesita, y la fisica tambien: un plato
 /// cae y una perla no.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -782,6 +864,10 @@ pub enum Forma {
     Batuta,
     /// Del remolino del director: sale girando y se abre.
     Remolino,
+    /// Del contrabajista: se tuerce hacia el suelo.
+    Negra,
+    /// El slap del contrabajista, a ras de acera.
+    Onda,
 }
 
 impl Forma {
@@ -792,6 +878,8 @@ impl Forma {
             Forma::Corchea => 8.0,
             Forma::Batuta => 8.0,
             Forma::Remolino => 7.0,
+            Forma::Negra => 9.0,
+            Forma::Onda => 12.0,
         }
     }
 }
@@ -860,11 +948,12 @@ pub struct Fugaz {
 pub struct Aparicion {
     pub tipo: Tipo,
     pub x: f32,
-    /// La altura de vuelo de una nota, o la superficie donde esta de pie un
+    /// La altura de vuelo de lo que vuela, o la superficie donde esta de pie un
     /// camarero. Cero o sin poner es la acera.
     #[serde(default)]
     pub y: f32,
-    /// Solo en las notas, las hojas y el confeti: si se puede parriar.
+    /// Solo en lo que vuela (hojas, gaviotas, canotiers, confeti): si se
+    /// puede parriar.
     #[serde(default)]
     pub rosa: bool,
     /// Si es el portero del paseo: el que cierra la arena del final, con su
@@ -1028,6 +1117,11 @@ impl Enemigo {
     /// La rosa devuelta pasa.
     fn para(&self, d: &Disparo) -> bool {
         self.tipo == Tipo::Malevo && !d.rosa && d.vel.x * self.dir < 0.0
+    }
+
+    /// Cual es en la fila, de 0 (la de la izquierda) a `FILA - 1`.
+    pub fn en_la_fila(&self) -> u32 {
+        self.lanzados
     }
 
     /// La pierna de una corista: de la cadera a la punta del botin. Parada
@@ -1760,8 +1854,8 @@ impl Paseo {
             // por encima de la lamina, en y negativas.
             let pisa = if a.y != 0.0 { a.y } else { self.def.altura(x) };
             let y = match a.tipo {
-                Tipo::Nota => a.y,
                 Tipo::Hoja => a.y,
+                Tipo::Canotier => a.y,
                 t => pisa - t.alto(),
             };
             // El primer plato sale con un poco de azar: dos camareros que se
@@ -1784,7 +1878,7 @@ impl Paseo {
                 vida: a.tipo.vida(),
                 dir: -1.0,
                 nacio: self.tick,
-                rosa: a.rosa && matches!(a.tipo, Tipo::Nota | Tipo::Hoja | Tipo::Confeti),
+                rosa: a.rosa && matches!(a.tipo, Tipo::Hoja | Tipo::Confeti | Tipo::Canotier),
                 golpe: 0,
                 reloj,
                 lanzados: 0,
@@ -1799,6 +1893,22 @@ impl Paseo {
                 && let Some(e) = self.enemigos.last_mut()
             {
                 e.rosa = a.rosa;
+            }
+            // El canotier vuela alrededor de donde salio, y la fila entera
+            // va con el centro de la fila: las dos cosas, en `avance`.
+            let primera = self.enemigos.len() - 1;
+            if matches!(a.tipo, Tipo::Canotier | Tipo::Fila) {
+                self.enemigos[primera].avance = a.x;
+            }
+            if a.tipo == Tipo::Fila {
+                // La fila sale entera de una aparicion, y cada una sabe su
+                // sitio (`lanzados`): despertarlas por separado las
+                // desacompasaria.
+                for k in 1..FILA {
+                    let mut e = self.enemigos[primera].clone();
+                    e.lanzados = k;
+                    self.enemigos.push(e);
+                }
             }
         }
     }
@@ -1870,14 +1980,6 @@ impl Paseo {
                         rosa: e.lanzados % 3 == 0,
                         forma: Forma::Plato,
                     });
-                }
-                Tipo::Nota => {
-                    // Hacia la izquierda en onda: un periodo cada cuatro
-                    // tiempos, asi que tambien van con la musica.
-                    e.pos.x -= 140.0 * DT;
-                    let t = edad as f32 / (4 * tiempo) as f32;
-                    e.pos.y = e.base_y + 50.0 * sin(TAU * t);
-                    e.dir = -1.0;
                 }
                 Tipo::Hoja => {
                     // Una vuelta por compas alrededor de un centro que baja y
@@ -2045,6 +2147,77 @@ impl Paseo {
                     } else {
                         e.pos.y = e.base_y;
                     }
+                }
+                Tipo::Canotier => {
+                    // Un centro que viene hacia ti y la vuelta alrededor:
+                    // arriba, abajo por delante y abajo por detras, un tercio
+                    // de un tiron en cada golpe.
+                    let centro = Vec2::new(e.avance - VEL_CANOTIER * edad as f32 * DT, e.base_y);
+                    let (s, c) = sin_cos(giro_canotier(self.tick, self.def.tiempo));
+                    let (rx, ry) = VUELTA_CANOTIER;
+                    e.pos = centro + Vec2::new(-rx * s, -ry * c);
+                    e.dir = -1.0;
+                }
+                Tipo::Fila => {
+                    // El centro de la fila avanza un paso en cada golpe, si
+                    // por delante de la primera hay acera. Todas hacen la
+                    // misma cuenta con el mismo centro, asi que van a la par
+                    // aunque se tumbe a alguna.
+                    let (_, dentro, _) = clave(self.tick, self.def.tiempo);
+                    let frente = e.avance + sitio_en_la_fila(0, 1.0) - e.tipo.radio() - 20.0;
+                    if dentro < TICKS_PASO_FILA && self.def.hay_suelo(frente) {
+                        e.avance -= PASO_FILA / TICKS_PASO_FILA as f32;
+                    }
+                    let hueco = hueco_fila(self.tick, self.def.tiempo);
+                    e.pos.x = e.avance + sitio_en_la_fila(e.lanzados, hueco);
+                    e.pos.y = self.def.altura(e.pos.x) - e.tipo.alto();
+                    e.dir = -1.0;
+                }
+                Tipo::Contrabajista => {
+                    e.gesto = (e.gesto - 1.0 / 12.0).max(0.0);
+                    let dx = objetivo.x - e.pos.x;
+                    if dx != 0.0 {
+                        e.dir = dx.signum();
+                    }
+                    // Solo toca con la arena cerrada: antes no hay baile.
+                    let (golpe, dentro, _) = clave(self.tick, self.def.tiempo);
+                    if !arena || dentro != 0 {
+                        continue;
+                    }
+                    let compas = self.tick / (8 * u64::from((self.def.tiempo / 2).max(1)));
+                    let fase = e.fase();
+                    if golpe == 0 && (fase == 2 || fase == 1 && compas.is_multiple_of(2)) {
+                        // El slap: una onda a cada lado, a ras de acera.
+                        e.gesto = 1.0;
+                        let pies = e.pos.y + e.tipo.alto();
+                        for lado in [-1.0, 1.0] {
+                            self.proyectiles.push(Proyectil {
+                                pos: Vec2::new(e.pos.x + lado * 40.0, pies - Forma::Onda.radio()),
+                                vel: Vec2::new(lado * VEL_ONDA, 0.0),
+                                rosa: false,
+                                forma: Forma::Onda,
+                            });
+                        }
+                        continue;
+                    }
+                    // Las negras: tres, tres y dos, en abanico hacia ti y
+                    // cada golpe por otros huecos. La ultima del dos, rosa.
+                    let grados: &[f32] = match golpe {
+                        0 => &[12.0, 30.0, 48.0],
+                        1 => &[20.0, 38.0, 56.0],
+                        _ => &[25.0, 45.0],
+                    };
+                    let mastil = e.pos + Vec2::new(e.dir * 10.0, -46.0);
+                    for (i, g) in grados.iter().enumerate() {
+                        let (s, c) = sin_cos(g * TAU / 360.0);
+                        self.proyectiles.push(Proyectil {
+                            pos: mastil,
+                            vel: Vec2::new(e.dir * c, -s) * VEL_NEGRA,
+                            rosa: golpe == 2 && i == grados.len() - 1,
+                            forma: Forma::Negra,
+                        });
+                    }
+                    e.lanzados += 1;
                 }
                 Tipo::Corista => {
                     // El cancan va en compas de dos, y ella en cuatro tiempos:
@@ -2710,6 +2883,11 @@ impl Paseo {
                 let v = q.vel;
                 q.vel = Vec2::new(v.x * c - v.y * s, v.x * s + v.y * c) * ACELERA_REMOLINO;
             }
+            if q.forma == Forma::Negra {
+                // Se tuerce hacia el suelo, vaya al lado que vaya.
+                let (s, c) = sin_cos(GIRO_NEGRA * DT * q.vel.x.signum());
+                q.vel = Vec2::new(q.vel.x * c - q.vel.y * s, q.vel.x * s + q.vel.y * c);
+            }
             q.pos += q.vel * DT;
         }
         // Un plato que llega a la acera se rompe. Sobre un foso sigue cayendo
@@ -3020,7 +3198,6 @@ mod tests {
             );
         }
         // Las notas volaban por las cuatro calles; en Viena caen hojas.
-        assert!(!viena.enemigos.iter().any(|a| a.tipo == Tipo::Nota));
         // El husar sale a `DETRAS_HUSAR` de donde va ella al despertarlo, y
         // ahi tiene que haber acera.
         for a in viena.enemigos.iter().filter(|a| a.tipo == Tipo::Husar) {
@@ -3044,7 +3221,14 @@ mod tests {
             .fold(0.0, f32::max);
         assert!(vacio > 2000.0, "Chicago no tiene tejados: {vacio}");
         assert_eq!(chicago.tiempo, 36, "el Maple Leaf va a 100");
-        for t in [Tipo::Flapper, Tipo::Saxo, Tipo::Saltarin, Tipo::Nota] {
+        for t in [
+            Tipo::Flapper,
+            Tipo::Saxo,
+            Tipo::Saltarin,
+            Tipo::Canotier,
+            Tipo::Fila,
+            Tipo::Contrabajista,
+        ] {
             assert!(
                 chicago.enemigos.iter().any(|a| a.tipo == t),
                 "falta {t:?} en Chicago"
@@ -3053,11 +3237,26 @@ mod tests {
         // Cada flapper, saxo y saltarin, de pie sobre algo: uno puesto en el
         // aire flotaria, y un saltarin en el aire no sabria donde caer.
         for a in &chicago.enemigos {
-            if matches!(a.tipo, Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin) {
+            if matches!(
+                a.tipo,
+                Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin | Tipo::Fila | Tipo::Contrabajista
+            ) {
                 let pisa = if a.y > 0.0 { a.y } else { SUELO_Y };
                 assert!(chicago.hay_pie(a.x, pisa), "{a:?} flota");
             }
         }
+        // Las notas de Viena no vuelan por Chicago: alli vuelan canotieres.
+        // El portero, dentro de su arena, y la puerta pasada la arena.
+        let po = chicago
+            .porteria
+            .expect("Chicago acaba con el contrabajista");
+        let portero = chicago
+            .enemigos
+            .iter()
+            .find(|a| a.portero)
+            .expect("sin portero");
+        assert!((po.desde..po.desde + VISTA_W).contains(&portero.x));
+        assert!(chicago.puerta > po.desde + VISTA_W);
 
         // El arrabal, antes del tango, con sus enemigos y mas saltos que Viena.
         let arrabal = de_serie("El Tango");
@@ -3083,7 +3282,6 @@ mod tests {
         for t in [Tipo::Gaviota, Tipo::Malevo] {
             assert!(arrabal.enemigos.iter().any(|a| a.tipo == t), "falta {t:?}");
         }
-        assert!(!arrabal.enemigos.iter().any(|a| a.tipo == Tipo::Nota));
         let po = arrabal.porteria.expect("el arrabal acaba con portero");
         let guapo: Vec<&Aparicion> = arrabal.enemigos.iter().filter(|a| a.portero).collect();
         assert!(guapo.len() == 1 && guapo[0].tipo == Tipo::Guapo);
@@ -3634,10 +3832,31 @@ mod tests {
                     && cae > pl.x + 10.0
                     && cae < pl.x + pl.ancho - 10.0
             });
-            if j.on_ground && (!hay_debajo(30.0) || subir) {
+            // Sin nada donde caer a tiro de salto y con una plataforma que se
+            // mueve cerca (el tren), espera a que llegue. Y en la arena del
+            // portero se planta a dispararle de frente. Se alcanza saltando
+            // algo debajo a menos de un salto, o un tejado por encima, mas
+            // cerca cuanto mas alto.
+            let alcanza = (4..=21).any(|k| hay_debajo(10.0 * k as f32))
+                || p.def.plataformas.iter().any(|pl| {
+                    let alto = pies - pl.y;
+                    alto > 0.0
+                        && alto < 140.0
+                        && pl.x + pl.ancho > x + 40.0
+                        && pl.x - x <= 230.0 - alto * 0.8
+                });
+            let espera = j.on_ground
+                && !alcanza
+                && p.def
+                    .plataformas
+                    .iter()
+                    .any(|pl| pl.mueve.is_some() && (pl.x - x).abs() < 1200.0)
+                || p.cierre().is_some();
+            if j.on_ground && !espera && (!hay_debajo(30.0) || subir) {
                 salto = 22;
             }
-            let bits = DERECHA | DISPARA | if salto > 0 { InputFrame::JUMP } else { 0 };
+            let anda = if espera { 0 } else { DERECHA };
+            let bits = anda | DISPARA | if salto > 0 { InputFrame::JUMP } else { 0 };
             salto = if salto > 0 { salto - 1 } else { 0 };
             p.step(pulsar(bits));
             if p.completado.is_some() {
@@ -3652,6 +3871,344 @@ mod tests {
         let p = bot_anda(de_serie("El Charleston"));
         assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
         assert_eq!(p.vidas, VIDAS, "no se ha caido de ningun tejado");
+        // Ha subido al tren y ha tumbado al contrabajista disparando de
+        // frente: sin el no se abre la puerta, y su ficha estaba de camino.
+        assert!(p.fichas[4], "sin la ficha del contrabajista");
+    }
+
+    #[test]
+    fn el_canotier_da_una_vuelta_por_compas_a_tirones_en_la_clave() {
+        let mut def = uno(Tipo::Canotier, 600.0, 380.0);
+        def.tiempo = 36;
+        let mut p = Paseo::new(def, 1);
+        p.step(InputFrame::NONE);
+        let centro =
+            |p: &Paseo| Vec2::new(600.0 - 110.0 * p.tick.saturating_sub(1) as f32 * DT, 380.0);
+        let mut pasos = [[0.0_f32; 2]; 3];
+        let mut antes = p.enemigos[0].pos - centro(&p);
+        let al_empezar = antes;
+        for _ in 0..144 {
+            let (golpe, dentro, _) = clave(p.tick, 36);
+            p.step(InputFrame::NONE);
+            let e = &p.enemigos[0];
+            let rel = e.pos - centro(&p);
+            // El tiron, los primeros ticks del golpe; el planeo, el resto.
+            pasos[golpe][usize::from(dentro >= TIRON_CANOTIER)] += (rel - antes).length();
+            antes = rel;
+            let (rx, ry) = VUELTA_CANOTIER;
+            assert!(
+                rel.x.abs() <= rx + 0.01 && rel.y.abs() <= ry + 0.01,
+                "fuera de su vuelta"
+            );
+        }
+        for [tiron, planeo] in pasos {
+            assert!(tiron > 60.0 && planeo < 1.0, "{pasos:?}");
+        }
+        // Una vuelta por compas, y el centro ha venido hacia ella.
+        assert!(
+            (antes - al_empezar).length() < 0.5,
+            "{antes} vs {al_empezar}"
+        );
+        assert!(p.enemigos[0].pos.x < 600.0 - 200.0);
+        // En el picado baja a la altura de ella: tiene que verse venir.
+        let (_, ry) = VUELTA_CANOTIER;
+        let toca = Tipo::Canotier.radio() * 0.8 + CUERPO_RADIO;
+        assert!(380.0 + ry * 0.5 + toca > p.jugadora.pos.y - CUERPO_MEDIO);
+    }
+
+    #[test]
+    fn un_canotier_rosa_se_parria() {
+        let mut p = Paseo::new(
+            con(vec![Aparicion {
+                rosa: true,
+                ..aparece(Tipo::Canotier, 600.0)
+            }]),
+            1,
+        );
+        p.step(InputFrame::NONE);
+        assert!(p.enemigos[0].rosa);
+        p.enemigos[0].avance = p.jugadora.pos.x + 20.0;
+        p.enemigos[0].base_y = p.jugadora.pos.y + 20.0;
+        p.step(InputFrame::NONE);
+        p.step(pulsar(InputFrame::PARRY));
+        assert_eq!(p.events.parried, 1);
+        assert!(p.enemigos.is_empty());
+    }
+
+    #[test]
+    fn la_fila_sale_entera_y_abre_el_hueco_en_la_clave() {
+        let mut def = uno(Tipo::Fila, 900.0, 0.0);
+        def.tiempo = 36;
+        let mut p = Paseo::new(def, 1);
+        p.jugadora.pos.x = 400.0;
+        let mut abierto = false;
+        let mut cerrado = false;
+        let mut centro = f32::MAX;
+        for _ in 0..(144 * 2) {
+            p.jugadora.iframes = 10;
+            let (golpe, dentro, _) = clave(p.tick, 36);
+            p.step(InputFrame::NONE);
+            let fila: Vec<&Enemigo> = p.enemigos.iter().filter(|e| e.tipo == Tipo::Fila).collect();
+            assert_eq!(fila.len(), FILA as usize, "salen todas a la vez");
+            let xs: Vec<f32> = fila.iter().map(|e| e.pos.x).collect();
+            // Las de cada lado van hombro con hombro; el hueco, en el medio.
+            assert!((xs[1] - xs[0] - ESPACIO_FILA).abs() < 1e-3);
+            assert!((xs[3] - xs[2] - ESPACIO_FILA).abs() < 1e-3);
+            let hueco = xs[2] - xs[1] - ESPACIO_FILA;
+            if dentro >= TICKS_HUECO {
+                if golpe == 0 {
+                    assert!(hueco.abs() < 1e-3, "en el uno, cerrado: {hueco}");
+                    cerrado = true;
+                } else {
+                    assert!((hueco - HUECO_FILA).abs() < 1e-3, "abierto: {hueco}");
+                    abierto = true;
+                }
+            }
+            // Avanza a pasos, en los golpes: el resto del golpe, quieta.
+            let ahora = (xs[1] + xs[2]) * 0.5;
+            if dentro >= TICKS_PASO_FILA {
+                assert_eq!(ahora, centro, "anda fuera del paso");
+            }
+            centro = ahora;
+        }
+        assert!(abierto && cerrado);
+        assert!(centro < 900.0 - 100.0, "no ha avanzado: {centro}");
+        // Abierto, en el hueco cabe ella de sobra; cerrado, no hay por donde.
+        let toca = Tipo::Fila.radio() * 0.8 + CUERPO_RADIO;
+        assert!(ESPACIO_FILA + HUECO_FILA - 2.0 * toca > 4.0 * CUERPO_RADIO);
+        assert!(ESPACIO_FILA < 2.0 * toca);
+    }
+
+    #[test]
+    fn a_la_fila_se_la_tumba_de_una_en_una_y_no_se_descoloca() {
+        let mut def = uno(Tipo::Fila, 600.0, 0.0);
+        def.tiempo = 36;
+        let mut p = Paseo::new(def, 1);
+        let mut caidas = 0;
+        for _ in 0..240 {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(DISPARA));
+            caidas += p.caidos;
+            if caidas > 0 {
+                break;
+            }
+        }
+        assert_eq!(caidas, 1, "una cae y las otras siguen");
+        // La de delante es la que cae, y las que quedan siguen en su sitio.
+        let hueco = hueco_fila(p.tick - 1, 36);
+        for e in &p.enemigos {
+            assert!(e.lanzados > 0);
+            assert!((e.pos.x - e.avance - sitio_en_la_fila(e.lanzados, hueco)).abs() < 1e-3);
+        }
+    }
+
+    /// Chicago, con la jugadora en el techo del tren en el tick 0, que es
+    /// cuando el tren esta en el tejado de la izquierda.
+    fn en_el_tren() -> Paseo {
+        let mut p = Paseo::new(de_serie("El Charleston"), 1);
+        let pl = p
+            .def
+            .plataformas
+            .iter()
+            .find(|pl| pl.mueve.is_some())
+            .copied()
+            .expect("sin tren");
+        p.jugadora.pos = Vec2::new(pl.x + 100.0, pl.y - PIES);
+        p.jugadora.prev_pos = p.jugadora.pos;
+        p.siguiente = p.def.enemigos.len();
+        p
+    }
+
+    #[test]
+    fn el_tren_cruza_el_vacio_entre_los_tejados() {
+        // Sin el tren no se cruza: ni saltando con un dash al final.
+        let def = de_serie("El Charleston");
+        let tejado = |x: f32| {
+            def.plataformas
+                .iter()
+                .find(move |pl| pl.mueve.is_none() && pl.x <= x && x <= pl.x + pl.ancho)
+        };
+        assert!(tejado(4250.0).is_some() && tejado(5300.0).is_some());
+        assert!(
+            (4290..5280).all(|x| tejado(x as f32).is_none()),
+            "hay por donde cruzar"
+        );
+
+        // Quieta en el techo: el tren la lleva al otro lado sin caerse.
+        let mut p = en_el_tren();
+        let x0 = p.jugadora.pos.x;
+        for _ in 0..240 {
+            p.step(InputFrame::NONE);
+            assert!(
+                p.jugadora.on_ground,
+                "se ha caido del tren en x {}",
+                p.jugadora.pos.x
+            );
+        }
+        assert!(
+            (p.jugadora.pos.x - (x0 + 584.0)).abs() < 2.0,
+            "x {}",
+            p.jugadora.pos.x
+        );
+        // Anda al otro vagon sin caerse por la rendija, y salta al tejado.
+        while p.jugadora.pos.x < 5180.0 {
+            p.step(pulsar(DERECHA));
+            assert!(p.jugadora.on_ground, "se ha caido entre los vagones");
+        }
+        correr(&mut p, DERECHA | InputFrame::JUMP, 40);
+        correr(&mut p, DERECHA, 10);
+        assert!(p.jugadora.on_ground && p.jugadora.pos.x > 5280.0);
+        assert_eq!(p.jugadora.pos.y + PIES, 240.0, "en el tejado de enfrente");
+        assert_eq!(p.vidas, VIDAS);
+    }
+
+    /// El contrabajista en su arena (de 1000 a 1960), y la jugadora dentro.
+    fn con_contrabajista(vida: i32) -> Paseo {
+        let mut def = con(vec![Aparicion {
+            portero: true,
+            ..aparece(Tipo::Contrabajista, 1700.0)
+        }]);
+        def.tiempo = 36;
+        def.porteria = Some(Porteria {
+            desde: 1000.0,
+            ficha: Some(0),
+        });
+        def.fichas = vec![(1700.0, 430.0)];
+        def.puerta = 2500.0;
+        let mut p = Paseo::new(def, 1);
+        while p.cierre().is_none() {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(DERECHA));
+            assert!(p.proyectiles.is_empty(), "toca antes de cerrarse la arena");
+        }
+        p.enemigos[0].vida = vida;
+        p
+    }
+
+    /// Lo que suelta en `compases` compases desde el siguiente uno: las
+    /// negras de cada golpe (rosas aparte) y en que golpes hay slap.
+    fn lo_que_toca(p: &mut Paseo, compases: u64) -> (Vec<(usize, usize, usize)>, Vec<u64>) {
+        while clave(p.tick, 36) != (0, 0, 54) {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+        }
+        let (mut negras, mut slaps) = (Vec::new(), Vec::new());
+        for _ in 0..(144 * compases) {
+            p.jugadora.iframes = 10;
+            let (golpe, _, _) = clave(p.tick, 36);
+            let antes = p.proyectiles.len();
+            let tick = p.tick;
+            p.step(InputFrame::NONE);
+            let nuevas = &p.proyectiles[antes.min(p.proyectiles.len())..];
+            if nuevas.is_empty() {
+                continue;
+            }
+            assert_eq!(clave(tick, 36).1, 0, "fuera de la clave");
+            if nuevas.iter().all(|q| q.forma == Forma::Onda) {
+                assert_eq!(nuevas.len(), 2, "una onda a cada lado");
+                slaps.push(tick / 144);
+            } else {
+                assert!(nuevas.iter().all(|q| q.forma == Forma::Negra));
+                let rosas = nuevas.iter().filter(|q| q.rosa).count();
+                negras.push((golpe, nuevas.len(), rosas));
+            }
+        }
+        (negras, slaps)
+    }
+
+    #[test]
+    fn el_contrabajista_tira_negras_en_arco_en_la_clave() {
+        let mut p = con_contrabajista(Tipo::Contrabajista.vida());
+        assert_eq!(p.portero().map(Enemigo::fase), Some(0));
+        let (negras, slaps) = lo_que_toca(&mut p, 2);
+        assert!(slaps.is_empty(), "sin slap con la vida entera");
+        let compas = [(0, 3, 0), (1, 3, 0), (2, 2, 1)];
+        assert_eq!(
+            negras,
+            [compas, compas].concat(),
+            "tres, tres y dos, la ultima rosa"
+        );
+        // En arco: van hacia ella, a velocidad fija, y se tuercen al suelo.
+        let q = *p
+            .proyectiles
+            .iter()
+            .find(|q| q.forma == Forma::Negra)
+            .expect("sin negras");
+        assert!(q.vel.x < 0.0);
+        let (v, bajada) = (q.vel.length(), q.vel.y);
+        p.step(InputFrame::NONE);
+        let q2 = p
+            .proyectiles
+            .iter()
+            .find(|n| n.forma == Forma::Negra)
+            .expect("sin negras");
+        assert!((q2.vel.length() - v).abs() < 1e-2 && q2.vel.y > bajada);
+    }
+
+    #[test]
+    fn el_contrabajista_da_el_slap_segun_la_vida_que_le_queda() {
+        let max = Tipo::Contrabajista.vida();
+        // Segunda fase: un uno de cada dos es slap; tercera, todos.
+        for (vida, fase, slaps) in [(max * 2 / 3 - 1, 1, 2), (max / 3 - 1, 2, 4)] {
+            let mut p = con_contrabajista(vida);
+            assert_eq!(p.portero().map(Enemigo::fase), Some(fase));
+            let (negras, hechos) = lo_que_toca(&mut p, 4);
+            assert_eq!(hechos.len(), slaps, "fase {fase}: {hechos:?}");
+            // El dos sigue siendo rosa: el parry no se va con la vida.
+            assert_eq!(negras.iter().filter(|n| n.0 == 2 && n.2 == 1).count(), 4);
+        }
+        // La onda va a ras de acera, y se salta.
+        let mut p = con_contrabajista(max / 3 - 1);
+        while !p.proyectiles.iter().any(|q| q.forma == Forma::Onda) {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+        }
+        let onda = p
+            .proyectiles
+            .iter()
+            .find(|q| q.forma == Forma::Onda && q.vel.x < 0.0)
+            .copied()
+            .expect("sin onda");
+        assert_eq!(onda.pos.y + Forma::Onda.radio(), SUELO_Y);
+        for salta in [false, true] {
+            let mut p = Paseo::new(calle(), 1);
+            p.proyectiles.push(Proyectil {
+                pos: Vec2::new(p.jugadora.pos.x + 120.0, onda.pos.y),
+                ..onda
+            });
+            let bits = if salta { InputFrame::JUMP } else { 0 };
+            let mut dado = false;
+            for _ in 0..40 {
+                p.step(pulsar(bits));
+                dado |= p.events.player_died;
+            }
+            assert_eq!(dado, !salta, "saltando {salta}");
+        }
+    }
+
+    #[test]
+    fn el_contrabajista_cae_a_tiros_y_abre_la_arena() {
+        let mut p = con_contrabajista(Tipo::Contrabajista.vida());
+        let mut ticks = 0;
+        let mut fases = Vec::new();
+        while p.portero_vivo() {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(DISPARA));
+            ticks += 1;
+            if let Some(e) = p.portero()
+                && fases.last() != Some(&e.fase())
+            {
+                fases.push(e.fase());
+            }
+            assert!(ticks < 60 * 60, "no cae");
+        }
+        assert_eq!(fases, [0, 1, 2], "pasa por las tres fases");
+        // Con la aguja y sin fallar una, unos 22 segundos: con lo que se
+        // esquiva, entre veinte y cuarenta.
+        let segundos = ticks as f32 * DT;
+        assert!((20.0..30.0).contains(&segundos), "{segundos} s");
+        assert!(p.cierre().is_none(), "la arena sigue cerrada");
+        assert!(p.ficha_visible(0), "sin su ficha");
     }
 
     #[test]
@@ -4990,7 +5547,8 @@ mod tests {
         for def in PaseoDef::de_serie() {
             let n = def.fichas.len();
             assert!((3..=6).contains(&n), "{}: {n} fichas", def.nombre);
-            total += n;
+            // La del portero es de propina: no cuenta para la modista.
+            total += n - usize::from(def.porteria.and_then(|po| po.ficha).is_some());
             for &(x, y) in &def.fichas {
                 assert!(
                     x > def.salida && x < def.puerta,
@@ -5114,9 +5672,9 @@ mod tests {
 
     #[test]
     fn la_serpentina_busca_a_lo_que_vuela_y_dispara_la_mitad() {
-        let nota = uno(Tipo::Nota, 450.0, 330.0);
+        let canotier = uno(Tipo::Canotier, 450.0, 330.0);
         for (tiro, busca) in [(Tiro::Aguja, false), (Tiro::Serpentina, true)] {
-            let mut p = equipado(nota.clone(), tiro, Amuleto::Ninguno);
+            let mut p = equipado(canotier.clone(), tiro, Amuleto::Ninguno);
             let mut disparos = 0;
             for _ in 0..16 {
                 p.step(pulsar(DISPARA));
