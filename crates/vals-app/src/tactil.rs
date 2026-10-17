@@ -213,12 +213,18 @@ pub struct Tactil {
 
 impl Tactil {
     /// Una vez por frame, con los dedos de `touches()`.
+    ///
+    /// Ojo: macroquad da los dedos en pixeles de la pantalla y `screen_width`
+    /// en pixeles logicos. En el ordenador son lo mismo, pero en un movil hay
+    /// dos o tres de los primeros por cada uno de los segundos: sin dividir,
+    /// el stick (que sale donde caiga el dedo) iba, y ningun boton se acertaba.
     pub fn actualizar(&mut self) {
+        let escala = macroquad::miniquad::window::dpi_scale();
         let contactos: Vec<Contacto> = touches()
             .iter()
             .map(|t| Contacto {
                 id: t.id,
-                pos: t.position,
+                pos: t.position / escala,
                 fin: matches!(t.phase, TouchPhase::Ended | TouchPhase::Cancelled),
             })
             .collect();
