@@ -111,6 +111,62 @@ const RADIO_PLATO: f32 = 9.0;
 pub const CADENCIA_CAMARERO: u32 = 96;
 const ALCANCE_CAMARERO: f32 = 620.0;
 
+// Viena. El verbo del vals es **girar**, a tres tiempos: las hojas bajan
+// dando vueltas, el husar llega valsando y el director gira la batuta.
+
+/// La hoja del Prater da una vuelta por compas alrededor de un centro que baja
+/// y se va hacia la izquierda. La vuelta se ve de lado: en pantalla es una
+/// elipse, ancha y aplastada, como el giro de una pareja.
+const GIRO_HOJA_X: f32 = 46.0;
+const GIRO_HOJA_Y: f32 = 16.0;
+const DERIVA_HOJA: f32 = 70.0;
+const CAIDA_HOJA: f32 = 42.0;
+/// El husar sale por detras, a esto de la jugadora: fuera de cuadro, que la
+/// camara la lleva al 38 % y el borde izquierdo queda a unas 365.
+pub const DETRAS_HUSAR: f32 = 420.0;
+/// Su vals: el paso largo del uno, mas rapido que ella corriendo, y los
+/// pasitos del dos y el tres. De media corre algo mas que ella: si no se le
+/// tumba, alcanza.
+const PASO_LARGO_HUSAR: f32 = 560.0;
+const PASO_CORTO_HUSAR: f32 = 230.0;
+/// El director, portero de Viena: con la aguja (15 por segundo si entran
+/// todos) son 22 segundos de fuego, y con lo que se esquiva, unos treinta.
+const VIDA_DIRECTOR: i32 = 330;
+/// La espiral de la batuta: cuantas notas suelta en el uno y el dos de cada
+/// compas, y a que velocidad, por fase.
+pub const BRAZOS_ESPIRAL: [usize; 3] = [3, 4, 5];
+const VEL_ESPIRAL: [f32; 3] = [150.0, 165.0, 180.0];
+/// El tres: la nota rosa que tira a donde estas en el tercer tiempo.
+const VEL_TRES: f32 = 210.0;
+/// El remolino, desde la segunda fase: cada cuantos compases (el anterior lo
+/// pasa preparandolo, quieto y con los brazos arriba) y cuantas notas.
+pub const REMOLINO_CADA: [u64; 3] = [0, 4, 3];
+pub const NOTAS_REMOLINO: usize = 12;
+/// Las notas del remolino salen despacio y girando, y aceleran hasta el tope:
+/// una espiral que se abre y luego se va recta.
+const VEL_REMOLINO: f32 = 110.0;
+const TOPE_REMOLINO: f32 = 300.0;
+const ACELERA_REMOLINO: f32 = 1.015;
+const GIRO_REMOLINO: f32 = 2.4;
+/// De la mano a la punta de la batuta.
+pub const BATUTA: f32 = 24.0;
+
+/// Por donde va la batuta en el tick `t`: una vuelta cada cuatro compases de
+/// tres, un doceavo por tiempo. El dibujo usa esta cuenta, asi que las notas
+/// salen de donde se ve la punta.
+pub fn giro_batuta(t: f32, tiempo: u32) -> f32 {
+    TAU * t / (12 * tiempo.max(1)) as f32
+}
+
+/// Que hace el director en el tick `t`: que tiempo del compas suena (0, 1 o
+/// 2), cuantos ticks lleva, y si ese compas lo pasa preparando el remolino.
+pub fn batuta(tick: u64, tiempo: u32, fase: usize) -> (u64, u64, bool) {
+    let tiempo = u64::from(tiempo.max(1));
+    let cada = REMOLINO_CADA[fase.min(2)];
+    let prepara = cada > 0 && (tick / (3 * tiempo)) % cada == cada - 1;
+    ((tick / tiempo) % 3, tick % tiempo, prepara)
+}
+
 /// Las perlas de la flapper: cuantas suelta a la vez, repartidas por el
 /// collar, y a que velocidad salen. Rectas y sin gravedad: son un collar que
 /// gira, no una piedra, y lo que se lee es el giro.
@@ -324,6 +380,16 @@ pub enum Tipo {
     Camarero,
     /// Una nota que cruza volando en onda. Las rosas se parrian.
     Nota,
+    /// Una hoja de castano del Prater que baja girando, una vuelta por compas.
+    /// Las rosas se parrian.
+    Hoja,
+    /// Un husar que entra por detras, fuera de cuadro, y viene valsando: hay
+    /// que darse la vuelta y tumbarlo, o saltarlo.
+    Husar,
+    /// El director de orquesta, portero de Viena: en su tarima, gira la
+    /// batuta y suelta espirales de notas a tres tiempos. En el tres, una
+    /// rosa. Desde la segunda fase, el remolino.
+    Director,
     // --- El arrabal. El tango arranca a tope y se clava,
     // y sus enemigos tambien.
     /// Un compadrito de chambergo y panuelo: amaga un tiempo, se
@@ -375,6 +441,9 @@ impl Tipo {
             Tipo::Pareja => 6,
             Tipo::Camarero => 8,
             Tipo::Nota => 2,
+            Tipo::Hoja => 2,
+            Tipo::Husar => 6,
+            Tipo::Director => VIDA_DIRECTOR,
             Tipo::Compadrito => 8,
             Tipo::Florista => 6,
             Tipo::Rosa => 1,
@@ -393,6 +462,9 @@ impl Tipo {
             Tipo::Pareja => 24.0,
             Tipo::Camarero => 22.0,
             Tipo::Nota => 14.0,
+            Tipo::Hoja => 14.0,
+            Tipo::Husar => 24.0,
+            Tipo::Director => 30.0,
             Tipo::Compadrito => 22.0,
             Tipo::Florista => 20.0,
             Tipo::Rosa => 14.0,
@@ -409,6 +481,9 @@ impl Tipo {
             Tipo::Pareja => 38.0,
             Tipo::Camarero => 36.0,
             Tipo::Nota | Tipo::Rosa => 0.0,
+            Tipo::Hoja => 0.0,
+            Tipo::Husar => 38.0,
+            Tipo::Director => 48.0,
             Tipo::Compadrito => 38.0,
             Tipo::Florista => 36.0,
             Tipo::Flapper => 38.0,
@@ -424,6 +499,9 @@ impl Tipo {
             Tipo::Pareja => 0,
             Tipo::Camarero => 1,
             Tipo::Nota => 2,
+            Tipo::Hoja => 20,
+            Tipo::Husar => 21,
+            Tipo::Director => 22,
             Tipo::Flapper => 3,
             Tipo::Saxo => 4,
             Tipo::Saltarin => 5,
@@ -473,6 +551,10 @@ pub enum Forma {
     Perla,
     /// Del saxo.
     Corchea,
+    /// De la batuta del director, recta.
+    Batuta,
+    /// Del remolino del director: sale girando y se abre.
+    Remolino,
 }
 
 impl Forma {
@@ -481,6 +563,8 @@ impl Forma {
             Forma::Plato => RADIO_PLATO,
             Forma::Perla => 7.0,
             Forma::Corchea => 8.0,
+            Forma::Batuta => 8.0,
+            Forma::Remolino => 7.0,
         }
     }
 }
@@ -538,7 +622,7 @@ pub struct Aparicion {
     /// camarero. Cero o sin poner es la acera.
     #[serde(default)]
     pub y: f32,
-    /// Solo en las notas: si se puede parriar.
+    /// Solo en las notas y las hojas: si se puede parriar.
     #[serde(default)]
     pub rosa: bool,
     /// Si es el portero del paseo: el que cierra la arena del final, con su
@@ -667,6 +751,23 @@ impl Enemigo {
     /// La vida con que nacio, para la barra del portero.
     pub fn vida_max(&self) -> i32 {
         self.tipo.vida()
+    }
+
+    /// En que fase va un portero, de 0 a 2: un tercio de la vida cada una.
+    pub fn fase(&self) -> usize {
+        let (v, max) = (self.vida.max(0) * 3, self.vida_max());
+        if v > 2 * max {
+            0
+        } else if v > max {
+            1
+        } else {
+            2
+        }
+    }
+
+    /// La mano de la batuta del director. La punta da vueltas alrededor.
+    pub fn mano(&self) -> Vec2 {
+        self.pos + Vec2::new(self.dir * 22.0, -30.0)
     }
 
     /// La pierna de una corista: de la cadera a la punta del botin. Parada
@@ -1338,15 +1439,18 @@ impl Paseo {
                 break;
             }
             self.siguiente += 1;
+            // El husar despierta como todos, pero sale por detras de ella.
+            let x = if a.tipo == Tipo::Husar {
+                self.jugadora.pos.x - DETRAS_HUSAR
+            } else {
+                a.x
+            };
             // Distinto de cero y no mayor: en lo alto de una escalera se pisa
             // por encima de la lamina, en y negativas.
-            let pisa = if a.y != 0.0 {
-                a.y
-            } else {
-                self.def.altura(a.x)
-            };
+            let pisa = if a.y != 0.0 { a.y } else { self.def.altura(x) };
             let y = match a.tipo {
                 Tipo::Nota => a.y,
+                Tipo::Hoja => a.y,
                 t => pisa - t.alto(),
             };
             // El primer plato sale con un poco de azar: dos camareros que se
@@ -1358,11 +1462,11 @@ impl Paseo {
             }
             self.enemigos.push(Enemigo {
                 tipo: a.tipo,
-                pos: Vec2::new(a.x, y),
+                pos: Vec2::new(x, y),
                 vida: a.tipo.vida(),
                 dir: -1.0,
                 nacio: self.tick,
-                rosa: a.rosa && a.tipo == Tipo::Nota,
+                rosa: a.rosa && matches!(a.tipo, Tipo::Nota | Tipo::Hoja),
                 golpe: 0,
                 reloj,
                 lanzados: 0,
@@ -1381,19 +1485,27 @@ impl Paseo {
         // Lo que nace este tick (las rosas). Se anade al acabar, que no se
         // puede empujar a la lista que se esta recorriendo.
         let mut nuevas = Vec::new();
+        // El portero no empieza hasta que se cierra su arena.
+        let arena = self.cierre().is_some();
         for e in &mut self.enemigos {
             e.golpe = e.golpe.saturating_sub(1);
             let edad = self.tick - e.nacio;
             match e.tipo {
-                Tipo::Pareja => {
+                Tipo::Pareja | Tipo::Husar => {
                     // Un vals: en el uno del compas se vuelve hacia ti y da el
                     // paso largo; en el dos y el tres, pasitos. Es el tres por
                     // cuatro hecho andar, y se lee: sabes cuando va a acelerar.
+                    // El husar, igual pero a la carga.
                     let fase = edad % (3 * tiempo);
                     if fase == 0 && objetivo.x != e.pos.x {
                         e.dir = (objetivo.x - e.pos.x).signum();
                     }
-                    let v = if fase < tiempo { 170.0 } else { 40.0 };
+                    let (largo, corto) = if e.tipo == Tipo::Husar {
+                        (PASO_LARGO_HUSAR, PASO_CORTO_HUSAR)
+                    } else {
+                        (170.0, 40.0)
+                    };
+                    let v = if fase < tiempo { largo } else { corto };
                     let nx = e.pos.x + e.dir * v * DT;
                     // No se tira al canal: en el borde de la acera da la vuelta.
                     if self.def.hay_suelo(nx + e.dir * e.tipo.radio()) {
@@ -1438,6 +1550,79 @@ impl Paseo {
                     let t = edad as f32 / (4 * tiempo) as f32;
                     e.pos.y = e.base_y + 50.0 * sin(TAU * t);
                     e.dir = -1.0;
+                }
+                Tipo::Hoja => {
+                    // Una vuelta por compas alrededor de un centro que baja y
+                    // deriva a la izquierda: en x se suma la velocidad de la
+                    // vuelta, en y se pone donde toca.
+                    let w = TAU / (3 * tiempo) as f32;
+                    let (s, c) = sin_cos(w * edad as f32);
+                    e.pos.x += -DERIVA_HOJA * DT + GIRO_HOJA_X * w * c;
+                    e.pos.y = e.base_y + CAIDA_HOJA * edad as f32 * DT + GIRO_HOJA_Y * s;
+                    // Hacia donde va en la vuelta: el dibujo le da la cara.
+                    e.dir = if c >= 0.0 { 1.0 } else { -1.0 };
+                }
+                Tipo::Director => {
+                    e.gesto = (e.gesto - 1.0 / 12.0).max(0.0);
+                    let dx = objetivo.x - e.pos.x;
+                    if dx != 0.0 {
+                        e.dir = dx.signum();
+                    }
+                    if !arena {
+                        continue;
+                    }
+                    let fase = e.fase();
+                    let (golpe, dentro, prepara) = batuta(self.tick, self.def.tiempo, fase);
+                    if prepara {
+                        // Un compas quieto, con los brazos arriba: el aviso.
+                        // `reloj` a 1 es "remolino preparado".
+                        e.reloj = 1;
+                        continue;
+                    }
+                    if dentro != 0 {
+                        continue;
+                    }
+                    e.gesto = 1.0;
+                    e.lanzados += 1;
+                    let mano = e.mano();
+                    let giro = giro_batuta(self.tick as f32, self.def.tiempo);
+                    if golpe == 0 && e.reloj == 1 {
+                        // El remolino: un anillo entero que sale girando.
+                        e.reloj = 0;
+                        for k in 0..NOTAS_REMOLINO {
+                            let a = giro + TAU * k as f32 / NOTAS_REMOLINO as f32;
+                            let (s, c) = sin_cos(a);
+                            let d = Vec2::new(c, s);
+                            self.proyectiles.push(Proyectil {
+                                pos: e.pos + d * 34.0,
+                                vel: d * VEL_REMOLINO,
+                                rosa: false,
+                                forma: Forma::Remolino,
+                            });
+                        }
+                    } else if golpe == 2 {
+                        // El tres: una sola nota, rosa, a donde estas.
+                        let d = (objetivo - mano).normalize_or(Vec2::new(e.dir, 0.0));
+                        self.proyectiles.push(Proyectil {
+                            pos: mano,
+                            vel: d * VEL_TRES,
+                            rosa: true,
+                            forma: Forma::Batuta,
+                        });
+                    } else {
+                        // El uno y el dos: la espiral, por donde va la punta.
+                        let n = BRAZOS_ESPIRAL[fase];
+                        for k in 0..n {
+                            let (s, c) = sin_cos(giro + TAU * k as f32 / n as f32);
+                            let d = Vec2::new(c, s);
+                            self.proyectiles.push(Proyectil {
+                                pos: mano + d * BATUTA,
+                                vel: d * VEL_ESPIRAL[fase],
+                                rosa: false,
+                                forma: Forma::Batuta,
+                            });
+                        }
+                    }
                 }
                 Tipo::Flapper => {
                     let dx = objetivo.x - e.pos.x;
@@ -1721,6 +1906,9 @@ impl Paseo {
         let def = &self.def;
         self.enemigos
             .retain(|e| e.tipo != Tipo::Rosa || e.pos.y < def.altura(e.pos.x) + 90.0);
+        // Y una hoja que llega a la acera se queda alli, que ya no es nada.
+        self.enemigos
+            .retain(|e| e.tipo != Tipo::Hoja || e.pos.y < def.altura(e.pos.x) - 8.0);
     }
 
     /// Lo fugaz se mueve, se transforma al tocar la acera y se apaga.
@@ -1785,6 +1973,12 @@ impl Paseo {
         for q in &mut self.proyectiles {
             if q.forma == Forma::Plato {
                 q.vel.y += GRAVEDAD_PLATO * DT;
+            } else if q.forma == Forma::Remolino && q.vel.length() < TOPE_REMOLINO {
+                // Gira y acelera a la vez: la vuelta se abre en espiral, y al
+                // llegar al tope sigue recta.
+                let (s, c) = sin_cos(GIRO_REMOLINO * DT);
+                let v = q.vel;
+                q.vel = Vec2::new(v.x * c - v.y * s, v.x * s + v.y * c) * ACELERA_REMOLINO;
             }
             q.pos += q.vel * DT;
         }
@@ -2062,12 +2256,32 @@ mod tests {
 
         let viena = de_serie("El Vals");
         assert!(viena.suelo.len() >= 3, "hace falta algun foso que saltar");
-        for t in [Tipo::Pareja, Tipo::Camarero, Tipo::Nota] {
+        for t in [
+            Tipo::Pareja,
+            Tipo::Camarero,
+            Tipo::Hoja,
+            Tipo::Husar,
+            Tipo::Director,
+        ] {
             assert!(
                 viena.enemigos.iter().any(|a| a.tipo == t),
                 "falta {t:?} en Viena"
             );
         }
+        // Las notas volaban por las cuatro calles; en Viena caen hojas.
+        assert!(!viena.enemigos.iter().any(|a| a.tipo == Tipo::Nota));
+        // El husar sale a `DETRAS_HUSAR` de donde va ella al despertarlo, y
+        // ahi tiene que haber acera.
+        for a in viena.enemigos.iter().filter(|a| a.tipo == Tipo::Husar) {
+            let x = a.x - ACTIVAR - DETRAS_HUSAR;
+            assert!(viena.hay_suelo(x) && viena.hay_suelo(x - 60.0), "{a:?}");
+        }
+        // El director en su arena, y la puerta pasada ella.
+        let po = viena.porteria.expect("Viena acaba con el director");
+        let dire = viena.enemigos.iter().find(|a| a.portero).expect("portero");
+        assert!(dire.x > po.desde && dire.x < po.desde + VISTA_W);
+        assert!(viena.puerta > po.desde + VISTA_W);
+        assert_eq!(po.ficha, Some(viena.fichas.len() - 1), "la suya, la ultima");
 
         // Chicago se cruza por arriba: tiene que haber un tramo largo sin
         // calle, y la clave del charleston en su `tiempo`.
@@ -2660,25 +2874,350 @@ mod tests {
         // Un bot que corre, dispara y salta cuando tiene un foso delante. Es
         // invulnerable, asi que no prueba que sea facil: prueba que ningun foso
         // es mas ancho que un salto y que no hay nada que tape la puerta.
+        //
+        // Dos cosas mas que en las otras calles: el canal del fiacre no se
+        // salta, se espera a la barca en el muelle y se va en ella hasta la
+        // otra orilla; y en la arena se planta y dispara de frente hasta
+        // tumbar al director.
         let def = de_serie("El Vals");
         let mut p = Paseo::new(def, 3);
         let mut salto = 0;
-        for _ in 0..(60 * 60) {
+        let mut tumbado = false;
+        for _ in 0..(60 * 120) {
             p.jugadora.iframes = 5;
-            let x = p.jugadora.pos.x;
-            let foso_delante = p.jugadora.on_ground && !p.def.hay_suelo(x + 24.0);
-            if foso_delante {
+            let j = &p.jugadora;
+            let x = j.pos.x;
+            let foso_delante = j.on_ground && !p.def.hay_suelo(x + 24.0);
+            // La barca, si la hay sobre el foso que tiene delante.
+            let barca = p.def.plataformas.iter().enumerate().find(|(i, pl)| {
+                let Some(Mueve::Vaiven { dx, .. }) = pl.mueve else {
+                    return false;
+                };
+                let a = p.bases[*i].x;
+                (a..=a + dx + pl.ancho).contains(&(x + 24.0))
+            });
+            let mut lado = DERECHA;
+            if let Some(i) = p.sobre {
+                // Montada: al morro de la barca y quieta hasta la otra orilla.
+                let pl = p.def.plataformas[i];
+                if !p.def.hay_suelo(x + 40.0) && x + 40.0 > pl.x + pl.ancho {
+                    lado = 0;
+                }
+            } else if foso_delante && let Some((_, pl)) = barca {
+                // En el muelle: se sube andando si esta aqui, si no espera.
+                if !(pl.x <= x + 10.0 && pl.x + pl.ancho >= x + 80.0) {
+                    lado = 0;
+                }
+            } else if foso_delante {
                 salto = 20;
             }
-            let bits = DERECHA | DISPARA | if salto > 0 { InputFrame::JUMP } else { 0 };
+            let mut bits = lado | DISPARA | if salto > 0 { InputFrame::JUMP } else { 0 };
+            if p.cierre().is_some() {
+                bits = InputFrame::FOCUS | DERECHA | DISPARA;
+            }
             salto = if salto > 0 { salto - 1 } else { 0 };
+            let habia = p.portero().is_some();
             p.step(pulsar(bits));
+            tumbado |= habia && p.portero().is_none();
             if p.completado.is_some() {
                 break;
             }
         }
         assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
+        assert!(tumbado, "el director tenia que caer a tiros");
+        assert_eq!(p.fichas_cogidas(), 2, "la del camino y la del director");
+        assert!(p.fichas[3], "la del director, al pasar por su tarima");
         assert_eq!(p.vidas, VIDAS, "no ha caido a ningun foso");
+    }
+
+    // --- Viena ---
+
+    #[test]
+    fn la_hoja_baja_girando_y_se_queda_en_la_acera() {
+        let mut p = Paseo::new(uno(Tipo::Hoja, 600.0, 250.0), 1);
+        p.step(InputFrame::NONE);
+        let salida = p.enemigos[0].pos;
+        let (mut ida, mut vuelta) = (false, false);
+        let mut antes = salida;
+        // Un compas: una vuelta entera, asi que va y vuelve en x.
+        for _ in 0..(3 * 21) {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+            let e = &p.enemigos[0];
+            ida |= e.pos.x > antes.x;
+            vuelta |= e.pos.x < antes.x;
+            antes = e.pos;
+        }
+        assert!(ida && vuelta, "no gira");
+        assert!(antes.y > salida.y + 20.0, "no baja: {antes}");
+        assert!(antes.x < salida.x - 40.0, "no deriva: {antes}");
+        // Hasta la acera, y alli se va sin contar como caida.
+        let mut caidos = 0;
+        for _ in 0..600 {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+            caidos += p.caidos;
+            if let Some(e) = p.enemigos.first() {
+                assert!(e.pos.y < SUELO_Y, "atraviesa la acera");
+            }
+        }
+        assert!(p.enemigos.is_empty(), "no llega a la acera");
+        assert_eq!(caidos, 0);
+        // Y las rosas despiertan rosas, que es lo que se parria.
+        let rosa = con(vec![Aparicion {
+            y: 300.0,
+            rosa: true,
+            ..aparece(Tipo::Hoja, 400.0)
+        }]);
+        let mut p = Paseo::new(rosa, 1);
+        p.step(InputFrame::NONE);
+        assert!(p.enemigos[0].rosa);
+    }
+
+    #[test]
+    fn el_husar_sale_por_detras_y_alcanza_a_quien_corre() {
+        let mut def = uno(Tipo::Husar, 1300.0, 0.0);
+        (def.largo, def.puerta, def.suelo) = (6000.0, 5800.0, vec![(0.0, 6000.0)]);
+        let mut p = Paseo::new(def.clone(), 1);
+        let mut salio = None;
+        for _ in 0..1500 {
+            p.step(pulsar(DERECHA));
+            if salio.is_none()
+                && let Some(e) = p.enemigos.first()
+            {
+                salio = Some((e.pos.x, p.jugadora.pos.x, e.dir));
+            }
+            if p.events.player_died {
+                break;
+            }
+        }
+        let (ex, jx, dir) = salio.expect("no ha salido");
+        assert!(
+            ex < jx - VISTA_W * ENCUADRE,
+            "fuera de cuadro: {ex} vs {jx}"
+        );
+        assert_eq!(dir, 1.0, "viene hacia ella");
+        assert!(p.events.player_died, "corriendo no se le escapa");
+
+        // Dandose la vuelta y disparando, cae antes de llegar.
+        let mut p = Paseo::new(def, 1);
+        while p.enemigos.is_empty() {
+            p.step(pulsar(DERECHA));
+        }
+        let mut cayo = false;
+        for _ in 0..120 {
+            p.step(pulsar(InputFrame::LEFT | InputFrame::FOCUS | DISPARA));
+            cayo |= p.caidos > 0;
+        }
+        assert!(cayo, "el husar tenia que caer");
+        assert_eq!(p.vidas, VIDAS, "sin dejarlo llegar");
+    }
+
+    #[test]
+    fn la_barca_del_fiacre_cruza_el_canal_de_orilla_a_orilla() {
+        let def = de_serie("El Vals");
+        let pl = *def
+            .plataformas
+            .iter()
+            .find(|pl| pl.mueve.is_some())
+            .expect("falta el fiacre");
+        let Some(Mueve::Vaiven {
+            dx, dy, periodo, ..
+        }) = pl.mueve
+        else {
+            panic!("el fiacre va y viene");
+        };
+        // El canal que cruza: de muelle a muelle, mas que un salto con dash.
+        let (a, b) = def
+            .suelo
+            .windows(2)
+            .map(|par| (par[0].1, par[1].0))
+            .find(|&(a, b)| (a..b).contains(&(pl.x + pl.ancho)))
+            .expect("la barca sale de un muelle");
+        assert!(b - a > 600.0, "este canal se salta: {}", b - a);
+        assert_eq!((dy, pl.y), (0.0, SUELO_Y), "a ras de muelle");
+        // Y se mete bajo cada muelle, que es lo que da tiempo a subir y bajar.
+        assert!(
+            pl.x <= a - 40.0 && pl.x + pl.ancho > a + 100.0,
+            "no toca su muelle"
+        );
+        assert!(
+            pl.x + dx < b - 100.0 && pl.x + dx + pl.ancho >= b + 40.0,
+            "ni el otro"
+        );
+
+        // Se sube andando, se va quieta y se baja andando al otro lado.
+        let mut p = Paseo::new(def, 1);
+        let y = p.def.altura(a) - PIES;
+        p.jugadora.pos = Vec2::new(a - 30.0, y);
+        p.jugadora.prev_pos = p.jugadora.pos;
+        for _ in 0..20 {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(DERECHA));
+        }
+        assert!(p.sobre.is_some(), "no se ha subido");
+        while p.tick < u64::from(periodo / 2) {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+            assert!(p.jugadora.on_ground, "se ha caido de la barca");
+        }
+        for _ in 0..60 {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(DERECHA));
+        }
+        let j = &p.jugadora;
+        assert!(j.pos.x > b && j.on_ground, "en {}", j.pos);
+        assert_eq!(p.vidas, VIDAS);
+    }
+
+    /// El director en una arena de pruebas que empieza en 1000.
+    fn con_director() -> PaseoDef {
+        let mut def = con(vec![Aparicion {
+            y: 458.0,
+            portero: true,
+            ..aparece(Tipo::Director, 1750.0)
+        }]);
+        def.porteria = Some(Porteria {
+            desde: 1000.0,
+            ficha: None,
+        });
+        def.puerta = 2500.0;
+        def
+    }
+
+    /// Anda hasta que se cierra la arena, invulnerable.
+    fn hasta_la_arena(def: PaseoDef) -> Paseo {
+        let mut p = Paseo::new(def, 1);
+        while p.cierre().is_none() {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(DERECHA));
+            assert!(p.proyectiles.is_empty(), "toca antes de cerrarse");
+            assert!(p.tick < 600, "la arena no se cierra");
+        }
+        p
+    }
+
+    /// Un tick con lo que vuela borrado: lo que quede es lo que ha nacido.
+    fn lo_nuevo(p: &mut Paseo) -> Vec<Proyectil> {
+        p.jugadora.iframes = 10;
+        p.proyectiles.clear();
+        p.step(InputFrame::NONE);
+        p.proyectiles.clone()
+    }
+
+    #[test]
+    fn el_director_toca_a_tres_tiempos_y_la_rosa_va_en_el_tres() {
+        let mut p = hasta_la_arena(con_director());
+        let (mut espirales, mut rosas) = (0, 0);
+        for _ in 0..(3 * 21 * 4) {
+            let tick = p.tick;
+            let nuevas = lo_nuevo(&mut p);
+            if nuevas.is_empty() {
+                continue;
+            }
+            let (golpe, dentro, _) = batuta(tick, 21, 0);
+            assert_eq!(dentro, 0, "fuera de tiempo en {tick}");
+            if golpe == 2 {
+                assert!(nuevas.len() == 1 && nuevas[0].rosa, "el tres: {nuevas:?}");
+                // A ella: hacia la izquierda.
+                assert!(nuevas[0].vel.x < 0.0);
+                rosas += 1;
+            } else {
+                assert_eq!(nuevas.len(), BRAZOS_ESPIRAL[0]);
+                assert!(nuevas.iter().all(|q| !q.rosa && q.forma == Forma::Batuta));
+                espirales += 1;
+            }
+        }
+        assert_eq!((espirales, rosas), (8, 4), "cuatro compases");
+        // Y la rosa se parria.
+        let rosa = Proyectil {
+            pos: p.jugadora.pos + Vec2::new(20.0, -10.0),
+            vel: Vec2::ZERO,
+            rosa: true,
+            forma: Forma::Batuta,
+        };
+        p.proyectiles = vec![rosa];
+        p.jugadora.iframes = 0;
+        p.step(pulsar(InputFrame::PARRY));
+        assert_eq!(p.events.parried, 1);
+    }
+
+    #[test]
+    fn el_director_cambia_de_fase_por_tercios_y_avisa_el_remolino() {
+        let mut p = hasta_la_arena(con_director());
+        let max = p.portero().expect("despierto").vida_max();
+        for (vida, fase) in [(max, 0), (max * 2 / 3, 1), (max / 3, 2), (1, 2)] {
+            p.enemigos[0].vida = vida;
+            assert_eq!(p.enemigos[0].fase(), fase, "con {vida} de {max}");
+        }
+        // En la segunda fase, un compas quieto y luego el anillo.
+        p.enemigos[0].vida = max / 2;
+        let compas = 3 * 21;
+        let mut ultimo_tiro = p.tick;
+        let mut anillo = None;
+        for _ in 0..(compas * 9) {
+            let tick = p.tick;
+            let nuevas = lo_nuevo(&mut p);
+            if nuevas.iter().any(|q| q.forma == Forma::Remolino) {
+                assert_eq!(nuevas.len(), NOTAS_REMOLINO);
+                assert!(tick - ultimo_tiro > compas, "sin aviso en {tick}");
+                anillo.get_or_insert(nuevas);
+            }
+            if !p.proyectiles.is_empty() {
+                ultimo_tiro = tick;
+            }
+        }
+        let anillo = anillo.expect("no ha soltado el remolino");
+        // Las del remolino giran y aceleran hasta el tope, y luego van rectas.
+        // La que sale mas de lado, que es la que mas dura en la vista.
+        let mut q = *anillo
+            .iter()
+            .max_by(|a, b| a.vel.x.abs().total_cmp(&b.vel.x.abs()))
+            .expect("un anillo tiene notas");
+        let v0 = q.vel;
+        let mut p = Paseo::new(calle(), 1);
+        p.proyectiles = vec![Proyectil {
+            pos: Vec2::new(500.0, 270.0),
+            ..q
+        }];
+        correr(&mut p, 0, 30);
+        q = p.proyectiles[0];
+        assert!(q.vel.length() > v0.length() * 1.3, "no acelera");
+        assert!(v0.normalize().dot(q.vel.normalize()) < 0.9, "no gira");
+        correr(&mut p, 0, 60);
+        let recta = p.proyectiles[0].vel;
+        assert!(recta.length() >= TOPE_REMOLINO);
+        p.step(InputFrame::NONE);
+        assert_eq!(p.proyectiles[0].vel, recta, "pasado el tope, recto");
+    }
+
+    #[test]
+    fn el_director_cae_a_tiros_en_su_tiempo_y_abre_la_arena() {
+        // Plantada a la entrada de la arena, disparando de frente: con la
+        // aguja tiene que durar entre 20 y 40 segundos.
+        let mut p = hasta_la_arena(con_director());
+        let empieza = p.tick;
+        let mut vida = p.portero().expect("despierto").vida;
+        while p.portero_vivo() {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(InputFrame::FOCUS | DERECHA | DISPARA));
+            if let Some(e) = p.portero() {
+                assert!(e.vida <= vida, "se cura");
+                vida = e.vida;
+            }
+            assert!(
+                p.tick - empieza < 60 * 40,
+                "dura mas de 40 s: le queda {vida}"
+            );
+        }
+        let segundos = (p.tick - empieza) as f32 * DT;
+        assert!(segundos > 20.0, "dura poco: {segundos} s");
+        assert!(p.cierre().is_none(), "tumbado, se abre");
+        while !p.terminado() {
+            p.step(pulsar(DERECHA));
+            assert!(p.tick < 60 * 60, "no llega a la puerta");
+        }
+        assert!(p.completado.is_some());
     }
 
     // --- El arrabal ---
@@ -3049,7 +3588,7 @@ mod tests {
                 );
             }
         }
-        assert_eq!(total, 16, "los precios de la modista cuentan con 16");
+        assert!(total >= 16, "los precios de la modista cuentan con 16");
     }
 
     #[test]

@@ -364,6 +364,7 @@ textos! {
     LlegasteCamino: "llegaste al {}% del camino a la puerta", "you made it {}% of the way to the door";
     ReintentarPaseo: "{} o {}  reintentar el paseo", "{} or {}  retry the promenade";
     EstaNoche: "ESTA NOCHE", "TONIGHT";
+    ElDirector: "El director de orquesta", "The conductor";
 
     // --- La pista ---
     LaPista: "LA PISTA", "THE DANCE FLOOR";

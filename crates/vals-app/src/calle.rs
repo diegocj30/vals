@@ -29,6 +29,7 @@ use crate::acciones::Nombres;
 use crate::calle_arrabal;
 use crate::calle_chicago;
 use crate::calle_montmartre;
+use crate::calle_viena;
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{Instrumento, arco, circulo, linea, musico, rect, tri};
 use crate::fuentes::{self, Cara};
@@ -141,7 +142,8 @@ pub fn dibujar(p: &Paseo, alpha: f32, l: &Layout, pulso: f32, baile: usize) {
         3 => calle_montmartre::calle(p, &calle, alpha, t, pulso),
         _ => {
             acera(p, &calle, cam, t, AGUA);
-            plataformas(p, &calle);
+            calle_viena::templete(p, &calle, pulso);
+            plataformas(p, &calle, pulso);
             puerta(p, &calle, alpha, t, tintas);
         }
     }
@@ -227,6 +229,22 @@ pub fn encima(p: &Paseo, l: &Layout, n: &Nombres) {
         let ancho = l.len(VISTA_W * 0.4);
         let frac = e.vida as f32 / e.vida_max().max(1) as f32;
         draw::barra_de_vida(o.x + (w - ancho) * 0.5, o.y + 14.0, ancho, 7.0, frac);
+        let quien = match e.tipo {
+            Tipo::Director => Some(tx(Texto::ElDirector)),
+            _ => None,
+        };
+        if let Some(quien) = quien {
+            let y = o.y + l.len(62.0);
+            fuentes::centrado(
+                quien,
+                o.x + w * 0.5 + 1.4,
+                y + 1.4,
+                16.0,
+                Cara::Titulo,
+                fade(TINTA, 0.85),
+            );
+            fuentes::centrado(quien, o.x + w * 0.5, y, 16.0, Cara::Titulo, TEXTO);
+        }
     }
 
     if p.derrota {
@@ -613,8 +631,13 @@ pub(crate) fn acera(p: &Paseo, l: &Layout, cam: f32, t: f32, agua: Color) {
 
 /// Mesas de cafe y balcones. Una mesa baja es de marmol con pie de hierro; lo
 /// que esta mas alto es un balcon de piedra con sus mensulas.
-fn plataformas(p: &Paseo, l: &Layout) {
+fn plataformas(p: &Paseo, l: &Layout, pulso: f32) {
     for pl in &p.def.plataformas {
+        // La que se mueve es la barca del fiacre.
+        if pl.mueve.is_some() {
+            calle_viena::fiacre(p, pl, l, pulso);
+            continue;
+        }
         let (x, y, w) = (pl.x, pl.y, pl.ancho);
         if SUELO_Y - y < 60.0 {
             // El pie hasta la acera, y el tablero.
@@ -829,6 +852,9 @@ fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tiempo: u32, tintas: (Col
         Tipo::Pareja => pareja(e, l, edad, tintas, &tinte),
         Tipo::Camarero => camarero(e, l, &tinte),
         Tipo::Nota => nota(e, l, t, &tinte),
+        Tipo::Hoja => calle_viena::hoja(e, l, edad, tiempo, t, &tinte),
+        Tipo::Husar => calle_viena::husar(e, l, edad, tiempo, tintas, &tinte),
+        Tipo::Director => calle_viena::director(e, l, tick, t, tiempo, tintas, &tinte),
         Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin => {
             calle_chicago::enemigo(e, l, tick, t, tiempo, tintas, &tinte);
         }
@@ -1079,6 +1105,10 @@ fn nota(e: &Enemigo, l: &Layout, t: f32, tinte: &dyn Fn(Color) -> Color) {
 /// azul de la vajilla. Los rosas, con el anillo de parry.
 fn platos(p: &Paseo, l: &Layout, t: f32, azul: Color) {
     for (i, q) in p.proyectiles.iter().enumerate() {
+        if matches!(q.forma, Forma::Batuta | Forma::Remolino) {
+            calle_viena::nota_de_batuta(q, l, t, azul);
+            continue;
+        }
         if q.forma != Forma::Plato {
             calle_chicago::proyectil(q, l, t);
             continue;
