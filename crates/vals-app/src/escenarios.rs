@@ -6,9 +6,10 @@
 //!
 //! Cada uno es el sitio de su baile y de su epoca: **Viena** para el vals, un
 //! **arrabal** de Buenos Aires para el tango, un **club** de jazz para el
-//! charleston y **el Moulin Rouge** para el cancan. Y no tienen la misma luz:
-//! el vals y el tango son de noche, el club es dorado y el Moulin Rouge es
-//! rojo. La variedad sale de ahi mas que del dibujo.
+//! charleston, **el Moulin Rouge** para el cancan y **Sevilla** para el
+//! flamenco. Y no tienen la misma luz: el vals y el tango son de noche, el
+//! club es dorado, el Moulin Rouge es rojo y Sevilla es de atardecer. La
+//! variedad sale de ahi mas que del dibujo.
 //!
 //! Todo es fondo: se dibuja en la franja de encima del horizonte, detras del
 //! jefe, y no hay nada aqui que sea informacion. Las balas pasan por encima.
@@ -30,7 +31,8 @@ pub fn dibujar(l: &Layout, baile: usize, alto: f32, t: f32, brillo: f32) {
         0 => viena(l, alto, brillo),
         1 => arrabal(l, alto, brillo),
         2 => club(l, alto, t, brillo),
-        _ => moulin_rouge(l, alto, t, brillo),
+        3 => moulin_rouge(l, alto, t, brillo),
+        _ => sevilla(l, alto, t, brillo),
     }
 }
 
@@ -358,6 +360,110 @@ fn publico(l: &Layout, alto: f32, t: f32, brillo: f32) {
 }
 
 // ---------------------------------------------------------------------------
+// El Flamenco: Sevilla al atardecer, con la Giralda y los farolillos.
+// ---------------------------------------------------------------------------
+
+fn sevilla(l: &Layout, alto: f32, t: f32, brillo: f32) {
+    // El cielo de la tarde, de violeta a naranja: el unico decorado que no es
+    // de noche ni de sala.
+    for (i, c) in [
+        color_u8!(44, 24, 48, 255),
+        color_u8!(96, 40, 54, 255),
+        color_u8!(160, 74, 50, 255),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        rect(l, 0.0, alto * i as f32 / 3.0, ARENA_W, alto / 3.0 + 1.0, c);
+    }
+    circulo(l, 150.0, alto * 0.78, 30.0, color_u8!(236, 150, 72, 255));
+
+    // La Giralda, a contraluz: la torre, el cuerpo de campanas, la linterna y
+    // el Giraldillo arriba del todo.
+    let piedra = color_u8!(52, 26, 34, 255);
+    let (gx, ancho) = (468.0, 46.0);
+    rect(l, gx - ancho * 0.5, alto * 0.36, ancho, alto * 0.64, piedra);
+    rect(l, gx - 16.0, alto * 0.20, 32.0, alto * 0.17, piedra);
+    rect(l, gx - 10.0, alto * 0.10, 20.0, alto * 0.11, piedra);
+    tri(
+        l,
+        (gx - 6.0, alto * 0.10),
+        (gx + 6.0, alto * 0.10),
+        (gx, alto * 0.03),
+        piedra,
+    );
+    linea(l, (gx, alto * 0.03), (gx, -6.0), 2.0, piedra);
+    tri(l, (gx, -6.0), (gx + 9.0, -2.0), (gx, 1.0), piedra);
+    // Las ventanas del campanario, encendidas con el compas.
+    let luz = color_u8!(240, 186, 110, 255);
+    for dx in [-9.0, 3.0] {
+        rect(
+            l,
+            gx + dx,
+            alto * 0.25,
+            6.0,
+            12.0,
+            fade(luz, 0.55 + 0.45 * brillo),
+        );
+    }
+    for k in 0..3 {
+        let y = alto * (0.48 + 0.16 * k as f32);
+        rect(l, gx - 3.0, y, 6.0, 9.0, fade(luz, 0.35));
+    }
+
+    // Los arcos de herradura del patio, delante: el muro de albero con los
+    // huecos abiertos al cielo.
+    let albero = color_u8!(140, 86, 42, 255);
+    let arriba = alto * 0.58;
+    rect(l, 0.0, arriba, ARENA_W, alto - arriba, albero);
+    for cx in [64.0, 192.0, 320.0] {
+        let (r, cy) = (28.0, arriba + 38.0);
+        let hueco = color_u8!(110, 50, 50, 255);
+        circulo(l, cx, cy, r, hueco);
+        rect(l, cx - r * 0.82, cy, r * 1.64, alto - cy, hueco);
+        arco(l, cx, cy, r, 3.0, TINTA);
+    }
+    linea(l, (0.0, arriba), (ARENA_W, arriba), 3.0, TINTA);
+
+    // Los farolillos de la feria, colgando en guirnalda: rojos y blancos con
+    // lunares, y se encienden en el golpe. Se mecen a su aire.
+    let rojo = color_u8!(196, 36, 44, 255);
+    let blanco = color_u8!(238, 224, 200, 255);
+    for (fila, y0) in [(0usize, alto * 0.16), (1, alto * 0.36)] {
+        let n = 9;
+        for i in 0..n {
+            let f = (i as f32 + 0.5) / n as f32;
+            let x = f * ARENA_W;
+            let comba = (f * PI).sin() * 16.0;
+            let (meneo, _) = sin_cos(t * 0.05 + i as f32 * 0.9 + fila as f32);
+            let y = y0 + comba + meneo * 1.5;
+            let color = if (i + fila).is_multiple_of(2) {
+                rojo
+            } else {
+                blanco
+            };
+            let lunar = if color == rojo { blanco } else { rojo };
+            linea(
+                l,
+                (x - ARENA_W / n as f32 * 0.5, y - 9.0),
+                (x, y - 9.0),
+                1.0,
+                TINTA,
+            );
+            circulo(l, x, y, 9.0, TINTA);
+            circulo(l, x, y, 7.5, fade(color, 0.75 + 0.25 * brillo));
+            for (dx, dy) in [(-3.0, -2.0), (3.0, 1.0), (-1.0, 4.0)] {
+                circulo(l, x + dx, y + dy, 1.3, lunar);
+            }
+        }
+    }
+
+    // Y el cuadro, delante de los arcos: uno al cajon y otro dando palmas.
+    musico(l, 196.0, alto, Instrumento::Cajon, brillo);
+    musico(l, 286.0, alto, Instrumento::Palmas, brillo);
+}
+
+// ---------------------------------------------------------------------------
 // Los musicos: siluetas de tinta que tocan al compas.
 //
 // Un decorado quieto es un papel pintado. Cuphead llena sus fondos de gente que
@@ -376,6 +482,10 @@ pub(crate) enum Instrumento {
     Bateria,
     Violin,
     Violonchelo,
+    /// Sentado encima y pegandole con las manos.
+    Cajon,
+    /// De pie, con las manos juntandose en el golpe.
+    Palmas,
 }
 
 /// Un musico con los pies en `(x, suelo)`. `brillo` es el pulso del compas: en
@@ -385,15 +495,22 @@ pub(crate) fn musico(l: &Layout, x: f32, suelo: f32, que: Instrumento, brillo: f
     let golpe = brillo * 2.5;
     let sentado = matches!(
         que,
-        Instrumento::Bandoneon | Instrumento::Bateria | Instrumento::Violonchelo
+        Instrumento::Bandoneon
+            | Instrumento::Bateria
+            | Instrumento::Violonchelo
+            | Instrumento::Cajon
     );
     // Sentado, las caderas bajan y se ve la silla.
     let cadera = if sentado { suelo - 20.0 } else { suelo - 30.0 };
     let hombros = cadera - 26.0;
     let cabeza = (x + golpe * 0.4, hombros - 9.0 + golpe);
 
-    // Piernas y, si esta sentado, la silla.
-    if sentado {
+    // Piernas y, si esta sentado, la silla. El del cajon se sienta en el.
+    if matches!(que, Instrumento::Cajon) {
+        rect(l, x - 11.0, cadera, 22.0, suelo - cadera, c);
+        linea(l, (x + 4.0, cadera), (x + 16.0, cadera + 4.0), 4.0, c);
+        linea(l, (x + 16.0, cadera + 4.0), (x + 16.0, suelo), 4.0, c);
+    } else if sentado {
         rect(l, x - 12.0, cadera, 24.0, 4.0, c);
         linea(l, (x - 10.0, cadera), (x - 10.0, suelo), 2.5, c);
         linea(l, (x + 10.0, cadera), (x + 10.0, suelo), 2.5, c);
@@ -499,6 +616,19 @@ pub(crate) fn musico(l: &Layout, x: f32, suelo: f32, que: Instrumento, brillo: f
                 1.5,
                 c,
             );
+        }
+        // El cajon: las manos bajan a la tapa de delante en el golpe.
+        Instrumento::Cajon => {
+            let mano = (x + 6.0, cadera + 4.0 - (1.0 - brillo) * 6.0);
+            linea(l, (x + 4.0, hombros + 4.0), mano, 2.5, c);
+            linea(l, (x - 4.0, hombros + 4.0), (mano.0 - 6.0, mano.1), 2.5, c);
+        }
+        // Las palmas: los brazos se cierran delante del pecho en el golpe.
+        Instrumento::Palmas => {
+            let abre = 3.0 + (1.0 - brillo) * 9.0;
+            let y = hombros + 8.0;
+            linea(l, (x - 7.0, hombros + 3.0), (x - abre, y), 2.5, c);
+            linea(l, (x + 7.0, hombros + 3.0), (x + abre, y), 2.5, c);
         }
         // La bateria: el bombo delante y el platillo, que salta en el golpe.
         Instrumento::Bateria => {

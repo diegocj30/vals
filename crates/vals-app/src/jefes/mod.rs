@@ -10,6 +10,8 @@
 //! - **El Tango**: un bandoneon con brazos y cara, que respira con el fuelle.
 //! - **El Charleston**: un gramofono; la bocina es la boca y el disco gira.
 //! - **El Cancan**: una fila de coristas pateando a la vez.
+//! - **El Flamenco**: una guitarra con volante de lunares, que se tensa y
+//!   vibra en cada acento.
 //!
 //! La regla de siempre sigue en pie: **cada jefe baila lo que dispara**.
 //! Por eso todos reciben el pulso del compas y la figura en la que van.
@@ -26,7 +28,8 @@
 //! segunda puerta, con `k` de 0 (el golpe que lo tumba) a 1 (tumbado del
 //! todo). En Cuphead el KO es el premio, y un objeto que desaparece de golpe
 //! no premia nada: la caja de musica se queda sin cuerda, el bandoneon se
-//! desinfla, el gramofono se raya y las coristas caen en fila al espagat. El
+//! desinfla, el gramofono se raya, las coristas caen en fila al espagat y a
+//! la guitarra se le saltan las cuerdas. El
 //! reloj de la caida lo lleva la app (`caida`), no la simulacion: el replay
 //! dorado no se entera.
 
@@ -36,6 +39,7 @@ mod bandoneon;
 mod caja_de_musica;
 mod coristas;
 mod gramofono;
+mod guitarra;
 
 /// Todo lo que un jefe necesita para dibujarse en este instante.
 pub struct Escena {
@@ -70,7 +74,7 @@ pub struct Escena {
 
 /// Dibuja al jefe de un baile.
 ///
-/// Aqui hierve la linea (`trazo::hervir`), para los cuatro a la vez: ninguno
+/// Aqui hierve la linea (`trazo::hervir`), para todos a la vez: ninguno
 /// tiene que saberlo.
 pub fn dibujar(baile: usize, e: &Escena) {
     // El aro de golpeo mide 46 unidades de arena, y la figura lo llena.
@@ -79,7 +83,8 @@ pub fn dibujar(baile: usize, e: &Escena) {
         0 => caja_de_musica::dibujar(e),
         1 => bandoneon::dibujar(e),
         2 => gramofono::dibujar(e),
-        _ => coristas::dibujar(e),
+        3 => coristas::dibujar(e),
+        _ => guitarra::dibujar(e),
     });
 }
 
@@ -97,7 +102,8 @@ pub fn dibujar_muerte(baile: usize, e: &Escena, k: f32) {
         0 => caja_de_musica::dibujar_muerte(e, k),
         1 => bandoneon::dibujar_muerte(e, k),
         2 => gramofono::dibujar_muerte(e, k),
-        _ => coristas::dibujar_muerte(e, k),
+        3 => coristas::dibujar_muerte(e, k),
+        _ => guitarra::dibujar_muerte(e, k),
     });
 }
 

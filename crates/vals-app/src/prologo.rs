@@ -94,7 +94,7 @@ const ROMANOS: [&str; 5] = ["I.", "II.", "III.", "IV.", "V."];
 const ORDEN_DE_LA_NOCHE: [usize; 5] = [0, 2, 3, 1, 4];
 
 /// Una linea por jefe, para su cartela de entrada.
-const LEMAS_BAILE: [Texto; 5] = [
+const LEMAS_BAILE: [Texto; vals_core::boss::BAILES] = [
     Texto::LemaVals,
     Texto::LemaTango,
     Texto::LemaCharleston,
@@ -140,7 +140,7 @@ const DURA_CREDITOS: f32 = DURA + 6.0;
 /// Lo que tarda en bajar el telon al final de los creditos.
 const TELON: f32 = 1.6;
 
-/// Si al volver a la pista toca el final: los cinco bailes ganados, en el
+/// Si al volver a la pista toca el final: todos los bailes ganados, en el
 /// orden que sea, y sin haberlo visto todavia.
 pub fn toca_el_final(pista: &Pista, visto: bool) -> bool {
     pista.todo_vencido() && !visto

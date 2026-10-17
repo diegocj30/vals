@@ -50,11 +50,12 @@ const OSCURO: f32 = 0.65;
 /// Lo que grita el cartel, por baile. "¡BRAVO!" ya es el sello de la victoria,
 /// asi que el super grita otra cosa, y una distinta por baile: dice que el
 /// numero era de ese baile.
-const PALABRAS: [Texto; 4] = [
+const PALABRAS: [Texto; vals_core::boss::BAILES] = [
     Texto::SuperVals,
     Texto::SuperTango,
     Texto::SuperCharleston,
     Texto::SuperCancan,
+    Texto::SuperFlamenco,
 ];
 
 pub struct Ovacion {

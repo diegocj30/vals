@@ -5,9 +5,9 @@
 //! decian **a donde** se iba. En el mapa de Cuphead cada nivel es un sitio: una
 //! casa, un barco, un circo. Aqui cada baile es **el sitio donde se baila**, el
 //! mismo de su decorado (`escenarios.rs`) en pequeno: el palacio de Viena, la
-//! esquina del arrabal, el club de jazz y el molino del Moulin Rouge. Y los une
-//! un camino a trazos, que es lo que convierte cuatro dibujos sueltos en un
-//! recorrido.
+//! esquina del arrabal, el club de jazz, el molino del Moulin Rouge y la
+//! Giralda de Sevilla. Y los une un camino a trazos, que es lo que convierte
+//! cinco dibujos sueltos en un recorrido.
 //!
 //! Todo es dibujo. La pista sigue siendo plana en el core (`vals_core::pista`):
 //! la perspectiva, los caminos y los monumentos solo existen aqui.
@@ -100,7 +100,8 @@ fn dibujar_tarima(l: &Layout) {
 /// `Pista::abierto`: que al acabar un nivel se abren todos los del siguiente a
 /// la vez. Una cadena vals - charleston - cancan - tango diria que el cancan va
 /// despues del charleston, y no es verdad: se pueden bailar en cualquier orden.
-/// Con los bailes de hoy (uno, dos y uno) sale un rombo.
+/// Con los bailes de hoy (uno, dos, uno y uno) sale un rombo con el flamenco
+/// en la punta del fondo.
 ///
 /// Saltarse los niveles vacios es la misma regla que `nivel_abierto`: un nivel
 /// sin bailes no bloquea, asi que tampoco corta el camino.
@@ -572,6 +573,49 @@ fn molino(lp: &Lapiz, tinta: Color, ropa: Color, luz: Color, t: f32) -> Silueta 
     }
 }
 
+/// El Flamenco: la Giralda, con su campanario y el Giraldillo dando vueltas
+/// arriba, y al pie un tablao encalado con su arco de herradura y una
+/// guirnalda de farolillos.
+fn giralda(lp: &Lapiz, tinta: Color, ropa: Color, luz: Color, t: f32) -> Silueta {
+    // La torre va detras del tablao.
+    lp.caja(-11.0, -78.0, 22.0, 78.0, tinta);
+    lp.caja(-8.0, -90.0, 16.0, 12.0, tinta);
+    lp.caja(-5.0, -97.0, 10.0, 7.0, ropa);
+    lp.tri_tinta((-4.0, -97.0), (4.0, -97.0), (0.0, -103.0), tinta);
+    lp.linea((0.0, -103.0), (0.0, -108.0), 1.0, TINTA);
+    // El Giraldillo es una veleta: se vuelve con el aire.
+    let veleta = (t * 0.03).sin() * 3.0;
+    lp.tri((0.0, -110.0), (5.0 + veleta, -108.0), (0.0, -106.0), ORO);
+    for x in [-6.0, 1.5] {
+        lp.arco(x, -86.0, 4.5, 6.0, luz);
+    }
+    for y in [-66.0, -52.0] {
+        lp.arco(-2.0, y, 4.0, 7.0, luz);
+    }
+
+    // El tablao, con la puerta en herradura: el arco es mas ancho que la
+    // puerta, que es lo que lo hace arabe y no romano.
+    let encalado = color_u8!(232, 222, 198, 255);
+    lp.caja(-40.0, -30.0, 80.0, 30.0, encalado);
+    lp.caja(-42.0, -34.0, 84.0, 4.0, ropa);
+    lp.disco(0.0, -16.0, 9.5, luz);
+    lp.caja(-7.0, -16.0, 14.0, 16.0, luz);
+    lp.caja(-32.0, -24.0, 9.0, 10.0, luz);
+    lp.caja(23.0, -24.0, 9.0, 10.0, luz);
+
+    // Los farolillos, colgando de la cornisa: rojos y de papel, uno y uno.
+    for i in 0..7 {
+        let x = -36.0 + i as f32 * 12.0;
+        let comba = (1.0 - (x / 40.0).powi(2)) * 3.0;
+        let c = if i % 2 == 0 { ropa } else { PAPEL };
+        lp.disco(x, -29.0 + comba, 2.2, c);
+    }
+    Silueta {
+        puerta: Rect::new(-7.0, -25.0, 14.0, 25.0),
+        alto: 110.0,
+    }
+}
+
 /// Dos tablones en aspa sobre la puerta: el cartel de "cerrado" que se
 /// entiende sin leer.
 ///
@@ -714,7 +758,8 @@ fn dibujar_nodo(
         0 => palacio(&lp, tinta, ropa, luz),
         1 => esquina(&lp, tinta, ropa, luz, t_mon),
         2 => club(&lp, tinta, ropa, luz, t_mon),
-        _ => molino(&lp, tinta, ropa, luz, t_mon),
+        3 => molino(&lp, tinta, ropa, luz, t_mon),
+        _ => giralda(&lp, tinta, ropa, luz, t_mon),
     };
     if cerrado {
         tablones(&lp, silueta.puerta);

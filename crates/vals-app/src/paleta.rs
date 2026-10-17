@@ -51,7 +51,7 @@ pub const ORO: Color = color_u8!(255, 205, 128, 255);
 /// Es lo que hace que los cuatro se distingan **a un vistazo, con el sonido
 /// quitado**, que era lo unico que faltaba despues de darles un verbo y un
 /// compas propios.
-pub const TINTAS: [(Color, Color); 4] = [
+pub const TINTAS: [(Color, Color); vals_core::boss::BAILES] = [
     // El Vals: azul de Prusia y hueso. Es el que ensena, y el mas frio.
     (color_u8!(88, 132, 190, 255), color_u8!(226, 216, 198, 255)),
     // El Tango: carmin y negro. Los dos colores de un tango, sin discusion.
@@ -60,6 +60,9 @@ pub const TINTAS: [(Color, Color); 4] = [
     (color_u8!(226, 178, 66, 255), color_u8!(78, 116, 92, 255)),
     // El Cancan: rosa Moulin Rouge y granate. El cartel, tal cual.
     (color_u8!(232, 96, 142, 255), color_u8!(122, 40, 62, 255)),
+    // El Flamenco: ocre de albero y rojo de lunares. La madera de la guitarra
+    // y el traje de gitana; los lunares blancos los pone su dibujo.
+    (color_u8!(212, 116, 42, 255), color_u8!(176, 28, 38, 255)),
 ];
 
 /// La tinta de un baile. Un indice raro cae en el primero, que es el que

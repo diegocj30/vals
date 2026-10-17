@@ -143,6 +143,11 @@ fn en_espanol(clave: &str) -> Option<&'static str> {
         "El battement" => "El battement",
         "El port d'armes" => "El port d'armes",
         "La rueda y el grand ecart" => "La rueda y el grand écart",
+        "El Flamenco" => "El Flamenco",
+        "La llamada" => "La llamada",
+        "El rasgueo" => "El rasgueo",
+        "El zapateado" => "El zapateado",
+        "El remate" => "El remate",
         // Los paseos (assets/paseos).
         "El paseo de Viena" => "El paseo de Viena",
         "Camino del baile" => "Camino del baile",
@@ -203,6 +208,11 @@ fn en_ingles(es: &str) -> Option<&'static str> {
         "El battement" => "The Battement",
         "El port d'armes" => "The Port d'Armes",
         "La rueda y el grand ecart" => "The Cartwheel and the Grand Ecart",
+        "El Flamenco" => "The Flamenco",
+        "La llamada" => "The Llamada",
+        "El rasgueo" => "The Rasgueo",
+        "El zapateado" => "The Zapateado",
+        "El remate" => "The Remate",
         // Los paseos (assets/paseos).
         "El paseo de Viena" => "The Vienna Promenade",
         "Camino del baile" => "On the way to the ball",
@@ -352,6 +362,7 @@ textos! {
     SuperTango: "¡BRAVÍSIMO!", "BRAVISSIMO!";
     SuperCharleston: "¡HURRA!", "HOORAY!";
     SuperCancan: "¡ALLEZ HOP!", "ALLEZ HOP!";
+    SuperFlamenco: "¡OLÉ!", "OLÉ!";
     BailadoEntero: "{}, bailado entero", "{}, danced to the end";
     VictoriaAyuda: "{} otra vez    {} volver a la pista", "{} again    {} back to the dance floor";
     SeAcabo: "SE ACABÓ", "CURTAINS";

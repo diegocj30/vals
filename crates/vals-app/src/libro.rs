@@ -605,8 +605,14 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
 
     seccion(150.0, tx(Texto::LosBailes));
     let vacia = Marca::default();
+    // Las filas se aprietan para que quepa lo que haya: con cuatro bailes van
+    // a 92 y 40, y con el quinto ya no cabian. 488 es lo que hay entre la
+    // primera fila de bailes y la ultima de paseos, menos los titulos.
+    let fila = (390.0 / bailes.len().max(1) as f32).min(92.0);
+    let resto = 488.0 - bailes.len() as f32 * fila;
+    let fila_paseo = (resto / paseos.len().saturating_sub(1).max(1) as f32).min(40.0);
     for (i, def) in bailes.iter().enumerate() {
-        let y = 176.0 + i as f32 * 92.0;
+        let y = 176.0 + i as f32 * fila;
         let m = g.marcas.por_nombre.get(&def.name).unwrap_or(&vacia);
         let c = p(78.0, y + 34.0);
         match m.nota {
@@ -664,10 +670,10 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
         caidas(l, m, def.phases.len(), vec2(470.0, y + 14.0));
     }
 
-    let y0 = 176.0 + bailes.len() as f32 * 92.0 + 22.0;
+    let y0 = 176.0 + bailes.len() as f32 * fila + 22.0;
     seccion(y0, tx(Texto::LosPaseos));
     for (i, def) in paseos.iter().enumerate() {
-        let y = y0 + 34.0 + i as f32 * 40.0;
+        let y = y0 + 34.0 + i as f32 * fila_paseo;
         let m = g.marcas.por_nombre.get(&def.nombre).unwrap_or(&vacia);
         let s = p(60.0, y);
         fuentes::texto(

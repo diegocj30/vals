@@ -104,6 +104,8 @@ pub enum Tocado {
     Casquete,
     /// Penacho de plumas. El cancan.
     Penacho,
+    /// Mono bajo con peineta y flor. El flamenco.
+    Peineta,
 }
 const BRAZO: f32 = 6.0;
 const ANTEBRAZO: f32 = 5.5;

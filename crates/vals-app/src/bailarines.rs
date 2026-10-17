@@ -9,10 +9,11 @@
 //! mismos huesos y el mismo dibujo. Lo que cambia por jefe son dos cosas:
 //!
 //! - **El cuerpo** (`Cuerpo`): proporciones. Uno alto y de vestido largo, otro
-//!   compacto y anguloso, otro bajo y ancho con flecos.
+//!   compacto y anguloso, otro bajo y ancho con flecos, otra de bata de cola.
 //! - **El baile**: como se mueven esas articulaciones. Y aqui esta la gracia,
 //!   porque **cada uno se mueve como su gramatica de balas**. El vals gira, el
-//!   tango se para en seco, el charleston rebota en la clave 3-3-2.
+//!   tango se para en seco, el charleston rebota en la clave 3-3-2 y la
+//!   flamenca se quiebra en los acentos del compas de doce.
 //!
 //! Como en la protagonista, **la pose es funcion pura** del tick, la figura y
 //! la vida que le queda. Ni estado de animacion, ni maquina de estados, ni
@@ -139,6 +140,22 @@ const CUERPO_CANCAN: Cuerpo = Cuerpo {
     vuelo: 0.75,
     // El penacho de plumas del Moulin Rouge.
     tocado: Tocado::Penacho,
+};
+
+/// Alta y de bata de cola: torso largo y erguido, brazos largos para el
+/// braceo y la falda larga de volantes.
+const CUERPO_FLAMENCO: Cuerpo = Cuerpo {
+    torso: 7.6,
+    cuello: 5.4,
+    brazo: 6.8,
+    antebrazo: 6.0,
+    muslo: 7.0,
+    pantorrilla: 6.6,
+    hombros: 3.4,
+    cintura: 2.2,
+    falda: 11.0,
+    vuelo: 0.5,
+    tocado: Tocado::Peineta,
 };
 
 /// Los angulos que decide un baile. Lo que `montar` convierte en una figura.
@@ -300,7 +317,8 @@ pub fn poses(jefe: usize, fase: usize, t: f32, vida: f32) -> Vec<Pose> {
         0 => vec![vals(fase, t, vida)],
         1 => tango(fase, t, vida),
         2 => vec![charleston(fase, t, vida)],
-        _ => vec![cancan(fase, t, vida)],
+        3 => vec![cancan(fase, t, vida)],
+        _ => vec![flamenco(fase, t, vida)],
     }
 }
 
@@ -469,6 +487,47 @@ fn cancan(fase: usize, t: f32, vida: f32) -> Pose {
     )
 }
 
+/// **El Flamenco**: erguida, y se quiebra en los acentos.
+///
+/// El compas es de doce, a 20 ticks por tiempo como sus balas
+/// (`TIEMPO_FLAMENCO`), con los acentos en el 3, el 6, el 8, el 10 y el 12.
+/// Entre acento y acento braceo lento, las munecas dando vueltas; en el acento
+/// la cadera se quiebra de golpe a un lado, uno cada vez, y el pie de ese lado
+/// pisa: es el mismo zigzag que dibujan sus balas.
+fn flamenco(fase: usize, t: f32, vida: f32) -> Pose {
+    use vals_core::bullets::{TIEMPO_FLAMENCO, quiebro};
+    let tiempo = TIEMPO_FLAMENCO as f32;
+    // El ultimo acento y lo que ha pasado desde el: se busca hacia atras
+    // tiempo a tiempo, que en un compas de doce son como mucho tres.
+    let actual = (t / tiempo).floor().max(0.0) as u32;
+    let (lado, desde) = (0..12)
+        .filter_map(|k| actual.checked_sub(k))
+        .find_map(|b| quiebro(b * TIEMPO_FLAMENCO).map(|l| (l, t - (b as f32) * tiempo)))
+        .unwrap_or((1.0, tiempo * 3.0));
+    let golpe = (1.0 - desde / 12.0).max(0.0);
+
+    let brio = 1.0 + fase as f32 * 0.15 + (1.0 - vida) * 0.25;
+    let (braceo, _) = sin_cos(t * 0.04);
+
+    montar(
+        &crece(CUERPO_FLAMENCO, fase),
+        &Postura {
+            // La cadera se va al lado del quiebro y se queda ahi hasta el
+            // siguiente acento.
+            centro: vec2(lado * 1.4, -golpe * 0.8),
+            lean: -lado * 0.10 * brio,
+            // Los brazos arriba, en corona, y van y vienen despacio.
+            brazo_i: (0.75 + braceo * 0.15, -1.2),
+            brazo_d: (-0.75 + braceo * 0.15, 1.2),
+            pierna_i: (0.18 + lado.max(0.0) * golpe * 0.5, 0.25 * golpe),
+            pierna_d: (-0.18 - (-lado).max(0.0) * golpe * 0.5, 0.25 * golpe),
+            arrastre: vec2(-lado * 3.0, 1.0),
+            giro: 1.0,
+            fase: t,
+        },
+    )
+}
+
 /// Un aro alrededor del jefe, para que se vea donde le entran los disparos.
 ///
 /// El cuerpo dice quien es; el aro dice donde darle. Cuando el jefe era un
@@ -488,7 +547,7 @@ mod tests {
     fn la_pose_es_funcion_pura_de_sus_entradas() {
         // La misma disciplina que la protagonista: sin esto, la animacion y la
         // simulacion se desfasan y nadie sabe por que.
-        for jefe in 0..4 {
+        for jefe in 0..vals_core::boss::BAILES {
             let a = poses(jefe, 1, 123.5, 0.6);
             let b = poses(jefe, 1, 123.5, 0.6);
             for (x, y) in a.iter().zip(b.iter()) {
@@ -508,6 +567,7 @@ mod tests {
         );
         assert_eq!(poses(2, 0, 10.0, 1.0).len(), 1);
         assert_eq!(poses(3, 0, 10.0, 1.0).len(), 1);
+        assert_eq!(poses(4, 0, 10.0, 1.0).len(), 1);
     }
 
     #[test]
@@ -516,7 +576,7 @@ mod tests {
         // lo ancho a proposito —es lo que hace que parezca que gira— y eso
         // cambia las distancias. Lo que no puede cambiar nunca es la anatomia:
         // la cabeza arriba, los pies abajo y todo dentro de un tamano humano.
-        for jefe in 0..4 {
+        for jefe in 0..vals_core::boss::BAILES {
             for paso in 0..120 {
                 let t = paso as f32 * 3.7;
                 for vida in [1.0, 0.5, 0.0] {
@@ -559,10 +619,10 @@ mod tests {
             let pose = &poses(jefe, 0, 0.0, 1.0)[0];
             pose.joints[CADERA].y - pose.joints[CABEZA].y
         };
-        let (v, t, c, d) = (alto(0), alto(1), alto(2), alto(3));
+        let (v, f, t, c, d) = (alto(0), alto(4), alto(1), alto(2), alto(3));
         assert!(
-            v > t && t > c && c > d,
-            "alturas iguales: vals {v}, tango {t}, charleston {c}, cancan {d}"
+            v > f && f > t && t > c && c > d,
+            "alturas iguales: vals {v}, flamenca {f}, tango {t}, charleston {c}, cancan {d}"
         );
     }
 
@@ -636,7 +696,9 @@ mod tests {
         // estando quieta: es lo que hace un cartel, que resuelve un personaje
         // con la forma y el sombrero. Si dos coinciden, dos jefes se convierten
         // en el mismo munequito con otra animacion.
-        let suyo: Vec<Tocado> = (0..4).map(|j| poses(j, 0, 0.0, 1.0)[0].tocado).collect();
+        let suyo: Vec<Tocado> = (0..vals_core::boss::BAILES)
+            .map(|j| poses(j, 0, 0.0, 1.0)[0].tocado)
+            .collect();
         for i in 0..suyo.len() {
             for k in i + 1..suyo.len() {
                 assert_ne!(suyo[i], suyo[k], "los jefes {i} y {k} llevan lo mismo");

@@ -1424,6 +1424,15 @@ fn tocado(t: skeleton::Tocado, cabeza: Vec2, mono: Vec2, engorde: f32, l: &Layou
                 hueso(mono, punta, 1.0 + engorde, 0.3 + engorde, sep * 1.4, l, c);
             }
         }
+        // La peineta de la flamenca: el mono bajo, el abanico de carey
+        // encima y la flor a un lado.
+        Tocado::Peineta => {
+            let cen = cabeza + arriba * l.len(R * 0.5);
+            let (w, h) = (l.len(R * 1.1 + engorde), l.len(R * 1.4 + engorde));
+            draw_ellipse(cen.x, cen.y, w, h, grados + 90.0, c);
+            let flor = cabeza + (lado - arriba * 0.2) * l.len(R * 1.1);
+            draw_circle(flor.x, flor.y, l.len(1.3 + engorde), c);
+        }
     }
 }
 
@@ -1793,7 +1802,7 @@ mod tests {
     fn cada_baile_se_dibuja_con_su_bailarin() {
         // El bug que vigila: se elegia el cuerpo con `boss_index`, que al entrar
         // por la pista vale siempre 0, y los cuatro jefes salian como el vals.
-        for baile in 0..4 {
+        for baile in 0..vals_core::boss::BAILES {
             let w = World::empezar_en(7, Mode::Flight, baile);
             assert_eq!(w.boss_index, 0, "la premisa: la pista deja un solo jefe");
             assert_eq!(bailarin(&w), baile, "el baile {baile} sale con otro cuerpo");

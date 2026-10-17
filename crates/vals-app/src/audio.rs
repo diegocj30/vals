@@ -139,10 +139,11 @@ pub enum Sfx {
     CaeTango,
     CaeCharleston,
     CaeCancan,
+    CaeFlamenco,
     Ficha,
 }
 
-const TODOS: [Sfx; 15] = [
+const TODOS: [Sfx; 16] = [
     Sfx::Disparo,
     Sfx::Parry,
     Sfx::Graze,
@@ -157,6 +158,7 @@ const TODOS: [Sfx; 15] = [
     Sfx::CaeTango,
     Sfx::CaeCharleston,
     Sfx::CaeCancan,
+    Sfx::CaeFlamenco,
     Sfx::Ficha,
 ];
 
@@ -217,12 +219,14 @@ impl Sfx {
 
     /// Lo que suena cuando cae el jefe del baile `baile`.
     pub fn caida(baile: usize) -> Self {
-        [
+        const CAIDAS: [Sfx; vals_core::boss::BAILES] = [
             Sfx::CaeVals,
             Sfx::CaeTango,
             Sfx::CaeCharleston,
             Sfx::CaeCancan,
-        ][baile.min(3)]
+            Sfx::CaeFlamenco,
+        ];
+        CAIDAS[baile.min(CAIDAS.len() - 1)]
     }
 
     fn indice(self) -> usize {
@@ -337,6 +341,23 @@ impl Sfx {
                     v.push(Voz::new(Sine, 190.0, 70.0, 0.14, 0.26, 3.0).tras(t));
                     v.push(Voz::new(Noise, 1.0, 1.0, 0.04, 0.1, 3.0).tras(t));
                 }
+                v
+            }
+            // La guitarra rota: un rasgueo que baja de la prima al bordon,
+            // tres cuerdas que saltan con su latigazo, y la caja que suena
+            // hueca al dar contra el suelo.
+            Sfx::CaeFlamenco => {
+                let mut v: Vec<Voz> = [330.0, 247.0, 196.0, 147.0, 110.0, 82.0]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &f)| Voz::new(Saw, f, f, 0.5, 0.06, 4.0).tras(0.02 * i as f32))
+                    .collect();
+                for (i, f) in [1320.0, 990.0, 660.0].into_iter().enumerate() {
+                    let t = 0.4 + 0.2 * i as f32;
+                    v.push(Voz::new(Saw, f, f * 0.4, 0.12, 0.1, 3.0).tras(t));
+                }
+                v.push(Voz::new(Sine, 140.0, 60.0, 0.35, 0.26, 3.0).tras(1.15));
+                v.push(Voz::new(Noise, 1.0, 1.0, 0.06, 0.1, 4.0).tras(1.15));
                 v
             }
             // Dominante y tonica, la segunda encima de la primera: el
