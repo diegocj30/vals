@@ -3080,7 +3080,9 @@ impl Paseo {
     /// Lo que se ha quedado muy atras se va.
     fn olvidar(&mut self) {
         let x = self.jugadora.pos.x;
-        self.enemigos.retain(|e| e.pos.x > x - OLVIDAR);
+        // El portero no: la arena es mas ancha que `OLVIDAR`, y pegado a su
+        // borde izquierdo se iba sin caer y abria la arena.
+        self.enemigos.retain(|e| e.portero || e.pos.x > x - OLVIDAR);
         self.proyectiles.retain(|q| (q.pos.x - x).abs() < OLVIDAR);
         self.fugaces.retain(|f| (f.pos.x - x).abs() < OLVIDAR);
     }
@@ -5850,6 +5852,23 @@ mod tests {
         def.fichas = vec![(1500.0, 435.0)];
         def.puerta = 2500.0;
         def
+    }
+
+    #[test]
+    fn el_portero_no_se_olvida_aunque_quede_lejos_en_su_arena() {
+        let mut p = Paseo::new(con_portero(), 1);
+        while p.cierre().is_none() {
+            p.jugadora.iframes = 5;
+            p.step(pulsar(DERECHA));
+            assert!(p.tick < 600, "la arena no se cierra");
+        }
+        // Ella en el borde derecho y el, en el izquierdo: mas lejos que
+        // `OLVIDAR`.
+        p.jugadora.pos.x = 1000.0 + VISTA_W - 10.0;
+        p.enemigos.iter_mut().for_each(|e| e.pos.x = 1005.0);
+        p.jugadora.iframes = 5;
+        p.step(InputFrame::NONE);
+        assert!(p.portero().is_some() && p.cierre().is_some());
     }
 
     #[test]
