@@ -130,8 +130,9 @@ pub const DETRAS_HUSAR: f32 = 420.0;
 const PASO_LARGO_HUSAR: f32 = 560.0;
 const PASO_CORTO_HUSAR: f32 = 230.0;
 /// El director, portero de Viena: con la aguja (15 por segundo si entran
-/// todos) son 22 segundos de fuego, y con lo que se esquiva, unos treinta.
-const VIDA_DIRECTOR: i32 = 330;
+/// todos) son unos 13 segundos de fuego, y con lo que se esquiva, unos veinte.
+/// Con 330 eran 22 y se hacia largo: un portero es un jefe pequeno.
+const VIDA_DIRECTOR: i32 = 200;
 /// La espiral de la batuta: cuantas notas suelta en el uno y el dos de cada
 /// compas, y a que velocidad, por fase.
 pub const BRAZOS_ESPIRAL: [usize; 3] = [3, 4, 5];
@@ -268,9 +269,9 @@ pub const DANO_DEVUELTA: i32 = 20;
 const VEL_DEVUELTA: f32 = 720.0;
 const ALCANCE_DEVUELTA: f32 = 560.0;
 
-/// El guapo aguanta unos 24 segundos de aguja sin fallar una; esquivando, de
-/// 30 a 45.
-pub const VIDA_GUAPO: i32 = 360;
+/// El guapo aguanta unos 15 segundos de aguja sin fallar una; esquivando,
+/// unos veinte.
+pub const VIDA_GUAPO: i32 = 220;
 /// La estocada del guapo: unas 380 unidades, casi media arena. La finta es la
 /// misma estocada en pequeno, unas 50: sale y se clava enseguida.
 const ESTOCADA_GUAPO: f32 = 1500.0;
@@ -695,17 +696,17 @@ impl Tipo {
             Tipo::Saltarin => 7,
             Tipo::Canotier => 3,
             Tipo::Fila => 6,
-            // Unos 22 segundos de aguja sin fallar uno: con lo que se esquiva,
-            // medio minuto largo.
-            Tipo::Contrabajista => 330,
+            // Unos 13 segundos de aguja sin fallar uno: con lo que se esquiva,
+            // unos veinte.
+            Tipo::Contrabajista => 200,
             Tipo::Corista => 7,
             Tipo::Botella => 3,
             Tipo::Pintor => 6,
             Tipo::Confeti => 2,
             Tipo::Apache => 6,
-            // Unos 27 segundos de aguja sin fallar uno: con lo que se esquiva,
-            // treinta y tantos.
-            Tipo::Loyal => 400,
+            // Unos 16 segundos de aguja sin fallar uno: con lo que se esquiva,
+            // unos veinte.
+            Tipo::Loyal => 240,
         }
     }
 
@@ -1079,6 +1080,12 @@ pub struct Enemigo {
 }
 
 impl Enemigo {
+    /// Si se le puede dar. Un portero no, hasta que se cierra su arena: de
+    /// lejos y quieta se le tumbaba antes de que empezase a bailar.
+    fn tocable(&self, arena: bool) -> bool {
+        self.vida > 0 && self.presente() && (arena || !self.portero)
+    }
+
     /// La vida con que nacio, para la barra del portero.
     pub fn vida_max(&self) -> i32 {
         self.tipo.vida()
@@ -1821,11 +1828,13 @@ impl Paseo {
     /// o el guapo mas cercano que este a la vista. Es lo que tumba al malevo
     /// de frente, y lo que hace que en el arrabal el parry pague.
     fn devolver(&mut self, desde: Vec2) {
+        let arena = self.cierre().is_some();
         let blanco = self
             .enemigos
             .iter()
             .filter(|e| {
                 matches!(e.tipo, Tipo::Malevo | Tipo::Guapo)
+                    && e.tocable(arena)
                     && (e.pos.x - desde.x).abs() < ALCANCE_DEVUELTA
             })
             .min_by(|a, b| {
@@ -1854,8 +1863,9 @@ impl Paseo {
         self.proyectiles.clear();
         self.fugaces.clear();
         let x = self.jugadora.pos.x;
+        let arena = self.cierre().is_some();
         for e in &mut self.enemigos {
-            if (e.pos.x - x).abs() < VISTA_W * 0.6 {
+            if (e.pos.x - x).abs() < VISTA_W * 0.6 && e.tocable(arena) {
                 e.vida -= DANO_SUPER;
                 e.golpe = 8;
             }
@@ -2953,12 +2963,13 @@ impl Paseo {
         }
         self.disparos.retain(|d| d.ttl > 0.0);
 
+        let arena = self.cierre().is_some();
         let mut i = 0;
         while i < self.disparos.len() {
             let d = self.disparos[i];
             let blanco = self.enemigos.iter_mut().find(|e| {
                 let r = e.tipo.radio() + DISPARO_RADIO;
-                e.vida > 0 && e.presente() && e.pos.distance_squared(d.pos) <= r * r
+                e.tocable(arena) && e.pos.distance_squared(d.pos) <= r * r
             });
             if let Some(e) = blanco {
                 if e.para(&d) {
@@ -4230,10 +4241,10 @@ mod tests {
             assert!(ticks < 60 * 60, "no cae");
         }
         assert_eq!(fases, [0, 1, 2], "pasa por las tres fases");
-        // Con la aguja y sin fallar una, unos 22 segundos: con lo que se
-        // esquiva, entre veinte y cuarenta.
+        // Con la aguja y sin fallar una, unos 13 segundos: con lo que se
+        // esquiva, unos veinte.
         let segundos = ticks as f32 * DT;
-        assert!((20.0..30.0).contains(&segundos), "{segundos} s");
+        assert!((12.0..20.0).contains(&segundos), "{segundos} s");
         assert!(p.cierre().is_none(), "la arena sigue cerrada");
         assert!(p.ficha_visible(0), "sin su ficha");
     }
@@ -4563,7 +4574,7 @@ mod tests {
     #[test]
     fn el_director_cae_a_tiros_en_su_tiempo_y_abre_la_arena() {
         // Plantada a la entrada de la arena, disparando de frente: con la
-        // aguja tiene que durar entre 20 y 40 segundos.
+        // aguja tiene que durar entre 12 y 25 segundos.
         let mut p = hasta_la_arena(con_director());
         let empieza = p.tick;
         let mut vida = p.portero().expect("despierto").vida;
@@ -4575,12 +4586,12 @@ mod tests {
                 vida = e.vida;
             }
             assert!(
-                p.tick - empieza < 60 * 40,
-                "dura mas de 40 s: le queda {vida}"
+                p.tick - empieza < 60 * 25,
+                "dura mas de 25 s: le queda {vida}"
             );
         }
         let segundos = (p.tick - empieza) as f32 * DT;
-        assert!(segundos > 20.0, "dura poco: {segundos} s");
+        assert!(segundos > 12.0, "dura poco: {segundos} s");
         assert!(p.cierre().is_none(), "tumbado, se abre");
         while !p.terminado() {
             p.step(pulsar(DERECHA));
@@ -5424,7 +5435,7 @@ mod tests {
     fn monsieur_loyal_cambia_de_numeros_con_la_vida() {
         // Quieta e invulnerable en la pista, una vuelta entera de numeros en
         // cada fase: cuantas palomas por chistera, y si saca el baston.
-        for (fase, vida) in [(0, 400), (1, 200), (2, 100)] {
+        for (fase, vida) in [(0, 240), (1, 120), (2, 60)] {
             let mut p = Paseo::new(con_loyal(), 1);
             hasta_la_pista(&mut p);
             p.enemigos[0].vida = vida;
@@ -5460,7 +5471,7 @@ mod tests {
         // el tiempo de un portero, y al caer se abre la pista y sale la ficha.
         let mut p = Paseo::new(con_loyal(), 1);
         hasta_la_pista(&mut p);
-        assert_eq!(p.portero().map(|e| e.vida_max()), Some(400));
+        assert_eq!(p.portero().map(|e| e.vida_max()), Some(240));
         let desde = p.tick;
         while p.portero_vivo() {
             p.jugadora.iframes = 5;
@@ -5473,7 +5484,7 @@ mod tests {
             assert!(p.tick - desde < 60 * 45, "no cae");
         }
         let segundos = (p.tick - desde) as f32 * DT;
-        assert!((25.0..40.0).contains(&segundos), "dura {segundos} s");
+        assert!((14.0..25.0).contains(&segundos), "dura {segundos} s");
         assert!(p.cierre().is_none() && p.ficha_visible(0));
         correr(&mut p, DERECHA, 300);
         assert!(p.completado.is_some());
@@ -5832,6 +5843,28 @@ mod tests {
         def.fichas = vec![(1500.0, 435.0)];
         def.puerta = 2500.0;
         def
+    }
+
+    #[test]
+    fn al_portero_no_se_le_da_hasta_que_se_cierra_la_arena() {
+        // Quieta a la entrada, con el portero a tiro pero la arena aun
+        // abierta: los disparos le pasan y el super no le toca.
+        let mut p = Paseo::new(con_portero(), 1);
+        p.a_la_porteria();
+        // Hasta tenerlo despierto y a tiro, sin llegar a cerrar la arena.
+        while p.jugadora.pos.x < 1300.0 {
+            p.step(pulsar(DERECHA));
+        }
+        p.jugadora.meter = 1.0;
+        for _ in 0..240 {
+            p.jugadora.iframes = 5;
+            p.step(pulsar(DISPARA | InputFrame::SUPER));
+        }
+        assert!(p.cierre().is_none(), "sin andar no se cierra");
+        let e = p
+            .portero()
+            .expect("no esta: o no desperto o se le tumbo de lejos");
+        assert_eq!(e.vida, e.vida_max(), "se le ha hecho dano de lejos");
     }
 
     #[test]
