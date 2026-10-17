@@ -12,7 +12,7 @@ Cada jefe es un baile, y sus balas son la coreografía.
 [![CI](https://github.com/diegocj30/vals/actions/workflows/ci.yml/badge.svg)](https://github.com/diegocj30/vals/actions/workflows/ci.yml)
 ![Rust](https://img.shields.io/badge/Rust-stable-1a1418?logo=rust)
 ![WebAssembly](https://img.shields.io/badge/WebAssembly-sin_wasm--bindgen-654ff0?logo=webassembly&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-499-2f7d5b)
+![Tests](https://img.shields.io/badge/tests-500-2f7d5b)
 
 **Español** · [English](README.en.md)
 
@@ -95,7 +95,7 @@ cómo lo dibujan las balas y la foto de cada figura.
 
 ## Cómo está hecho
 
-| 0 imágenes | 32.000 balas a 144 fps | 4 KB por 30 s de partida | 499 tests |
+| 0 imágenes | 32.000 balas a 144 fps | 4 KB por 30 s de partida | 500 tests |
 |:---:|:---:|:---:|:---:|
 | Todo se dibuja con código, y la música se sintetiza al arrancar | Render instanciado; con las primitivas de macroquad, 30 fps | Una partida es una semilla y la lista de inputs | Entre ellos, bots que recorren cada paseo de punta a punta |
 

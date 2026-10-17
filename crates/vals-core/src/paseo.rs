@@ -506,11 +506,19 @@ pub const FRENO_TORITO: u32 = 6;
 
 /// La cantaora, portera de Triana: unos 12 segundos de aguja sin fallar uno.
 pub const VIDA_CANTAORA: i32 = 180;
-/// Sus ayes: a esto, abiertos esto de uno a otro.
+/// Sus ayes: a esto, y los de los lados apuntados esto por encima y por debajo
+/// de ti. Se ve de lado y se esquiva saltando: abiertos un angulo fijo, el de
+/// arriba quedaba justo donde se llega al saltar el del medio, y no habia
+/// hueco. Apuntados asi, el salto entero (156) cabe a cualquier distancia.
 const VEL_QUEJIO: f32 = 210.0;
-const ABRE_QUEJIO: f32 = 0.22;
-/// El cierre del remate, desde la tercera fase: un anillo de ayes.
-pub const NOTAS_REMATE: usize = 10;
+const ALTO_QUEJIO: f32 = 200.0;
+/// El cierre del remate, desde la tercera fase: un anillo de ayes, con el
+/// hueco hacia ti. Con ocho, de cerca el salto llegaba a los de al lado.
+pub const NOTAS_REMATE: usize = 6;
+/// Por debajo de esto, una falseta no se revuelve hacia ti: sigue recta, mas
+/// deprisa. Revolverse a quemarropa, o despues de haberla saltado, no se
+/// esquivaba.
+const QUIEBRO_LEJOS: f32 = 220.0;
 /// El taconeo del remate: a ras de tablao, a esto por segundo.
 const VEL_TACONEO: f32 = 320.0;
 
@@ -3119,8 +3127,14 @@ impl Paseo {
                         continue;
                     }
                     e.gesto = 1.0;
-                    e.lanzados += 1;
                     let fase = e.fase();
+                    // Canta en el 3, el 8 y el doce; el 6 y el 10 los marca
+                    // con las palmas, y es el respiro entre un ay y el
+                    // siguiente. En la tercera fase canta tambien en el 10.
+                    if n == 6 || (n == 10 && fase < 2) {
+                        continue;
+                    }
+                    e.lanzados += 1;
                     let boca = e.pos + Vec2::new(e.dir * 8.0, -30.0);
                     let hacia = (objetivo - boca).normalize_or(Vec2::new(e.dir, 0.0));
                     let girado = |a: f32| {
@@ -3152,8 +3166,10 @@ impl Paseo {
                             }
                         }
                         if fase == 2 {
+                            // Medio paso girado: el ay rosa va por el hueco.
                             for k in 0..NOTAS_REMATE {
-                                let d = girado(TAU * k as f32 / NOTAS_REMATE as f32);
+                                let a = TAU * (k as f32 + 0.5) / NOTAS_REMATE as f32;
+                                let d = girado(a);
                                 self.proyectiles.push(Proyectil {
                                     pos: e.pos + d * 30.0,
                                     vel: d * VEL_QUEJIO * 0.8,
@@ -3163,20 +3179,19 @@ impl Paseo {
                             }
                         }
                     } else {
-                        // Los ayes: un abanico a ti, mas abierto en cada fase,
-                        // y desde la segunda uno de cada dos es una falseta
-                        // que quiebra en el acento siguiente.
-                        let notas = 3 + fase;
-                        for k in 0..notas {
-                            let a = (k as f32 - (notas - 1) as f32 * 0.5) * ABRE_QUEJIO;
-                            let forma = if fase >= 1 && k % 2 == 1 {
+                        // Los ayes: un abanico de tres a ti, y desde la
+                        // segunda fase el del medio es una falseta que
+                        // quiebra en el acento siguiente: se esquiva dos veces.
+                        for k in 0..3 {
+                            let a = objetivo + Vec2::new(0.0, (k as f32 - 1.0) * ALTO_QUEJIO);
+                            let forma = if fase >= 1 && k == 1 {
                                 Forma::Falseta
                             } else {
                                 Forma::Quejio
                             };
                             self.proyectiles.push(Proyectil {
                                 pos: boca,
-                                vel: girado(a) * VEL_QUEJIO,
+                                vel: (a - boca).normalize_or(hacia) * VEL_QUEJIO,
                                 rosa: false,
                                 forma,
                             });
@@ -3215,7 +3230,12 @@ impl Paseo {
         let a = self.jugadora.pos;
         for q in &mut self.proyectiles {
             if q.forma == Forma::Falseta {
-                q.vel = (a - q.pos).normalize_or(Vec2::NEG_X) * VEL_QUEBRADA;
+                let rumbo = if q.pos.distance(a) > QUIEBRO_LEJOS {
+                    a - q.pos
+                } else {
+                    q.vel
+                };
+                q.vel = rumbo.normalize_or(Vec2::NEG_X) * VEL_QUEBRADA;
                 q.forma = Forma::Quebrada;
             }
         }
@@ -6375,31 +6395,34 @@ mod tests {
     fn la_cantaora_canta_a_compas_y_remata_en_el_doce() {
         let max = VIDA_CANTAORA;
         assert_eq!(Tipo::Cantaora.vida(), max);
-        // En la primera fase, abanicos de tres y un ay rosa en el doce.
+        // En la primera fase, abanicos de tres en el 3 y el 8, y un ay rosa
+        // en el doce. El 6 y el 10 son palmas: el respiro.
         let mut p = con_cantaora(max);
         let ayes = [3, 0, 0, 0];
         assert_eq!(
             lo_que_canta(&mut p),
-            [
-                (3, ayes),
-                (6, ayes),
-                (8, ayes),
-                (10, ayes),
-                (12, [1, 0, 0, 1])
-            ]
+            [(3, ayes), (8, ayes), (12, [1, 0, 0, 1])]
         );
-        // En la segunda, de cuatro con dos falsetas, y el taconeo.
+        // En la segunda, el del medio es una falseta, y el taconeo.
         let mut p = con_cantaora(max * 2 / 3 - 1);
         assert_eq!(p.portero().map(Enemigo::fase), Some(1));
-        let canto = lo_que_canta(&mut p);
-        assert!(canto[..4].iter().all(|c| c.1 == [2, 2, 0, 0]), "{canto:?}");
-        assert_eq!(canto[4], (12, [1, 0, 2, 1]));
-        // En la tercera, de cinco, y el cierre: diez ayes mas en anillo.
+        let falseta = [2, 1, 0, 0];
+        assert_eq!(
+            lo_que_canta(&mut p),
+            [(3, falseta), (8, falseta), (12, [1, 0, 2, 1])]
+        );
+        // En la tercera canta tambien en el 10, y el cierre: el anillo.
         let mut p = con_cantaora(max / 3 - 1);
         assert_eq!(p.portero().map(Enemigo::fase), Some(2));
-        let canto = lo_que_canta(&mut p);
-        assert!(canto[..4].iter().all(|c| c.1 == [3, 2, 0, 0]), "{canto:?}");
-        assert_eq!(canto[4], (12, [1 + NOTAS_REMATE, 0, 2, 1]));
+        assert_eq!(
+            lo_que_canta(&mut p),
+            [
+                (3, falseta),
+                (8, falseta),
+                (10, falseta),
+                (12, [1 + NOTAS_REMATE, 0, 2, 1])
+            ]
+        );
         // El taconeo va a ras de tablao: se salta.
         let mut p = con_cantaora(max / 3 - 1);
         let taconeo = loop {
@@ -6409,6 +6432,50 @@ mod tests {
             }
         };
         assert_eq!(taconeo.pos.y + Forma::Taconeo.radio(), SUELO_Y);
+    }
+
+    /// Los golpes que se lleva en 20 segundos quien no hace mas que saltar lo
+    /// que le viene a la altura del cuerpo, sin moverse ni disparar.
+    fn golpes_saltando(mut p: Paseo) -> usize {
+        let mut golpes = 0;
+        for _ in 0..60 * 20 {
+            p.vidas = VIDAS;
+            let j = p.jugadora.pos;
+            let viene = p.proyectiles.iter().any(|q| {
+                let llega = if q.vel.x.abs() > 1.0 {
+                    (j.x - q.pos.x) / q.vel.x
+                } else {
+                    9.0
+                };
+                (0.0..0.22).contains(&llega) && (q.pos.y + q.vel.y * llega - j.y).abs() < 40.0
+            });
+            let subiendo = !p.jugadora.on_ground && p.jugadora.vel.y < 0.0;
+            let saltar = (viene && p.jugadora.on_ground) || subiendo;
+            p.step(pulsar(if saltar { InputFrame::JUMP } else { 0 }));
+            golpes += usize::from(p.events.player_died);
+        }
+        golpes
+    }
+
+    #[test]
+    fn a_la_cantaora_se_la_esquiva_saltando() {
+        // Antes no habia hueco: el ay de arriba quedaba justo donde se llega
+        // al saltar el del medio, y se llevaba diez golpes de diez. Ahora, de
+        // donde se entra al tablao y desde el fondo, la primera fase se pasa
+        // entera saltando, y las otras dos piden algo mas que eso, pero poco.
+        for x in [1365.0, 1030.0] {
+            for (fase, vida, tope) in [
+                (0, VIDA_CANTAORA, 0),
+                (1, VIDA_CANTAORA * 2 / 3 - 1, 4),
+                (2, VIDA_CANTAORA / 3 - 1, 4),
+            ] {
+                let mut p = con_cantaora(vida);
+                p.jugadora.pos.x = x;
+                p.jugadora.prev_pos.x = x;
+                let golpes = golpes_saltando(p);
+                assert!(golpes <= tope, "fase {fase} desde {x}: {golpes} golpes");
+            }
+        }
     }
 
     #[test]
