@@ -64,6 +64,10 @@ const RUTAS_PASEOS: [&str; vals_core::paseo::PASEO_RONS.len()] = [
         env!("CARGO_MANIFEST_DIR"),
         "/../../assets/paseos/montmartre.ron"
     ),
+    concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/paseos/triana.ron"
+    ),
 ];
 
 /// Cuantos frames se muestra el aviso de recarga.

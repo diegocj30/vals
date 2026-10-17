@@ -157,6 +157,8 @@ fn en_espanol(clave: &str) -> Option<&'static str> {
         "Por encima de la ciudad" => "Por encima de la ciudad",
         "El paseo de Montmartre" => "El paseo de Montmartre",
         "Cuesta arriba, hasta el molino" => "Cuesta arriba, hasta el molino",
+        "El paseo de Triana" => "El paseo de Triana",
+        "Por el puente de barcas" => "Por el puente de barcas",
         // Las piezas (music.rs).
         "la sala" => "la sala",
         "El Danubio azul - Johann Strauss II, 1866" => "El Danubio azul - Johann Strauss II, 1866",
@@ -222,6 +224,8 @@ fn en_ingles(es: &str) -> Option<&'static str> {
         "Por encima de la ciudad" => "High above the city",
         "El paseo de Montmartre" => "The Montmartre Promenade",
         "Cuesta arriba, hasta el molino" => "Uphill, all the way to the mill",
+        "El paseo de Triana" => "The Triana Promenade",
+        "Por el puente de barcas" => "Over the bridge of boats",
         // Las piezas (music.rs).
         "la sala" => "the ballroom",
         "El Danubio azul - Johann Strauss II, 1866" => "The Blue Danube - Johann Strauss II, 1866",
@@ -387,6 +391,7 @@ textos! {
     ElGuapo: "El guapo del barrio", "The neighbourhood tough";
     ElContrabajista: "El contrabajista", "The double bass player";
     MonsieurLoyal: "Monsieur Loyal", "Monsieur Loyal";
+    LaCantaora: "La cantaora", "The flamenco singer";
 
     // --- La pista ---
     LaPista: "LA PISTA", "THE DANCE FLOOR";

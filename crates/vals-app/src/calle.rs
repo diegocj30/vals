@@ -29,6 +29,7 @@ use crate::acciones::Nombres;
 use crate::calle_arrabal;
 use crate::calle_chicago;
 use crate::calle_montmartre;
+use crate::calle_triana;
 use crate::calle_viena;
 use crate::draw::{self, Layout, fade};
 use crate::escenarios::{Instrumento, arco, circulo, linea, musico, rect, tri};
@@ -132,14 +133,16 @@ pub fn dibujar(p: &Paseo, alpha: f32, l: &Layout, pulso: f32, baile: usize) {
         1 => calle_arrabal::fondo(p, l, &capa, cam, pulso, t),
         2 => calle_chicago::fondo(p, l, &capa, cam, pulso),
         3 => calle_montmartre::fondo(p, l, &capa, cam, pulso),
+        4 => calle_triana::fondo(p, l, &capa, cam, pulso, t),
         _ => fondo_de_viena(p, l, &capa, cam, pulso),
     }
     // Y lo que se pisa tambien: el canal de Viena no es el vacio de Chicago
-    // ni la cuesta de Montmartre, ni el Riachuelo.
+    // ni la cuesta de Montmartre, ni el Riachuelo, ni el Guadalquivir.
     match baile {
         1 => calle_arrabal::calle(p, &calle, alpha, cam, t, pulso, tintas),
         2 => calle_chicago::calle(p, &calle, alpha, cam, t, pulso),
         3 => calle_montmartre::calle(p, &calle, alpha, t, pulso),
+        4 => calle_triana::calle(p, &calle, alpha, cam, t, pulso, tintas),
         _ => {
             acera(p, &calle, cam, t, AGUA);
             calle_viena::templete(p, &calle, pulso);
@@ -153,6 +156,7 @@ pub fn dibujar(p: &Paseo, alpha: f32, l: &Layout, pulso: f32, baile: usize) {
     }
     platos(p, &calle, t, tintas.0);
     calle_montmartre::fugaces(p, &calle, t, tintas);
+    calle_triana::palmadas(p, &calle);
     disparos(p, &calle);
     dibujar_jugadora(p, alpha, t, &calle);
     parry(p, alpha, &calle);
@@ -236,6 +240,7 @@ pub fn encima(p: &Paseo, l: &Layout, n: &Nombres) {
             Tipo::Guapo => Some(tx(Texto::ElGuapo)),
             Tipo::Contrabajista => Some(tx(Texto::ElContrabajista)),
             Tipo::Loyal => Some(tx(Texto::MonsieurLoyal)),
+            Tipo::Cantaora => Some(tx(Texto::LaCantaora)),
             _ => None,
         };
         if let Some(quien) = quien {
@@ -879,6 +884,12 @@ fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tiempo: u32, tintas: (Col
         Tipo::Gaviota => calle_arrabal::gaviota(e, l, t, &tinte),
         Tipo::Malevo => calle_arrabal::malevo(e, l, t, tintas, &tinte),
         Tipo::Guapo => calle_arrabal::guapo(e, l, t, tiempo, tintas, &tinte),
+        Tipo::Bailaora
+        | Tipo::Guitarrista
+        | Tipo::Palmas
+        | Tipo::Clavel
+        | Tipo::Torito
+        | Tipo::Cantaora => calle_triana::enemigo(e, l, tick, t, tiempo, &tinte),
     });
 }
 
@@ -1089,6 +1100,13 @@ fn platos(p: &Paseo, l: &Layout, t: f32, azul: Color) {
     for (i, q) in p.proyectiles.iter().enumerate() {
         if matches!(q.forma, Forma::Batuta | Forma::Remolino) {
             calle_viena::nota_de_batuta(q, l, t, azul);
+            continue;
+        }
+        if matches!(
+            q.forma,
+            Forma::Falseta | Forma::Quebrada | Forma::Quejio | Forma::Taconeo
+        ) {
+            calle_triana::proyectil(q, l, t);
             continue;
         }
         if q.forma != Forma::Plato {

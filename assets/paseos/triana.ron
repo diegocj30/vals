@@ -1,0 +1,161 @@
+// EL PASEO DE TRIANA. El rio que se cruza antes de bailar El Flamenco.
+//
+// Sevilla al caer la tarde: el Arenal con la Maestranza, el Guadalquivir y,
+// al otro lado, Triana, con sus casas de cal y albero, los azulejos de la
+// calle Pureza y los corrales de vecinos. El puente de hierro esta a medio
+// hacer, y el rio se cruza como se cruzo siempre: por el puente de barcas.
+// Al final, la cantaora en el tablao, y la puerta.
+//
+// El quinto paseo y el mas dificil. El verbo es el de la buleria, el
+// QUIEBRO: un giro en seco en los acentos del compas de doce, que caen en el
+// 3, el 6, el 8, el 10 y el 12 (tres, tres, dos, dos y dos tiempos entre uno
+// y otro). Aqui todo se planta y se revuelve en el acento:
+//
+//   Bailaora     zapatea hacia ti entre dos acentos SIN VOLVERSE; en cada
+//                acento se planta, se revuelve hacia ti y patea la bata de
+//                cola, que barre el suelo por delante. Se salta, o se le pasa
+//                por la espalda entre dos acentos.
+//   Guitarrista  sentado en un balcon (y = el balcon). En cada acento tira
+//                una falseta a donde estas, que en el acento siguiente
+//                QUIEBRA hacia donde estas entonces y acelera. La del doce,
+//                rosa. Esta arriba: plantada y apuntando.
+//   Palmas       un palmero que marca el compas: en cada acento, un golpe de
+//                palmas que estalla a su alrededor. Se pasa entre dos acentos.
+//   Clavel       el volador: un clavel tirado al aire que vuela recto y en
+//                cada acento quiebra hacia ti, abriendose a un lado y al otro,
+//                cuatro veces. y = altura; rosa: true se parria.
+//   Torito       el que rompe la regla: escapado de la Maestranza, escarba de
+//                cara a ti y en un acento embiste a tope, sin frenar, hasta el
+//                acento siguiente, en que se clava en seco y se revuelve. De
+//                frente los disparos le rebotan en la testuz: se le salta (el
+//                quiebro del torero) y se le tumba por detras o escarbando.
+//   Cantaora     la portera (`portero: true`), sentada en el tablao. Ayes en
+//                abanico en cada acento, y en el doce el remate: un ay rosa;
+//                con dos tercios de vida, falsetas en el abanico y el taconeo
+//                a ras de tablao, que se salta; con un tercio, el cierre, un
+//                anillo entero.
+//
+// Cinco tramos, de izquierda a derecha (la puerta esta en x 9100):
+//
+//   1. El Arenal         0 - 2300   la Maestranza y el muelle. Ensena a la
+//                                   bailaora y al palmero; al final, el
+//                                   torito suelto por el muelle.
+//   2. El puente      2300 - 3640   EL NUMERO: el Guadalquivir, que no se
+//                                   salta. Cuatro barcas van y vienen, cada
+//                                   una a contratiempo de la de al lado: al
+//                                   juntarse dos, se pasa de una a otra. Un
+//                                   compas la ida y la vuelta.
+//   3. La calle Betis 3640 - 5500   la orilla de Triana: balcones con
+//                                   guitarristas y los embarcaderos.
+//   4. El corral      5500 - 7900   el corral de vecinos de la calle Pureza:
+//                                   dos corredores, uno encima de otro, y
+//                                   todo junto.
+//   5. El tablao      8000 - 8960   la arena de la cantaora. Se cierra hasta
+//                                   tumbarla. Luego, la puerta.
+//
+// En nativo hay HOT-RELOAD, igual que con los jefes: guarda y el nivel se
+// rehace sin recompilar, con la jugadora donde estaba.
+//
+// Coordenadas: x crece hacia la derecha, y hacia abajo. El suelo esta en y 470
+// (`SUELO_Y`), y la vista mide 960 x 540. El salto sube unas 155 unidades y
+// cruza unas 200 corriendo.
+//
+// Guia de campos (los de Viena valen igual):
+//   tiempo        ticks por tiempo: 20, la buleria a 180. El compas de doce
+//                 son 240 ticks, cuatro segundos.
+//   plataformas   las que van a ras de agua sobre el rio y con `mueve` son las
+//                 barcas: `Vaiven(dx, dy, periodo, fase)`, y con fases 0 y 0,5
+//                 cada una va a contratiempo de la de al lado. Las demas son
+//                 balcones, poyetes y los corredores del corral.
+//   porteria      la arena: una vista entera desde `desde`, y el indice de la
+//                 ficha que suelta la cantaora.
+(
+  nombre: "El paseo de Triana",
+  jefe: "El Flamenco",
+  subtitulo: "Por el puente de barcas",
+  tiempo: 20,
+  largo: 9500.0,
+  salida: 140.0,
+  puerta: 9100.0,
+  suelo: [
+    (0.0, 1400.0),
+    (1560.0, 2300.0),
+    (3640.0, 4500.0),
+    (4660.0, 6200.0),
+    (6360.0, 9500.0),
+  ],
+  plataformas: [
+    // El Arenal: el balcon del primer guitarrista.
+    (x: 1150.0, y: 360.0, ancho: 130.0),
+    // El puente de barcas: cuatro barcas de 200, cada una 150 de recorrido.
+    // La primera y la ultima llegan a su muelle, y cada dos de al lado se
+    // juntan en un extremo cada medio compas.
+    (x: 2300.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 240, fase: 0.0))),
+    (x: 2630.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 240, fase: 0.5))),
+    (x: 2960.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 240, fase: 0.0))),
+    (x: 3290.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 240, fase: 0.5))),
+    // La calle Betis: balcones y un poyete.
+    (x: 3900.0, y: 360.0, ancho: 140.0),
+    (x: 4250.0, y: 410.0, ancho: 90.0),
+    (x: 4800.0, y: 340.0, ancho: 150.0),
+    (x: 5200.0, y: 400.0, ancho: 100.0),
+    // El corral: el corredor de abajo y, encima, el de arriba.
+    (x: 5600.0, y: 360.0, ancho: 300.0),
+    (x: 5700.0, y: 250.0, ancho: 240.0),
+    (x: 6450.0, y: 380.0, ancho: 120.0),
+    (x: 6700.0, y: 330.0, ancho: 150.0),
+    (x: 7300.0, y: 400.0, ancho: 100.0),
+    (x: 7500.0, y: 340.0, ancho: 140.0),
+  ],
+  enemigos: [
+    // --- El Arenal ---
+    (tipo: Bailaora, x: 750.0),
+    (tipo: Clavel, x: 1000.0, y: 390.0),
+    (tipo: Clavel, x: 1060.0, y: 330.0, rosa: true),
+    (tipo: Guitarrista, x: 1215.0, y: 360.0),
+    (tipo: Palmas, x: 1750.0),
+    (tipo: Bailaora, x: 1950.0),
+    (tipo: Torito, x: 2150.0),
+    // --- El puente de barcas: claveles mientras se espera ---
+    (tipo: Clavel, x: 2600.0, y: 330.0),
+    (tipo: Clavel, x: 2900.0, y: 300.0, rosa: true),
+    (tipo: Clavel, x: 3300.0, y: 340.0),
+    // --- La calle Betis ---
+    (tipo: Guitarrista, x: 3970.0, y: 360.0),
+    (tipo: Bailaora, x: 4200.0),
+    (tipo: Palmas, x: 4380.0),
+    (tipo: Clavel, x: 4700.0, y: 380.0, rosa: true),
+    (tipo: Guitarrista, x: 4875.0, y: 340.0),
+    (tipo: Torito, x: 5250.0),
+    (tipo: Bailaora, x: 5450.0),
+    // --- El corral ---
+    (tipo: Palmas, x: 5650.0),
+    (tipo: Guitarrista, x: 5820.0, y: 250.0),
+    (tipo: Bailaora, x: 6050.0),
+    (tipo: Clavel, x: 6150.0, y: 360.0),
+    (tipo: Clavel, x: 6210.0, y: 300.0, rosa: true),
+    (tipo: Guitarrista, x: 6775.0, y: 330.0),
+    (tipo: Torito, x: 6950.0),
+    (tipo: Palmas, x: 7150.0),
+    (tipo: Palmas, x: 7230.0),
+    (tipo: Bailaora, x: 7450.0),
+    (tipo: Clavel, x: 7600.0, y: 380.0, rosa: true),
+    (tipo: Clavel, x: 7660.0, y: 330.0),
+    (tipo: Torito, x: 7750.0),
+    // --- El tablao ---
+    (tipo: Cantaora, x: 8600.0, portero: true),
+  ],
+  porteria: Some((desde: 8000.0, ficha: Some(3))),
+  // Las fichas. Se quedan al llegar a la puerta, no al cogerlas.
+  fichas: [
+    // En el Arenal, de camino.
+    (600.0, 435.0),
+    // Sobre el rio, donde se juntan la segunda y la tercera barca: andando
+    // de una a otra no se coge, hay que saltar de la una a la otra.
+    (3000.0, 300.0),
+    // En el corredor de arriba del corral, detras del guitarrista.
+    (5900.0, 215.0),
+    // La de la cantaora: sale en medio del tablao al tumbarla.
+    (8480.0, 435.0),
+  ],
+)

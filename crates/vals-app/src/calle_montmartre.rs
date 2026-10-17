@@ -2189,6 +2189,8 @@ pub fn fugaces(p: &Paseo, l: &Layout, t: f32, (rosa, _): (Color, Color)) {
                     );
                 }
             }
+            // Las palmas son de Triana, y las pinta `calle_triana`.
+            Clase::Palmada => {}
         }
     }
 }

@@ -38,11 +38,12 @@ use crate::{DT, Equipo, InputFrame, Pcg32, Player};
 ///
 /// Cada uno dice delante de que jefe va (`jefe`), asi que el orden de esta
 /// lista no significa nada: un baile sin paseo se entra directo, como antes.
-pub const PASEO_RONS: [&str; 4] = [
+pub const PASEO_RONS: [&str; 5] = [
     include_str!("../../../assets/paseos/viena.ron"),
     include_str!("../../../assets/paseos/arrabal.ron"),
     include_str!("../../../assets/paseos/chicago.ron"),
     include_str!("../../../assets/paseos/montmartre.ron"),
+    include_str!("../../../assets/paseos/triana.ron"),
 ];
 
 /// Lo que se ve de la calle, en unidades logicas.
@@ -431,6 +432,88 @@ const NUMEROS: [Numero; 6] = [
     Numero::Aros,
 ];
 
+// Triana. El verbo de la buleria es el **quiebro**: un giro en seco en los
+// acentos del compas de doce. Sus enemigos se plantan, zapatean y se revuelven
+// de golpe, y lo que tiran tambien quiebra.
+
+/// Los acentos del compas de doce, contados del 1 al 12: tres, tres, dos, dos
+/// y dos tiempos entre uno y otro. Es el compas de la buleria y de la solea.
+pub const ACENTOS: [u64; 5] = [3, 6, 8, 10, 12];
+
+/// Que tiempo del compas de doce suena en el tick (del 1 al 12), cuantos
+/// ticks lleva sonando y si es acento. Va con el tick del paseo, como la
+/// clave: la musica es una para toda la calle.
+pub fn compas(tick: u64, tiempo: u32) -> (u64, u64, bool) {
+    let t = u64::from(tiempo.max(1));
+    let n = (tick / t) % 12 + 1;
+    (n, tick % t, ACENTOS.contains(&n))
+}
+
+/// Si en este tick entra un acento.
+pub fn acento(tick: u64, tiempo: u32) -> bool {
+    let (_, dentro, es) = compas(tick, tiempo);
+    es && dentro == 0
+}
+
+/// Cuantos ticks faltan para el siguiente acento: cero si entra en este. Es
+/// el aviso que pinta el dibujo: lo que va a quebrar se prepara antes.
+pub fn al_acento(tick: u64, tiempo: u32) -> u64 {
+    let (n, dentro, es) = compas(tick, tiempo);
+    if es && dentro == 0 {
+        return 0;
+    }
+    let sig = ACENTOS
+        .iter()
+        .copied()
+        .find(|&a| a > n)
+        .unwrap_or(ACENTOS[0] + 12);
+    (sig - n) * u64::from(tiempo.max(1)) - dentro
+}
+
+/// Hasta donde ve la bailaora, y lo que zapatea hacia ti entre dos acentos.
+const ALCANCE_BAILAORA: f32 = 520.0;
+const PASO_BAILAORA: f32 = 70.0;
+/// La patada de la bata de cola, en ticks: sale en el acento y vuelve. Por
+/// debajo de `BATA_PELIGRO` de `gesto` ya vuelve, y no pega.
+pub const PATADA_BATA: u32 = 18;
+const BATA_PELIGRO: f32 = 0.3;
+/// Lo que se estira la bata por delante, como mucho, y el radio de su vuelo.
+pub const BATA: f32 = 56.0;
+const RADIO_BATA: f32 = 14.0;
+
+/// El guitarrista: hasta donde ve, y sus falsetas, que salen despacio y tras
+/// el quiebro van mas deprisa.
+const ALCANCE_GUITARRISTA: f32 = 560.0;
+const VEL_FALSETA: f32 = 200.0;
+const VEL_QUEBRADA: f32 = 300.0;
+
+/// Las palmas: hasta donde se oyen, y lo que dura cada golpe. El golpe es un
+/// estallido quieto alrededor de las manos: se pasa entre dos acentos.
+const ALCANCE_PALMAS: f32 = 600.0;
+pub const VIDA_PALMADA: f32 = 0.2;
+
+/// El clavel: lo que vuela, cuantos quiebros da antes de seguir recto y lo
+/// que se abre de ti en cada uno, a un lado y al otro.
+const VEL_CLAVEL: f32 = 170.0;
+pub const QUIEBROS_CLAVEL: u32 = 4;
+const ZIGZAG_CLAVEL: f32 = 0.5;
+
+/// El torito: hasta donde ve, la carrera y lo que tarda en clavarse. De tope
+/// a cero en seis ticks: un frenazo, no la frenada larga del tango.
+const ALCANCE_TORITO: f32 = 520.0;
+const VEL_TORITO: f32 = 460.0;
+pub const FRENO_TORITO: u32 = 6;
+
+/// La cantaora, portera de Triana: unos 12 segundos de aguja sin fallar uno.
+pub const VIDA_CANTAORA: i32 = 180;
+/// Sus ayes: a esto, abiertos esto de uno a otro.
+const VEL_QUEJIO: f32 = 210.0;
+const ABRE_QUEJIO: f32 = 0.22;
+/// El cierre del remate, desde la tercera fase: un anillo de ayes.
+pub const NOTAS_REMATE: usize = 10;
+/// El taconeo del remate: a ras de tablao, a esto por segundo.
+const VEL_TACONEO: f32 = 320.0;
+
 /// Cuanto se ha movido en este tick la plataforma que pisa quien tiene los
 /// pies en `(x, pies)`, si se mueve. Va despues de recolocarlas, asi que se
 /// mira donde estaba antes: lo que el tranvia lleva encima no se le escurre.
@@ -673,6 +756,33 @@ pub enum Tipo {
     /// Monsieur Loyal, el maestro de ceremonias: el portero de Montmartre, a
     /// la puerta del Moulin Rouge. Ver `Numero`.
     Loyal,
+    // --- Triana. La buleria quiebra en los acentos del compas de
+    // doce, y sus enemigos tambien.
+    /// Una bailaora con bata de cola. Zapatea hacia ti entre dos acentos sin
+    /// volverse; en cada acento se planta, se revuelve hacia ti en seco y
+    /// patea la bata, que barre el suelo por delante. Se salta, o se le pasa
+    /// por la espalda entre dos acentos.
+    Bailaora,
+    /// Un guitarrista sentado en un balcon. En cada acento tira una falseta a
+    /// donde estas, que en el acento siguiente quiebra hacia donde estas
+    /// entonces. La del doce, rosa. Esta arriba: se le tumba apuntando.
+    Guitarrista,
+    /// Un palmero que marca el compas: en cada acento, un golpe de palmas que
+    /// estalla a su alrededor. Se pasa, o se salta, entre dos acentos.
+    Palmas,
+    /// Un clavel tirado al aire. Vuela recto y en cada acento quiebra hacia
+    /// ti, abriendose a un lado y al otro, hasta cuatro veces. Los rosas se
+    /// parrian.
+    Clavel,
+    /// Un torito escapado de la Maestranza. Escarba de cara a ti y, en un
+    /// acento, embiste a tope y sin frenar hasta el acento siguiente, en que
+    /// se clava en seco y se revuelve. De frente los disparos le rebotan en
+    /// la testuz: se le salta, que es el quiebro del torero, y se le tumba
+    /// por detras o escarbando.
+    Torito,
+    /// La cantaora, la portera de Triana, sentada en el tablao: ayes en
+    /// abanico en cada acento y el remate en el doce, a compas.
+    Cantaora,
 }
 
 impl Tipo {
@@ -707,6 +817,12 @@ impl Tipo {
             // Unos 13 segundos de aguja sin fallar uno: con lo que se esquiva,
             // unos quince.
             Tipo::Loyal => 192,
+            Tipo::Bailaora => 8,
+            Tipo::Guitarrista => 10,
+            Tipo::Palmas => 8,
+            Tipo::Clavel => 2,
+            Tipo::Torito => 14,
+            Tipo::Cantaora => VIDA_CANTAORA,
         }
     }
 
@@ -734,6 +850,10 @@ impl Tipo {
             Tipo::Confeti => 14.0,
             Tipo::Apache => 20.0,
             Tipo::Loyal => 30.0,
+            Tipo::Bailaora | Tipo::Guitarrista | Tipo::Palmas => 22.0,
+            Tipo::Clavel => 13.0,
+            Tipo::Torito => 24.0,
+            Tipo::Cantaora => 30.0,
         }
     }
 
@@ -762,6 +882,13 @@ impl Tipo {
             Tipo::Confeti => 0.0,
             Tipo::Apache => 38.0,
             Tipo::Loyal => 52.0,
+            Tipo::Bailaora => 40.0,
+            Tipo::Guitarrista => 34.0,
+            Tipo::Palmas => 38.0,
+            Tipo::Clavel => 0.0,
+            // Bajo y largo: se salta de sobra.
+            Tipo::Torito => 26.0,
+            Tipo::Cantaora => 46.0,
         }
     }
 
@@ -790,6 +917,12 @@ impl Tipo {
             Tipo::Gaviota => 15,
             Tipo::Malevo => 16,
             Tipo::Guapo => 17,
+            Tipo::Bailaora => 24,
+            Tipo::Guitarrista => 25,
+            Tipo::Palmas => 26,
+            Tipo::Clavel => 27,
+            Tipo::Torito => 28,
+            Tipo::Cantaora => 29,
         }
     }
 }
@@ -869,6 +1002,15 @@ pub enum Forma {
     Negra,
     /// El slap del contrabajista, a ras de acera.
     Onda,
+    /// Del guitarrista y de la cantaora: vuela recta y en el acento siguiente
+    /// quiebra hacia donde estas.
+    Falseta,
+    /// Una falseta que ya ha quebrado: sigue recta, mas deprisa.
+    Quebrada,
+    /// Un ay de la cantaora, recto.
+    Quejio,
+    /// El taconeo del remate de la cantaora, a ras de tablao.
+    Taconeo,
 }
 
 impl Forma {
@@ -881,6 +1023,9 @@ impl Forma {
             Forma::Remolino => 7.0,
             Forma::Negra => 9.0,
             Forma::Onda => 12.0,
+            Forma::Falseta | Forma::Quebrada => 8.0,
+            Forma::Quejio => 9.0,
+            Forma::Taconeo => 12.0,
         }
     }
 }
@@ -914,6 +1059,8 @@ pub enum Clase {
     Barrido,
     /// La humareda del apache al esfumarse. No hace dano: es el aviso.
     Humo,
+    /// El golpe de las palmas: un estallido quieto alrededor de las manos.
+    Palmada,
 }
 
 impl Clase {
@@ -929,6 +1076,7 @@ impl Clase {
             Clase::Aro => 16.0,
             Clase::Barrido => 14.0,
             Clase::Humo => 0.0,
+            Clase::Palmada => 58.0,
         }
     }
 }
@@ -1121,9 +1269,24 @@ impl Enemigo {
     }
 
     /// Si el poncho del malevo para este disparo: lo que le viene de frente.
-    /// La rosa devuelta pasa.
+    /// La rosa devuelta pasa. Y la testuz del torito, mientras embiste.
     fn para(&self, d: &Disparo) -> bool {
-        self.tipo == Tipo::Malevo && !d.rosa && d.vel.x * self.dir < 0.0
+        let escudo = self.tipo == Tipo::Malevo || self.embiste();
+        escudo && !d.rosa && d.vel.x * self.dir < 0.0
+    }
+
+    /// Si el torito va embistiendo, a tope y sin frenar.
+    pub fn embiste(&self) -> bool {
+        self.tipo == Tipo::Torito && self.reloj == 0 && self.vel.x != 0.0
+    }
+
+    /// La punta de la bata de cola de una bailaora, mientras patea: sale por
+    /// delante a ras de suelo, se estira y vuelve.
+    pub fn bata(&self) -> Option<Vec2> {
+        (self.tipo == Tipo::Bailaora && self.gesto > BATA_PELIGRO).then(|| {
+            let estira = sin(TAU * 0.5 * (1.0 - self.gesto));
+            self.pos + Vec2::new(self.dir * (22.0 + BATA * estira), self.tipo.alto() - 12.0)
+        })
     }
 
     /// Cual es en la fila, de 0 (la de la izquierda) a `FILA - 1`.
@@ -1397,6 +1560,7 @@ impl Paseo {
         self.parry();
         self.super_(input);
         self.despertar();
+        self.quebrar();
         self.enemigos_actuan();
         self.mover_proyectiles();
         self.mover_fugaces();
@@ -1891,8 +2055,7 @@ impl Paseo {
             // por encima de la lamina, en y negativas.
             let pisa = if a.y != 0.0 { a.y } else { self.def.altura(x) };
             let y = match a.tipo {
-                Tipo::Hoja => a.y,
-                Tipo::Canotier => a.y,
+                Tipo::Hoja | Tipo::Canotier | Tipo::Clavel => a.y,
                 t => pisa - t.alto(),
             };
             // El primer plato sale con un poco de azar: dos camareros que se
@@ -1905,7 +2068,7 @@ impl Paseo {
                 // El compadrito espera a tenerte cerca y a que caiga un tiempo.
                 reloj = 0;
             }
-            if matches!(a.tipo, Tipo::Apache | Tipo::Loyal) {
+            if matches!(a.tipo, Tipo::Apache | Tipo::Loyal | Tipo::Torito) {
                 // `reloj` es su ciclo, que empieza a cero.
                 reloj = 0;
             }
@@ -1915,7 +2078,11 @@ impl Paseo {
                 vida: a.tipo.vida(),
                 dir: -1.0,
                 nacio: self.tick,
-                rosa: a.rosa && matches!(a.tipo, Tipo::Hoja | Tipo::Confeti | Tipo::Canotier),
+                rosa: a.rosa
+                    && matches!(
+                        a.tipo,
+                        Tipo::Hoja | Tipo::Confeti | Tipo::Canotier | Tipo::Clavel
+                    ),
                 golpe: 0,
                 reloj,
                 lanzados: 0,
@@ -2812,6 +2979,210 @@ impl Paseo {
                         e.lanzados += 1;
                     }
                 }
+                Tipo::Bailaora => {
+                    e.gesto = (e.gesto - 1.0 / PATADA_BATA as f32).max(0.0);
+                    let dx = objetivo.x - e.pos.x;
+                    if dx.abs() > ALCANCE_BAILAORA {
+                        continue;
+                    }
+                    if acento(self.tick, self.def.tiempo) {
+                        // El quiebro: de cara a ti en seco, plantada, y la
+                        // patada de la bata. Solo aqui se vuelve.
+                        if dx != 0.0 {
+                            e.dir = dx.signum();
+                        }
+                        e.gesto = 1.0;
+                        e.lanzados += 1;
+                    }
+                    if e.gesto == 0.0 {
+                        // Entre dos acentos zapatea hacia donde mira, aunque
+                        // ya te tenga detras, y no se tira a un foso.
+                        let nx = e.pos.x + e.dir * PASO_BAILAORA * DT;
+                        if self.def.hay_suelo(nx + e.dir * e.tipo.radio()) {
+                            e.pos.x = nx;
+                        }
+                    }
+                    e.pos.y = self.def.altura(e.pos.x) - e.tipo.alto();
+                }
+                Tipo::Guitarrista => {
+                    e.gesto = (e.gesto - 1.0 / 12.0).max(0.0);
+                    let dx = objetivo.x - e.pos.x;
+                    if dx != 0.0 {
+                        e.dir = dx.signum();
+                    }
+                    let (n, _, _) = compas(self.tick, self.def.tiempo);
+                    if dx.abs() > ALCANCE_GUITARRISTA || !acento(self.tick, self.def.tiempo) {
+                        continue;
+                    }
+                    // Una falseta por acento, a donde estas. La del doce, que
+                    // cierra el compas, rosa: una por compas.
+                    e.gesto = 1.0;
+                    e.lanzados += 1;
+                    let boca = e.pos + Vec2::new(e.dir * 18.0, 4.0);
+                    let hacia = (objetivo - boca).normalize_or(Vec2::new(e.dir, 0.0));
+                    self.proyectiles.push(Proyectil {
+                        pos: boca,
+                        vel: hacia * VEL_FALSETA,
+                        rosa: n == 12,
+                        forma: Forma::Falseta,
+                    });
+                }
+                Tipo::Palmas => {
+                    e.gesto = (e.gesto - 1.0 / 10.0).max(0.0);
+                    let dx = objetivo.x - e.pos.x;
+                    if dx != 0.0 {
+                        e.dir = dx.signum();
+                    }
+                    if dx.abs() > ALCANCE_PALMAS || !acento(self.tick, self.def.tiempo) {
+                        continue;
+                    }
+                    e.gesto = 1.0;
+                    e.lanzados += 1;
+                    self.fugaces.push(Fugaz {
+                        clase: Clase::Palmada,
+                        pos: e.pos + Vec2::new(0.0, -6.0),
+                        vel: Vec2::ZERO,
+                        ttl: VIDA_PALMADA,
+                        rosa: false,
+                    });
+                }
+                Tipo::Clavel => {
+                    if e.vel == Vec2::ZERO {
+                        e.vel = Vec2::new(-VEL_CLAVEL, 0.0);
+                    }
+                    if e.lanzados < QUIEBROS_CLAVEL && acento(self.tick, self.def.tiempo) {
+                        // El quiebro: a por ti, abierto a un lado y al otro en
+                        // cada acento. Entre dos, recto.
+                        let lado = if e.lanzados % 2 == 0 { 1.0 } else { -1.0 };
+                        let hacia = (objetivo - e.pos).normalize_or(Vec2::NEG_X);
+                        let (s, c) = sin_cos(ZIGZAG_CLAVEL * lado);
+                        let d = Vec2::new(hacia.x * c - hacia.y * s, hacia.x * s + hacia.y * c);
+                        e.vel = d * VEL_CLAVEL;
+                        e.lanzados += 1;
+                    }
+                    e.pos += e.vel * DT;
+                    // En la acera no entra: rebota en ella.
+                    if e.pos.y > self.def.altura(e.pos.x) - 20.0 && e.vel.y > 0.0 {
+                        e.vel.y = -e.vel.y;
+                    }
+                    if e.vel.x != 0.0 {
+                        e.dir = e.vel.x.signum();
+                    }
+                }
+                Tipo::Torito => {
+                    // La polvareda del frenazo, que solo lee el dibujo.
+                    e.gesto = (e.gesto - 1.0 / 16.0).max(0.0);
+                    let dx = objetivo.x - e.pos.x;
+                    let acento = acento(self.tick, self.def.tiempo);
+                    if e.reloj > 0 {
+                        // Frenando: de tope a cero en `FRENO_TORITO` ticks.
+                        e.reloj -= 1;
+                        e.vel.x = e.dir * VEL_TORITO * e.reloj as f32 / FRENO_TORITO as f32;
+                    } else if e.vel.x != 0.0 {
+                        // Embiste a tope, sin frenar ni volverse, hasta el
+                        // acento siguiente: ahi se clava.
+                        if acento {
+                            e.reloj = FRENO_TORITO;
+                            e.gesto = 1.0;
+                        }
+                    } else {
+                        // Escarba de cara a ti, y en un acento se arranca.
+                        if dx != 0.0 {
+                            e.dir = dx.signum();
+                        }
+                        if acento && dx.abs() < ALCANCE_TORITO {
+                            e.vel.x = e.dir * VEL_TORITO;
+                        }
+                    }
+                    if e.vel.x != 0.0 {
+                        let nx = e.pos.x + e.vel.x * DT;
+                        if self.def.hay_suelo(nx + e.dir * e.tipo.radio()) {
+                            e.pos.x = nx;
+                        } else {
+                            // Al borde del muelle se clava de golpe.
+                            e.vel.x = 0.0;
+                            e.reloj = 0;
+                            e.gesto = 1.0;
+                        }
+                    }
+                    e.pos.y = self.def.altura(e.pos.x) - e.tipo.alto();
+                }
+                Tipo::Cantaora => {
+                    e.gesto = (e.gesto - 1.0 / 12.0).max(0.0);
+                    let dx = objetivo.x - e.pos.x;
+                    if dx != 0.0 {
+                        e.dir = dx.signum();
+                    }
+                    // No canta hasta que se cierra el tablao.
+                    let (n, _, _) = compas(self.tick, self.def.tiempo);
+                    if !arena || !acento(self.tick, self.def.tiempo) {
+                        continue;
+                    }
+                    e.gesto = 1.0;
+                    e.lanzados += 1;
+                    let fase = e.fase();
+                    let boca = e.pos + Vec2::new(e.dir * 8.0, -30.0);
+                    let hacia = (objetivo - boca).normalize_or(Vec2::new(e.dir, 0.0));
+                    let girado = |a: f32| {
+                        let (s, c) = sin_cos(a);
+                        Vec2::new(hacia.x * c - hacia.y * s, hacia.x * s + hacia.y * c)
+                    };
+                    if n == 12 {
+                        // El remate del compas: un ay rosa a ti; desde la
+                        // segunda fase, el taconeo a los dos lados; y en la
+                        // tercera, el cierre, un anillo entero.
+                        self.proyectiles.push(Proyectil {
+                            pos: boca,
+                            vel: hacia * VEL_QUEJIO,
+                            rosa: true,
+                            forma: Forma::Quejio,
+                        });
+                        if fase >= 1 {
+                            let pies = e.pos.y + e.tipo.alto();
+                            for lado in [-1.0, 1.0] {
+                                self.proyectiles.push(Proyectil {
+                                    pos: Vec2::new(
+                                        e.pos.x + lado * 36.0,
+                                        pies - Forma::Taconeo.radio(),
+                                    ),
+                                    vel: Vec2::new(lado * VEL_TACONEO, 0.0),
+                                    rosa: false,
+                                    forma: Forma::Taconeo,
+                                });
+                            }
+                        }
+                        if fase == 2 {
+                            for k in 0..NOTAS_REMATE {
+                                let d = girado(TAU * k as f32 / NOTAS_REMATE as f32);
+                                self.proyectiles.push(Proyectil {
+                                    pos: e.pos + d * 30.0,
+                                    vel: d * VEL_QUEJIO * 0.8,
+                                    rosa: false,
+                                    forma: Forma::Quejio,
+                                });
+                            }
+                        }
+                    } else {
+                        // Los ayes: un abanico a ti, mas abierto en cada fase,
+                        // y desde la segunda uno de cada dos es una falseta
+                        // que quiebra en el acento siguiente.
+                        let notas = 3 + fase;
+                        for k in 0..notas {
+                            let a = (k as f32 - (notas - 1) as f32 * 0.5) * ABRE_QUEJIO;
+                            let forma = if fase >= 1 && k % 2 == 1 {
+                                Forma::Falseta
+                            } else {
+                                Forma::Quejio
+                            };
+                            self.proyectiles.push(Proyectil {
+                                pos: boca,
+                                vel: girado(a) * VEL_QUEJIO,
+                                rosa: false,
+                                forma,
+                            });
+                        }
+                    }
+                }
             }
         }
         self.enemigos.extend(nuevas);
@@ -2828,6 +3199,26 @@ impl Paseo {
         // Un confeti reventado es papelillos: se va sin contar como caido.
         self.enemigos
             .retain(|e| e.tipo != Tipo::Confeti || e.gesto < 2.0);
+        // Y un clavel que se va por arriba de la vista ya no vuelve.
+        self.enemigos
+            .retain(|e| e.tipo != Tipo::Clavel || e.pos.y > def.altura(e.pos.x) - VISTA_H - 200.0);
+    }
+
+    /// El quiebro de lo que se tira en Triana: en cada acento, las falsetas
+    /// que ya volaban se revuelven en seco hacia donde estas y siguen rectas,
+    /// mas deprisa. Va antes de que los enemigos tiren: la que sale en un
+    /// acento quiebra en el siguiente, no al nacer.
+    fn quebrar(&mut self) {
+        if !acento(self.tick, self.def.tiempo) {
+            return;
+        }
+        let a = self.jugadora.pos;
+        for q in &mut self.proyectiles {
+            if q.forma == Forma::Falseta {
+                q.vel = (a - q.pos).normalize_or(Vec2::NEG_X) * VEL_QUEBRADA;
+                q.forma = Forma::Quebrada;
+            }
+        }
     }
 
     /// Lo fugaz se mueve, se transforma al tocar la acera y se apaga.
@@ -2903,6 +3294,7 @@ impl Paseo {
                     }
                 }
                 Clase::Humo => f.pos.y -= 30.0 * DT,
+                Clase::Palmada => {}
             }
             self.fugaces[i] = f;
         }
@@ -3053,10 +3445,15 @@ impl Paseo {
             .enemigos
             .iter()
             .any(|e| e.navaja().is_some_and(|n| self.toca(n, RADIO_NAVAJA)));
+        let bata = self
+            .enemigos
+            .iter()
+            .any(|e| e.bata().is_some_and(|b| self.toca(b, RADIO_BATA)));
         let tocado = plato.is_some()
             || fugaz.is_some()
             || patada
             || navaja
+            || bata
             || self
                 .enemigos
                 .iter()
@@ -3377,6 +3774,53 @@ mod tests {
             assert!(mont.enemigos.iter().any(|a| a.tipo == t), "falta {t:?}");
         }
         assert!(mont.enemigos.iter().any(|a| a.rosa));
+        // Triana: lleva a su jefe, trae los enemigos de la buleria, cruza el
+        // rio en barcas y acaba con la cantaora en su tablao.
+        let triana = de_serie("El Flamenco");
+        assert_eq!(triana.tiempo, 20, "la buleria va a 180");
+        for t in [
+            Tipo::Bailaora,
+            Tipo::Guitarrista,
+            Tipo::Palmas,
+            Tipo::Clavel,
+            Tipo::Torito,
+            Tipo::Cantaora,
+        ] {
+            assert!(triana.enemigos.iter().any(|a| a.tipo == t), "falta {t:?}");
+        }
+        // Los de a pie, en la acera, y los guitarristas, en su balcon.
+        for a in &triana.enemigos {
+            match a.tipo {
+                Tipo::Bailaora | Tipo::Palmas | Tipo::Torito | Tipo::Cantaora => {
+                    assert!(a.y == 0.0 && triana.hay_suelo(a.x), "{a:?} sin acera");
+                }
+                Tipo::Guitarrista => {
+                    let balcon = triana.plataformas.iter().any(|pl| {
+                        pl.mueve.is_none() && pl.y == a.y && (pl.x..=pl.x + pl.ancho).contains(&a.x)
+                    });
+                    assert!(balcon, "{a:?} sin balcon");
+                }
+                _ => {}
+            }
+        }
+        let po = triana.porteria.expect("Triana acaba con la cantaora");
+        let cantaora: Vec<&Aparicion> = triana.enemigos.iter().filter(|a| a.portero).collect();
+        assert!(cantaora.len() == 1 && cantaora[0].tipo == Tipo::Cantaora);
+        assert!((po.desde..po.desde + VISTA_W).contains(&cantaora[0].x));
+        assert!(
+            triana.puerta > po.desde + VISTA_W,
+            "la puerta, pasado el tablao"
+        );
+        assert_eq!(
+            triana
+                .plataformas
+                .iter()
+                .filter(|pl| pl.mueve.is_some())
+                .count(),
+            4,
+            "el puente de barcas"
+        );
+
         // Las escaleras de todos, dentro de lo que la fisica perdona y sin
         // empezar ni acabar en un foso: un borde de foso a media rampa no
         // tiene una altura que se lea.
@@ -5576,6 +6020,526 @@ mod tests {
         );
     }
 
+    // --- Triana ---
+
+    fn triana() -> PaseoDef {
+        de_serie("El Flamenco")
+    }
+
+    /// Una aparicion de Triana en la calle de pruebas, a 20 ticks por tiempo.
+    fn en_triana(tipo: Tipo, x: f32, y: f32) -> PaseoDef {
+        PaseoDef {
+            tiempo: 20,
+            ..uno(tipo, x, y)
+        }
+    }
+
+    #[test]
+    fn el_compas_de_doce_acentua_el_tres_el_seis_el_ocho_el_diez_y_el_doce() {
+        // A 20 ticks por tiempo el compas son 240, y el 3 entra en el 40.
+        let acentos: Vec<u64> = (0..480).filter(|&t| acento(t, 20)).collect();
+        assert_eq!(acentos, [40, 100, 140, 180, 220, 280, 340, 380, 420, 460]);
+        assert_eq!(compas(225, 20), (12, 5, true));
+        assert_eq!(compas(240, 20), (1, 0, false));
+        // El aviso cuenta hasta el siguiente, de un compas al otro.
+        assert_eq!(al_acento(100, 20), 0);
+        assert_eq!(al_acento(101, 20), 39);
+        assert_eq!(al_acento(221, 20), 59);
+        for t in 0..480 {
+            let d = al_acento(t, 20);
+            assert!(acento(t + d, 20) && (t..t + d).all(|u| !acento(u, 20)));
+        }
+    }
+
+    #[test]
+    fn la_bailaora_solo_se_revuelve_en_el_acento_y_patea_plantada() {
+        let mut p = Paseo::new(en_triana(Tipo::Bailaora, 600.0, 0.0), 1);
+        // En el primer acento se planta de cara a ella y patea la bata.
+        while p.tick <= 40 {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+        }
+        let e = &p.enemigos[0];
+        assert!(e.dir == -1.0 && e.gesto == 1.0 && e.bata().is_some());
+        // Mientras patea, plantada; luego zapatea hacia ella.
+        let x = e.pos.x;
+        for _ in 1..PATADA_BATA {
+            p.step(InputFrame::NONE);
+            assert_eq!(p.enemigos[0].pos.x, x, "patea andando");
+        }
+        correr(&mut p, 0, 10);
+        assert!(p.enemigos[0].pos.x < x, "no zapatea hacia ella");
+        // Ella se pone detras: sigue de espaldas hasta el acento del 100.
+        p.jugadora.pos.x = p.enemigos[0].pos.x + 150.0;
+        p.jugadora.prev_pos = p.jugadora.pos;
+        while p.tick < 100 {
+            p.step(InputFrame::NONE);
+            assert_eq!(p.enemigos[0].dir, -1.0, "se vuelve sin acento");
+        }
+        p.step(InputFrame::NONE);
+        let e = &p.enemigos[0];
+        assert!(e.dir == 1.0 && e.gesto == 1.0, "el quiebro, en el acento");
+    }
+
+    #[test]
+    fn la_bata_de_la_bailaora_barre_el_suelo_y_se_salta() {
+        // Ella a 70 por delante en el acento del 40: quieta le llega la
+        // bata, y saltando le pasa por debajo.
+        for salta in [false, true] {
+            let mut p = Paseo::new(en_triana(Tipo::Bailaora, 600.0, 0.0), 1);
+            while p.tick < 30 {
+                p.jugadora.iframes = 10;
+                p.step(InputFrame::NONE);
+            }
+            p.jugadora.pos.x = p.enemigos[0].pos.x - 70.0;
+            p.jugadora.prev_pos = p.jugadora.pos;
+            let bits = if salta { InputFrame::JUMP } else { 0 };
+            let mut dado = false;
+            while p.tick < 74 {
+                p.step(pulsar(bits));
+                dado |= p.events.player_died;
+            }
+            assert_eq!(dado, !salta, "saltando {salta}");
+        }
+    }
+
+    #[test]
+    fn el_guitarrista_tira_una_falseta_por_acento_y_la_del_doce_rosa() {
+        let mut p = Paseo::new(en_triana(Tipo::Guitarrista, 450.0, 330.0), 1);
+        let (mut tiradas, mut rosas) = (0, 0);
+        for _ in 0..480 {
+            p.jugadora.iframes = 10;
+            let tick = p.tick;
+            let antes = p.enemigos.first().map_or(0, |e| e.lanzados);
+            p.step(InputFrame::NONE);
+            if p.enemigos[0].lanzados == antes {
+                continue;
+            }
+            assert!(acento(tick, 20), "tira fuera del acento en {tick}");
+            let q = *p.proyectiles.last().expect("acaba de tirar");
+            assert_eq!(q.forma, Forma::Falseta);
+            assert_eq!(q.rosa, compas(tick, 20).0 == 12);
+            let a_ella = (p.jugadora.pos - q.pos).normalize();
+            assert!(q.vel.normalize().dot(a_ella) > 0.98, "no apunta");
+            tiradas += 1;
+            rosas += usize::from(q.rosa);
+        }
+        assert_eq!((tiradas, rosas), (10, 2), "cinco por compas, una rosa");
+    }
+
+    #[test]
+    fn la_falseta_vuela_recta_y_quiebra_en_el_acento_siguiente() {
+        let def = PaseoDef {
+            tiempo: 20,
+            ..calle()
+        };
+        let mut p = Paseo::new(def, 1);
+        p.proyectiles.push(Proyectil {
+            pos: Vec2::new(600.0, 300.0),
+            vel: Vec2::new(-VEL_FALSETA, 0.0),
+            rosa: false,
+            forma: Forma::Falseta,
+        });
+        let v = p.proyectiles[0].vel;
+        while p.tick < 40 {
+            p.step(InputFrame::NONE);
+            assert_eq!(p.proyectiles[0].vel, v, "quiebra sin acento");
+        }
+        // En el acento, de golpe hacia ella y mas deprisa.
+        p.step(InputFrame::NONE);
+        let q = p.proyectiles[0];
+        assert_eq!(q.forma, Forma::Quebrada);
+        assert!((q.vel.length() - VEL_QUEBRADA).abs() < 1e-2);
+        let a_ella = (p.jugadora.pos - q.pos).normalize();
+        assert!(
+            q.vel.normalize().dot(a_ella) > 0.99,
+            "no quiebra hacia ella"
+        );
+        // Y quebrada ya va recta: el acento siguiente no la toca.
+        let v = q.vel;
+        while p.tick <= 100 {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+        }
+        assert_eq!(p.proyectiles[0].vel, v);
+    }
+
+    #[test]
+    fn las_palmas_estallan_en_los_acentos_y_se_saltan_entre_dos() {
+        let mut p = Paseo::new(en_triana(Tipo::Palmas, 700.0, 0.0), 1);
+        let mut golpes = 0;
+        for _ in 0..240 {
+            p.jugadora.iframes = 10;
+            let tick = p.tick;
+            let antes = p.enemigos.first().map_or(0, |e| e.lanzados);
+            p.step(InputFrame::NONE);
+            if p.enemigos[0].lanzados > antes {
+                assert!(acento(tick, 20), "palmas fuera del acento en {tick}");
+                golpes += 1;
+            }
+            // El golpe dura un suspiro: nunca hay dos a la vez.
+            assert!(p.fugaces.len() <= 1);
+            assert!(p.fugaces.iter().all(|f| f.clase == Clase::Palmada));
+        }
+        assert_eq!(golpes, 5, "cinco acentos por compas");
+        // De pie a su lado, sin tocarle, el golpe le llega en el acento.
+        let mut def = en_triana(Tipo::Palmas, 700.0, 0.0);
+        def.salida = 640.0;
+        let mut p = Paseo::new(def.clone(), 1);
+        let mut dado = None;
+        while p.tick <= 40 && dado.is_none() {
+            let tick = p.tick;
+            p.step(InputFrame::NONE);
+            dado = p.events.player_died.then_some(tick);
+        }
+        assert_eq!(dado, Some(40), "de pie a su lado");
+        // Y saltandolo en el hueco largo, del doce al tres, no.
+        def.salida = 100.0;
+        let mut p = Paseo::new(def, 1);
+        while p.tick <= 220 {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+        }
+        p.jugadora.iframes = 0;
+        p.jugadora.pos.x = 700.0 - 105.0;
+        p.jugadora.prev_pos = p.jugadora.pos;
+        let mut dado = false;
+        while p.tick < 280 {
+            p.step(pulsar(DERECHA | InputFrame::JUMP));
+            dado |= p.events.player_died;
+        }
+        assert!(!dado, "entre dos acentos se salta");
+        assert!(p.jugadora.pos.x > 700.0 + 80.0, "no ha pasado");
+    }
+
+    #[test]
+    fn el_clavel_vuela_recto_y_quiebra_en_cada_acento() {
+        let mut p = Paseo::new(en_triana(Tipo::Clavel, 600.0, 300.0), 1);
+        let mut antes: Option<Vec2> = None;
+        let mut quiebros = 0;
+        for _ in 0..300 {
+            p.jugadora.iframes = 10;
+            let tick = p.tick;
+            p.step(InputFrame::NONE);
+            let Some(e) = p.enemigos.first() else { break };
+            assert!(
+                (e.vel.length() - VEL_CLAVEL).abs() < 1e-2,
+                "no vuela a su paso"
+            );
+            // El rebote en la acera solo da la vuelta a la y: lo que tuerce
+            // la x es un quiebro.
+            if let Some(v) = antes
+                && v.x != e.vel.x
+            {
+                assert!(acento(tick, 20), "quiebra fuera del acento en {tick}");
+                quiebros += 1;
+            }
+            antes = Some(e.vel);
+        }
+        assert_eq!(quiebros, QUIEBROS_CLAVEL);
+        // Y los rosas despiertan rosas, y se parrian.
+        let mut p = Paseo::new(
+            con(vec![Aparicion {
+                y: 300.0,
+                rosa: true,
+                ..aparece(Tipo::Clavel, 600.0)
+            }]),
+            1,
+        );
+        p.step(InputFrame::NONE);
+        assert!(p.enemigos[0].rosa);
+        p.enemigos[0].pos = p.jugadora.pos + Vec2::new(24.0, -10.0);
+        p.step(pulsar(InputFrame::PARRY));
+        assert_eq!(p.events.parried, 1);
+        assert!(p.enemigos.is_empty());
+    }
+
+    #[test]
+    fn el_torito_embiste_a_tope_de_acento_a_acento_y_se_clava() {
+        let mut p = Paseo::new(en_triana(Tipo::Torito, 600.0, 0.0), 1);
+        let mut x = 600.0;
+        while p.tick < 141 {
+            p.jugadora.iframes = 10;
+            let tick = p.tick;
+            p.step(InputFrame::NONE);
+            let e = &p.enemigos[0];
+            let v = e.vel.x;
+            match tick {
+                // Escarba hasta el primer acento, sin moverse.
+                0..40 => assert!(v == 0.0 && e.pos.x == x, "en {tick}"),
+                // Embiste a tope, sin frenar, hasta el siguiente.
+                40..=100 => {
+                    assert_eq!(v, -VEL_TORITO, "en {tick}");
+                    assert!(e.embiste() || tick == 100);
+                }
+                // Y ahi se clava: a cero en seis ticks.
+                101..=106 => {
+                    let quedan = (106 - tick) as f32 / FRENO_TORITO as f32;
+                    assert!((v + VEL_TORITO * quedan).abs() < 1e-2, "en {tick}: {v}");
+                }
+                // Y escarba hasta el acento del 140.
+                107..140 => assert!(v == 0.0 && e.pos.x == x, "en {tick}"),
+                _ => {}
+            }
+            x = e.pos.x;
+        }
+        assert!(p.enemigos[0].vel.x != 0.0, "no embiste en el 140");
+    }
+
+    #[test]
+    fn al_torito_se_le_salta_y_de_frente_no_se_le_tumba() {
+        // Ella a 200 y el torito a 600: pasa por debajo de ella hacia el 92.
+        for salta in [false, true] {
+            let mut def = en_triana(Tipo::Torito, 600.0, 0.0);
+            def.salida = 200.0;
+            let mut p = Paseo::new(def, 1);
+            while p.tick < 80 {
+                p.jugadora.iframes = 10;
+                p.step(InputFrame::NONE);
+            }
+            p.jugadora.iframes = 0;
+            let bits = if salta { InputFrame::JUMP } else { 0 };
+            let mut dado = false;
+            while p.tick < 130 {
+                p.step(pulsar(bits));
+                dado |= p.events.player_died;
+            }
+            assert_eq!(dado, !salta, "saltando {salta}");
+        }
+        // Disparandole de frente mientras embiste, nada; clavado, cae.
+        let mut p = Paseo::new(en_triana(Tipo::Torito, 600.0, 0.0), 1);
+        while p.tick <= 40 {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+        }
+        while p.tick < 100 {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(DISPARA));
+            assert!(p.enemigos[0].embiste());
+            assert_eq!(p.enemigos[0].vida, Tipo::Torito.vida(), "embistiendo");
+        }
+        correr(&mut p, DISPARA, 40);
+        assert!(p.enemigos[0].vida < Tipo::Torito.vida() - 5, "clavado no");
+    }
+
+    /// La cantaora en su tablao (de 1000 a 1960), y la jugadora dentro.
+    fn con_cantaora(vida: i32) -> Paseo {
+        let mut def = con(vec![Aparicion {
+            portero: true,
+            ..aparece(Tipo::Cantaora, 1600.0)
+        }]);
+        def.tiempo = 20;
+        def.porteria = Some(Porteria {
+            desde: 1000.0,
+            ficha: Some(0),
+        });
+        def.fichas = vec![(1480.0, 435.0)];
+        def.puerta = 2500.0;
+        let mut p = hasta_la_arena(def);
+        p.enemigos[0].vida = vida;
+        p
+    }
+
+    /// Lo que canta en un compas entero, desde el siguiente uno: por cada
+    /// acento, su tiempo y lo que suelta de cada forma (ayes, falsetas,
+    /// taconeos y rosas).
+    fn lo_que_canta(p: &mut Paseo) -> Vec<(u64, [usize; 4])> {
+        while !p.tick.is_multiple_of(240) {
+            lo_nuevo(p);
+        }
+        let mut cantado = Vec::new();
+        for _ in 0..240 {
+            let tick = p.tick;
+            let nuevas = lo_nuevo(p);
+            if nuevas.is_empty() {
+                continue;
+            }
+            assert!(acento(tick, 20), "canta fuera del acento en {tick}");
+            let de = |f: Forma| nuevas.iter().filter(|q| q.forma == f).count();
+            let rosas = nuevas.iter().filter(|q| q.rosa).count();
+            let n = compas(tick, 20).0;
+            cantado.push((
+                n,
+                [
+                    de(Forma::Quejio),
+                    de(Forma::Falseta),
+                    de(Forma::Taconeo),
+                    rosas,
+                ],
+            ));
+        }
+        cantado
+    }
+
+    #[test]
+    fn la_cantaora_canta_a_compas_y_remata_en_el_doce() {
+        let max = VIDA_CANTAORA;
+        assert_eq!(Tipo::Cantaora.vida(), max);
+        // En la primera fase, abanicos de tres y un ay rosa en el doce.
+        let mut p = con_cantaora(max);
+        let ayes = [3, 0, 0, 0];
+        assert_eq!(
+            lo_que_canta(&mut p),
+            [
+                (3, ayes),
+                (6, ayes),
+                (8, ayes),
+                (10, ayes),
+                (12, [1, 0, 0, 1])
+            ]
+        );
+        // En la segunda, de cuatro con dos falsetas, y el taconeo.
+        let mut p = con_cantaora(max * 2 / 3 - 1);
+        assert_eq!(p.portero().map(Enemigo::fase), Some(1));
+        let canto = lo_que_canta(&mut p);
+        assert!(canto[..4].iter().all(|c| c.1 == [2, 2, 0, 0]), "{canto:?}");
+        assert_eq!(canto[4], (12, [1, 0, 2, 1]));
+        // En la tercera, de cinco, y el cierre: diez ayes mas en anillo.
+        let mut p = con_cantaora(max / 3 - 1);
+        assert_eq!(p.portero().map(Enemigo::fase), Some(2));
+        let canto = lo_que_canta(&mut p);
+        assert!(canto[..4].iter().all(|c| c.1 == [3, 2, 0, 0]), "{canto:?}");
+        assert_eq!(canto[4], (12, [1 + NOTAS_REMATE, 0, 2, 1]));
+        // El taconeo va a ras de tablao: se salta.
+        let mut p = con_cantaora(max / 3 - 1);
+        let taconeo = loop {
+            let nuevas = lo_nuevo(&mut p);
+            if let Some(q) = nuevas.iter().find(|q| q.forma == Forma::Taconeo) {
+                break *q;
+            }
+        };
+        assert_eq!(taconeo.pos.y + Forma::Taconeo.radio(), SUELO_Y);
+    }
+
+    #[test]
+    fn la_cantaora_cae_a_tiros_y_abre_el_tablao() {
+        let mut p = con_cantaora(VIDA_CANTAORA);
+        let mut ticks = 0;
+        let mut fases = Vec::new();
+        while p.portero_vivo() {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(DISPARA));
+            ticks += 1;
+            if let Some(e) = p.portero()
+                && fases.last() != Some(&e.fase())
+            {
+                fases.push(e.fase());
+            }
+            assert!(ticks < 60 * 60, "no cae");
+        }
+        assert_eq!(fases, [0, 1, 2], "pasa por las tres fases");
+        // Unos 12 segundos de aguja sin fallar uno.
+        let segundos = ticks as f32 * DT;
+        assert!((9.0..16.0).contains(&segundos), "{segundos} s");
+        assert!(p.events.boss_down, "cae como un jefe");
+        assert!(p.cierre().is_none() && p.ficha_visible(0));
+        correr(&mut p, DERECHA, 300);
+        assert!(p.completado.is_some());
+    }
+
+    #[test]
+    fn el_puente_de_barcas_cruza_el_rio_de_barca_en_barca() {
+        let def = triana();
+        let barcas: Vec<Plataforma> = def
+            .plataformas
+            .iter()
+            .filter(|pl| pl.mueve.is_some())
+            .copied()
+            .collect();
+        assert_eq!(barcas.len(), 4, "cuatro barcas");
+        // El rio, de muelle a muelle: no se salta ni con dash.
+        let (a, b) = def
+            .suelo
+            .windows(2)
+            .map(|par| (par[0].1, par[1].0))
+            .find(|&(a, b)| (a..b).contains(&(barcas[0].x + barcas[0].ancho)))
+            .expect("la primera barca sale de un muelle");
+        assert!(b - a > 1000.0, "el rio se salta: {}", b - a);
+        // Cada dos de al lado se juntan en un extremo, y la primera y la
+        // ultima llegan a su muelle.
+        let tramo = |pl: &Plataforma, t: u64| {
+            let d = pl.mueve.expect("se mueve").desvio(t).x;
+            (pl.x + d, pl.x + d + pl.ancho)
+        };
+        for par in barcas.windows(2) {
+            let junta = (0..240).any(|t| tramo(&par[0], t).1 >= tramo(&par[1], t).0);
+            assert!(junta, "no se juntan: {par:?}");
+        }
+        assert!((0..240).any(|t| tramo(&barcas[0], t).0 <= a));
+        assert!((0..240).any(|t| tramo(&barcas[3], t).1 >= b));
+
+        // Quieta en cada barca, y andando solo cuando se junta con la
+        // siguiente, se llega a la otra orilla sin mojarse.
+        let mut p = Paseo::new(def, 1);
+        p.jugadora.pos.x = a - 30.0;
+        p.jugadora.prev_pos = p.jugadora.pos;
+        p.siguiente = p.def.enemigos.len();
+        let mut subida = false;
+        while p.jugadora.pos.x < b + 40.0 {
+            p.jugadora.iframes = 5;
+            let x = p.jugadora.pos.x + 30.0;
+            let pisa = p.def.hay_suelo(x)
+                || p.def.plataformas.iter().any(|pl| {
+                    pl.mueve.is_some() && pl.y == SUELO_Y && x >= pl.x && x <= pl.x + pl.ancho
+                });
+            p.step(pulsar(if pisa { DERECHA } else { 0 }));
+            subida |= p.sobre.is_some();
+            assert!(p.tick < 240 * 4, "atascada en x {}", p.jugadora.pos.x);
+        }
+        assert!(subida, "ha cruzado sin subir a las barcas");
+        assert_eq!(p.vidas, VIDAS, "al rio");
+        assert!(!p.fichas[1], "la del rio se coge sin buscarla");
+    }
+
+    #[test]
+    fn las_fichas_de_triana_se_cogen_buscandolas() {
+        let def = triana();
+        // La del rio: de la segunda barca a la tercera de un salto, cuando
+        // se juntan, en vez de andando.
+        let mut p = Paseo::new(def.clone(), 1);
+        p.siguiente = p.def.enemigos.len();
+        let barca = p.def.plataformas[2];
+        assert!(barca.mueve.is_some());
+        p.jugadora.pos = Vec2::new(barca.x + barca.ancho - 80.0, barca.y - PIES);
+        p.jugadora.prev_pos = p.jugadora.pos;
+        correr(&mut p, DERECHA | InputFrame::JUMP, 45);
+        correr(&mut p, 0, 20);
+        assert!(p.fichas[1], "la del rio no se coge");
+        let otra = p.sobre.map(|i| p.def.plataformas[i].x);
+        assert!(p.jugadora.on_ground && otra.is_some(), "en ninguna barca");
+        assert_eq!(p.vidas, VIDAS, "al rio");
+
+        // La del corral: del suelo al corredor de abajo, de ahi al de arriba
+        // y por el hasta detras del guitarrista.
+        let mut p = Paseo::new(def, 1);
+        p.siguiente = p.def.enemigos.len();
+        let (fx, _) = p.def.fichas[2];
+        p.jugadora.pos = Vec2::new(fx - 250.0, SUELO_Y - PIES);
+        p.jugadora.prev_pos = p.jugadora.pos;
+        let saltar = |p: &mut Paseo| {
+            correr(p, InputFrame::JUMP, 45);
+            correr(p, 0, 30);
+        };
+        saltar(&mut p);
+        assert_eq!(p.jugadora.pos.y + PIES, 360.0, "en el corredor de abajo");
+        correr(&mut p, DERECHA, 20);
+        saltar(&mut p);
+        assert_eq!(p.jugadora.pos.y + PIES, 250.0, "en el de arriba");
+        assert!(!p.fichas[2], "se coge sin subir");
+        correr(&mut p, DERECHA, 60);
+        assert!(p.fichas[2], "la del corral no se coge");
+    }
+
+    #[test]
+    fn triana_se_puede_andar_entera() {
+        let p = bot_anda(triana());
+        assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
+        assert_eq!(p.vidas, VIDAS, "ha caido al Guadalquivir");
+        // Ha cruzado las barcas y ha tumbado a la cantaora disparando de
+        // frente: sin ella no se abre la puerta, y su ficha estaba de camino.
+        assert!(p.fichas[0] && p.fichas[3], "{:?}", p.fichas);
+    }
+
     // --- Las fichas y el equipo ---
 
     use crate::equipo::Amuleto;
@@ -5593,8 +6557,10 @@ mod tests {
         let mut total = 0;
         for def in PaseoDef::de_serie() {
             let n = def.fichas.len();
-            // Una del camino, otra que hay que buscar y la del portero.
-            assert_eq!(n, 3, "{}: {n} fichas", def.nombre);
+            // Una del camino, otra que hay que buscar y la del portero. En
+            // Triana, la mas dificil, dos que buscar.
+            let suyas = if def.jefe == "El Flamenco" { 4 } else { 3 };
+            assert_eq!(n, suyas, "{}: {n} fichas", def.nombre);
             assert_eq!(def.porteria.and_then(|po| po.ficha), Some(n - 1));
             total += n;
             for &(x, y) in &def.fichas {
@@ -5612,11 +6578,8 @@ mod tests {
             }
         }
         // La modista cuesta 16: las tres de cada paseo y una mas en el
-        // quinto. Hasta que llegue, faltan esas cuatro.
-        assert!(
-            total <= 16,
-            "los precios de la modista cuentan con 16: {total}"
-        );
+        // quinto.
+        assert_eq!(total, 16, "los precios de la modista cuentan con 16");
     }
 
     #[test]

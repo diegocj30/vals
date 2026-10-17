@@ -19,6 +19,7 @@ mod calle;
 mod calle_arrabal;
 mod calle_chicago;
 mod calle_montmartre;
+mod calle_triana;
 mod calle_viena;
 mod cartela;
 mod draw;
