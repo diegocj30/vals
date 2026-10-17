@@ -261,6 +261,74 @@ const VUELO_GOTA: f32 = 0.7;
 /// Lo que dura el charco de pintura en la acera antes de secarse.
 const VIDA_MANCHA: f32 = 1.4;
 
+/// El paquete de confeti vuela hacia la izquierda a brincos de galop, uno por
+/// tiempo. Al tenerte a `MECHA_CONFETI_X` prende la mecha y en un tiempo
+/// revienta: papelillos que salen a tope, frenan, caen revoloteando y se
+/// apagan. Llegan a unas 120 unidades.
+const VEL_CONFETI: f32 = 150.0;
+const BRINCO_CONFETI: f32 = 24.0;
+const MECHA_CONFETI_X: f32 = 190.0;
+pub const MECHA_CONFETI: u32 = 24;
+pub const PAPELILLOS: usize = 10;
+const VEL_PAPELILLO: f32 = 300.0;
+const FRENO_PAPELILLO: f32 = 0.96;
+const GRAVEDAD_PAPELILLO: f32 = 260.0;
+pub const VIDA_PAPELILLO: f32 = 0.9;
+
+/// El apache, en ticks: un compas de dos tiempos esfumado (se ve su sombra
+/// donde va a salir), un tiempo de navajazo y dos plantado. Se esfuma en un
+/// tiempo de la musica, asi que sale en el uno del compas siguiente.
+pub const OCULTO_APACHE: u32 = 48;
+pub const GOLPE_APACHE: u32 = 24;
+pub const PLANTADO_APACHE: u32 = 48;
+pub const CICLO_APACHE: u32 = OCULTO_APACHE + GOLPE_APACHE + PLANTADO_APACHE;
+/// Lo que tarda en sacar la navaja tras salir: lo justo para verle.
+const AMAGO_APACHE: u32 = 8;
+const ALCANCE_APACHE: f32 = 420.0;
+/// A que distancia de ti sale, por el otro lado del que estaba.
+pub const LADO_APACHE: f32 = 100.0;
+/// El paso que da con el navajazo, y su alcance.
+const ESTOCADA_APACHE: f32 = 260.0;
+const RADIO_NAVAJA: f32 = 12.0;
+const NAVAJA_PELIGRO: f32 = 0.5;
+/// La humareda de cuando se esfuma: no hace dano, es el aviso.
+const VIDA_HUMO: f32 = 0.5;
+
+/// Monsieur Loyal: lo que dura cada numero segun la fase, y lo que vive lo
+/// que suelta. Las palomas se apagan antes de cruzar la pista: de lejos solo
+/// llegan los aros, y de cerca, el baston.
+const NUMERO_LOYAL: [u32; 3] = [120, 96, 72];
+const VEL_PALOMA: f32 = 260.0;
+pub const VIDA_PALOMA: f32 = 1.3;
+const VEL_ARO: f32 = 280.0;
+pub const VIDA_ARO: f32 = 1.8;
+const VEL_BARRIDO: f32 = 900.0;
+const VIDA_BARRIDO: f32 = 0.3;
+/// Por donde anda en la pista: de cerca se aparta y de lejos se acerca.
+const CERCA_LOYAL: f32 = 220.0;
+const LEJOS_LOYAL: f32 = 480.0;
+
+/// Los numeros de Monsieur Loyal, en el orden en que los presenta. En la
+/// primera fase se salta el baston.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Numero {
+    /// Levanta la chistera y salen palomas en abanico hacia ti.
+    Palomas,
+    /// Tira aros que ruedan botando por la pista.
+    Aros,
+    /// Se acerca de un brinco y barre el suelo con el baston: se salta.
+    Baston,
+}
+
+const NUMEROS: [Numero; 6] = [
+    Numero::Palomas,
+    Numero::Aros,
+    Numero::Baston,
+    Numero::Palomas,
+    Numero::Baston,
+    Numero::Aros,
+];
+
 /// Un tramo de acera, de `.0` a `.1`. Entre dos tramos hay un foso.
 pub type Tramo = (f32, f32);
 
@@ -431,6 +499,17 @@ pub enum Tipo {
     /// en abanico y la pintura deja charcos que se secan enseguida. Esta
     /// arriba: se le dispara plantada y apuntando.
     Pintor,
+    /// Un paquete de confeti que cruza volando a brincos de galop. Al tenerte
+    /// cerca prende la mecha y revienta en papelillos que se apagan en menos
+    /// de un segundo: se tumba antes, o se espera. Los rosas se parrian.
+    Confeti,
+    /// Un apache de la danse apache, gorra y panuelo rojo. Se esfuma en una
+    /// humareda, sale a tu lado (antes se ve su sombra) y tira un navajazo.
+    /// Luego se queda plantado, que es cuando se le tumba.
+    Apache,
+    /// Monsieur Loyal, el maestro de ceremonias: el portero de Montmartre, a
+    /// la puerta del Moulin Rouge. Ver `Numero`.
+    Loyal,
 }
 
 impl Tipo {
@@ -453,6 +532,11 @@ impl Tipo {
             Tipo::Corista => 7,
             Tipo::Botella => 3,
             Tipo::Pintor => 6,
+            Tipo::Confeti => 2,
+            Tipo::Apache => 6,
+            // Unos 27 segundos de aguja sin fallar uno: con lo que se esquiva,
+            // treinta y tantos.
+            Tipo::Loyal => 400,
         }
     }
 
@@ -472,6 +556,9 @@ impl Tipo {
             Tipo::Corista => 20.0,
             Tipo::Botella => 14.0,
             Tipo::Pintor => 20.0,
+            Tipo::Confeti => 14.0,
+            Tipo::Apache => 20.0,
+            Tipo::Loyal => 30.0,
         }
     }
 
@@ -491,6 +578,9 @@ impl Tipo {
             Tipo::Corista => 44.0,
             Tipo::Botella => 18.0,
             Tipo::Pintor => 36.0,
+            Tipo::Confeti => 0.0,
+            Tipo::Apache => 38.0,
+            Tipo::Loyal => 52.0,
         }
     }
 
@@ -511,6 +601,9 @@ impl Tipo {
             Tipo::Compadrito => 9,
             Tipo::Florista => 10,
             Tipo::Rosa => 11,
+            Tipo::Confeti => 12,
+            Tipo::Apache => 13,
+            Tipo::Loyal => 14,
         }
     }
 }
@@ -588,6 +681,16 @@ pub enum Clase {
     Gota,
     /// El charco: quieto en la acera, hasta que se seca.
     Mancha,
+    /// Un papelillo del confeti: sale a tope, frena y cae revoloteando.
+    Papelillo,
+    /// Una paloma de la chistera de Monsieur Loyal, en linea recta.
+    Paloma,
+    /// Un aro de Monsieur Loyal, rodando y botando por la acera.
+    Aro,
+    /// El barrido del baston, a ras de acera y de un tercio de segundo.
+    Barrido,
+    /// La humareda del apache al esfumarse. No hace dano: es el aviso.
+    Humo,
 }
 
 impl Clase {
@@ -598,6 +701,11 @@ impl Clase {
             Clase::Burbuja => 7.0,
             Clase::Gota => 6.0,
             Clase::Mancha => 14.0,
+            Clase::Papelillo => 5.0,
+            Clase::Paloma => 10.0,
+            Clase::Aro => 16.0,
+            Clase::Barrido => 14.0,
+            Clase::Humo => 0.0,
         }
     }
 }
@@ -622,7 +730,7 @@ pub struct Aparicion {
     /// camarero. Cero o sin poner es la acera.
     #[serde(default)]
     pub y: f32,
-    /// Solo en las notas y las hojas: si se puede parriar.
+    /// Solo en las notas, las hojas y el confeti: si se puede parriar.
     #[serde(default)]
     pub rosa: bool,
     /// Si es el portero del paseo: el que cierra la arena del final, con su
@@ -782,6 +890,23 @@ impl Enemigo {
         let a = -TAU * 0.25 + 3.3 * self.gesto;
         let (s, c) = sin_cos(a);
         Some((cadera, cadera + Vec2::new(self.dir * c, -s) * PIERNA))
+    }
+
+    /// Si esta en la calle. Un apache esfumado no esta: ni se le dispara ni
+    /// se choca con el, solo se ve su sombra donde va a salir.
+    pub fn presente(&self) -> bool {
+        self.tipo != Tipo::Apache || self.reloj <= GOLPE_APACHE + PLANTADO_APACHE
+    }
+
+    /// La punta de la navaja de un apache, mientras pega.
+    pub fn navaja(&self) -> Option<Vec2> {
+        (self.tipo == Tipo::Apache && self.gesto > NAVAJA_PELIGRO)
+            .then(|| self.pos + Vec2::new(self.dir * (18.0 + 34.0 * self.gesto), -8.0))
+    }
+
+    /// El numero que hace o va a hacer Monsieur Loyal.
+    pub fn numero(&self) -> Option<Numero> {
+        (self.tipo == Tipo::Loyal).then(|| NUMEROS[self.lanzados as usize % NUMEROS.len()])
     }
 }
 
@@ -1460,13 +1585,17 @@ impl Paseo {
                 // El compadrito espera a tenerte cerca y a que caiga un tiempo.
                 reloj = 0;
             }
+            if matches!(a.tipo, Tipo::Apache | Tipo::Loyal) {
+                // `reloj` es su ciclo, que empieza a cero.
+                reloj = 0;
+            }
             self.enemigos.push(Enemigo {
                 tipo: a.tipo,
                 pos: Vec2::new(x, y),
                 vida: a.tipo.vida(),
                 dir: -1.0,
                 nacio: self.tick,
-                rosa: a.rosa && matches!(a.tipo, Tipo::Nota | Tipo::Hoja),
+                rosa: a.rosa && matches!(a.tipo, Tipo::Nota | Tipo::Hoja | Tipo::Confeti),
                 golpe: 0,
                 reloj,
                 lanzados: 0,
@@ -1487,6 +1616,8 @@ impl Paseo {
         let mut nuevas = Vec::new();
         // El portero no empieza hasta que se cierra su arena.
         let arena = self.cierre().is_some();
+        // La pista de Monsieur Loyal, si esta cerrada.
+        let (pista_loyal, muro) = (self.cierre(), self.muro);
         for e in &mut self.enemigos {
             e.golpe = e.golpe.saturating_sub(1);
             let edad = self.tick - e.nacio;
@@ -1898,6 +2029,197 @@ impl Paseo {
                         e.pos += e.vel * DT;
                     }
                 }
+                Tipo::Confeti => {
+                    // Hacia la izquierda a brincos, uno por tiempo: el galop.
+                    // Con la mecha prendida va a medio gas, y `gesto` es lo
+                    // que lleva quemado.
+                    let mecha = e.gesto > 0.0;
+                    let v = if mecha {
+                        VEL_CONFETI * 0.5
+                    } else {
+                        VEL_CONFETI
+                    };
+                    e.pos.x -= v * DT;
+                    let f = (edad % tiempo) as f32 / tiempo as f32;
+                    e.pos.y = e.base_y - BRINCO_CONFETI * sin(TAU * 0.5 * f);
+                    e.dir = -1.0;
+                    let d = objetivo - e.pos;
+                    if mecha || d.x.abs() < MECHA_CONFETI_X && d.y.abs() < 260.0 {
+                        e.gesto += 1.0 / MECHA_CONFETI as f32;
+                    }
+                    if e.gesto >= 1.0 - 1e-4 {
+                        // Revienta: papelillos en corona, y si es rosa, uno
+                        // rosa. Se va sin contar como caido (abajo).
+                        for k in 0..PAPELILLOS {
+                            let (s, c) = sin_cos(TAU * k as f32 / PAPELILLOS as f32);
+                            self.fugaces.push(Fugaz {
+                                clase: Clase::Papelillo,
+                                pos: e.pos,
+                                vel: Vec2::new(c, s) * VEL_PAPELILLO,
+                                ttl: VIDA_PAPELILLO,
+                                rosa: e.rosa && k == 0,
+                            });
+                        }
+                        e.gesto = 2.0;
+                    }
+                }
+                Tipo::Apache => {
+                    let dx = objetivo.x - e.pos.x;
+                    if e.reloj == 0 {
+                        // En guardia y de cara. En un tiempo, si te tiene a
+                        // tiro, se esfuma y sale por tu otro lado; si alli no
+                        // hay acera, por el suyo.
+                        if dx != 0.0 {
+                            e.dir = dx.signum();
+                        }
+                        if dx.abs() > ALCANCE_APACHE || !self.tick.is_multiple_of(tiempo) {
+                            continue;
+                        }
+                        let def = &self.def;
+                        let sale = [e.dir, -e.dir]
+                            .into_iter()
+                            .map(|lado| objetivo.x + lado * LADO_APACHE)
+                            .find(|&x| {
+                                x > muro + 20.0
+                                    && def.hay_suelo(x - 20.0)
+                                    && def.hay_suelo(x + 20.0)
+                            });
+                        let Some(x) = sale else { continue };
+                        self.fugaces.push(Fugaz {
+                            clase: Clase::Humo,
+                            pos: e.pos,
+                            vel: Vec2::ZERO,
+                            ttl: VIDA_HUMO,
+                            rosa: false,
+                        });
+                        e.pos = Vec2::new(x, def.altura(x) - e.tipo.alto());
+                        e.reloj = CICLO_APACHE;
+                        continue;
+                    }
+                    e.reloj -= 1;
+                    let r = e.reloj;
+                    e.gesto = 0.0;
+                    if r > GOLPE_APACHE + PLANTADO_APACHE || r <= PLANTADO_APACHE {
+                        // Esfumado (ver `presente`), o plantado tras el golpe.
+                        continue;
+                    }
+                    // Sale de cara a ti, amaga y tira el navajazo dando un
+                    // paso: la navaja sube y baja en lo que queda del tiempo.
+                    let g = GOLPE_APACHE + PLANTADO_APACHE - r;
+                    if g == 0 && dx != 0.0 {
+                        e.dir = dx.signum();
+                    }
+                    if g >= AMAGO_APACHE {
+                        let k = (g - AMAGO_APACHE) as f32 / (GOLPE_APACHE - AMAGO_APACHE) as f32;
+                        e.gesto = sin(TAU * 0.5 * k);
+                        let nx = e.pos.x + e.dir * ESTOCADA_APACHE * DT;
+                        if self.def.hay_suelo(nx + e.dir * e.tipo.radio()) {
+                            e.pos = Vec2::new(nx, self.def.altura(nx) - e.tipo.alto());
+                        }
+                    }
+                }
+                Tipo::Loyal => {
+                    let dx = objetivo.x - e.pos.x;
+                    if dx != 0.0 {
+                        e.dir = dx.signum();
+                    }
+                    // El numero no empieza hasta que se cierra la pista.
+                    if self.def.porteria.is_some() && pista_loyal.is_none() {
+                        continue;
+                    }
+                    let fase = e.fase();
+                    if e.reloj == 0 {
+                        // Lo que presenta ahora. En la primera fase, sin baston.
+                        while fase == 0 && e.numero() == Some(Numero::Baston) {
+                            e.lanzados += 1;
+                        }
+                    }
+                    let numero = NUMEROS[e.lanzados as usize % NUMEROS.len()];
+                    // Un tiempo de aviso (la chistera, el aro o el baston en
+                    // alto) y luego lo suelta, una o varias veces.
+                    let (r, aviso) = (e.reloj, tiempo as u32);
+                    let (veces, cada) = match numero {
+                        Numero::Palomas => (1 + u32::from(fase == 2), aviso),
+                        Numero::Aros if fase == 2 => (3, aviso / 2),
+                        Numero::Aros => (2 + u32::from(fase > 0), aviso),
+                        Numero::Baston => (1, aviso),
+                    };
+                    let ultimo = aviso + cada * (veces - 1);
+                    e.gesto = if r < aviso {
+                        r as f32 / aviso as f32
+                    } else {
+                        (e.gesto - 1.0 / 12.0).max(0.0)
+                    };
+                    let pies = e.pos.y + e.tipo.alto();
+                    if r >= aviso && r <= ultimo && (r - aviso).is_multiple_of(cada) {
+                        e.gesto = 1.0;
+                        match numero {
+                            Numero::Palomas => {
+                                // En abanico hacia ti; la del medio, rosa.
+                                let boca = e.pos + Vec2::new(e.dir * 6.0, -62.0);
+                                let hacia = (objetivo - boca).normalize_or(Vec2::new(e.dir, 0.0));
+                                let n = 3 + fase;
+                                for k in 0..n {
+                                    let (s, c) = sin_cos((k as f32 - (n - 1) as f32 * 0.5) * 0.24);
+                                    let v = Vec2::new(
+                                        hacia.x * c - hacia.y * s,
+                                        hacia.x * s + hacia.y * c,
+                                    );
+                                    self.fugaces.push(Fugaz {
+                                        clase: Clase::Paloma,
+                                        pos: boca,
+                                        vel: v * VEL_PALOMA,
+                                        ttl: VIDA_PALOMA,
+                                        rosa: k == n / 2,
+                                    });
+                                }
+                            }
+                            Numero::Aros => self.fugaces.push(Fugaz {
+                                clase: Clase::Aro,
+                                pos: Vec2::new(e.pos.x + e.dir * 26.0, pies - 18.0),
+                                vel: Vec2::new(e.dir * VEL_ARO, 0.0),
+                                ttl: VIDA_ARO,
+                                rosa: false,
+                            }),
+                            Numero::Baston => {
+                                // Al final, barre a los dos lados.
+                                let lados = if fase == 2 { 2 } else { 1 };
+                                for lado in [e.dir, -e.dir].into_iter().take(lados) {
+                                    self.fugaces.push(Fugaz {
+                                        clase: Clase::Barrido,
+                                        pos: Vec2::new(e.pos.x + lado * 34.0, pies - 12.0),
+                                        vel: Vec2::new(lado * VEL_BARRIDO, 0.0),
+                                        ttl: VIDA_BARRIDO,
+                                        rosa: false,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    // Por la pista: antes del baston, un brinco hacia ti; tras
+                    // el numero, de cerca se aparta y de lejos se acerca.
+                    let v = if numero == Numero::Baston && r < aviso && dx.abs() > 160.0 {
+                        220.0
+                    } else if r > ultimo && dx.abs() < CERCA_LOYAL {
+                        -120.0
+                    } else if r > ultimo && dx.abs() > LEJOS_LOYAL {
+                        80.0
+                    } else {
+                        0.0
+                    } * e.dir;
+                    let (izq, der) = pista_loyal
+                        .map_or((f32::MIN, f32::MAX), |a| (a + 60.0, a + VISTA_W - 60.0));
+                    let nx = (e.pos.x + v * DT).clamp(izq, der);
+                    if v != 0.0 && self.def.hay_suelo(nx + v.signum() * e.tipo.radio()) {
+                        e.pos.x = nx;
+                    }
+                    e.pos.y = self.def.altura(e.pos.x) - e.tipo.alto();
+                    e.reloj += 1;
+                    if e.reloj >= NUMERO_LOYAL[fase] {
+                        e.reloj = 0;
+                        e.lanzados += 1;
+                    }
+                }
             }
         }
         self.enemigos.extend(nuevas);
@@ -1909,6 +2231,9 @@ impl Paseo {
         // Y una hoja que llega a la acera se queda alli, que ya no es nada.
         self.enemigos
             .retain(|e| e.tipo != Tipo::Hoja || e.pos.y < def.altura(e.pos.x) - 8.0);
+        // Un confeti reventado es papelillos: se va sin contar como caido.
+        self.enemigos
+            .retain(|e| e.tipo != Tipo::Confeti || e.gesto < 2.0);
     }
 
     /// Lo fugaz se mueve, se transforma al tocar la acera y se apaga.
@@ -1963,6 +2288,27 @@ impl Paseo {
                 }
                 Clase::Burbuja => f.pos += f.vel * DT,
                 Clase::Mancha => {}
+                Clase::Paloma => f.pos += f.vel * DT,
+                Clase::Papelillo => {
+                    f.vel *= FRENO_PAPELILLO;
+                    f.vel.y += GRAVEDAD_PAPELILLO * DT;
+                    f.pos += f.vel * DT;
+                }
+                Clase::Aro | Clase::Barrido => {
+                    // A ras de acera como el volante; el aro, botando a
+                    // cada tiempo del galop (0,4 s).
+                    f.pos.x += f.vel.x * DT;
+                    let (alto, bote) = if f.clase == Clase::Aro {
+                        (18.0, 26.0 * sin(TAU * 1.25 * f.ttl).abs())
+                    } else {
+                        (12.0, 0.0)
+                    };
+                    match self.def.suelo_en(f.pos.x) {
+                        Some(y) => f.pos.y = y - alto - bote,
+                        None => f.ttl = 0.0,
+                    }
+                }
+                Clase::Humo => f.pos.y -= 30.0 * DT,
             }
             self.fugaces[i] = f;
         }
@@ -2001,10 +2347,15 @@ impl Paseo {
         for d in &mut self.disparos {
             // La serpentina se tuerce hacia el enemigo vivo mas cercano.
             if serpentina
-                && let Some(e) = self.enemigos.iter().filter(|e| e.vida > 0).min_by(|a, b| {
-                    let (da, db) = (a.pos.distance_squared(d.pos), b.pos.distance_squared(d.pos));
-                    da.total_cmp(&db)
-                })
+                && let Some(e) = self
+                    .enemigos
+                    .iter()
+                    .filter(|e| e.vida > 0 && e.presente())
+                    .min_by(|a, b| {
+                        let (da, db) =
+                            (a.pos.distance_squared(d.pos), b.pos.distance_squared(d.pos));
+                        da.total_cmp(&db)
+                    })
             {
                 d.vel = guiar(d.vel, e.pos - d.pos);
             }
@@ -2018,7 +2369,7 @@ impl Paseo {
             let d = self.disparos[i];
             let blanco = self.enemigos.iter_mut().find(|e| {
                 let r = e.tipo.radio() + DISPARO_RADIO;
-                e.vida > 0 && e.pos.distance_squared(d.pos) <= r * r
+                e.vida > 0 && e.presente() && e.pos.distance_squared(d.pos) <= r * r
             });
             if let Some(e) = blanco {
                 e.vida -= self.equipo.tiro.dano_calle();
@@ -2073,20 +2424,25 @@ impl Paseo {
         let fugaz = self
             .fugaces
             .iter()
-            .position(|f| self.toca(f.pos, f.clase.radio()));
+            .position(|f| f.clase != Clase::Humo && self.toca(f.pos, f.clase.radio()));
         // La pierna de la corista solo pega arriba: recogida es decorado.
         let patada = self.enemigos.iter().any(|e| {
             e.gesto > PIERNA_PELIGRO
                 && e.pierna()
                     .is_some_and(|(_, pie)| self.toca(pie, RADIO_BOTIN))
         });
+        let navaja = self
+            .enemigos
+            .iter()
+            .any(|e| e.navaja().is_some_and(|n| self.toca(n, RADIO_NAVAJA)));
         let tocado = plato.is_some()
             || fugaz.is_some()
             || patada
+            || navaja
             || self
                 .enemigos
                 .iter()
-                .any(|e| self.toca(e.pos, e.tipo.radio() * 0.8));
+                .any(|e| e.presente() && self.toca(e.pos, e.tipo.radio() * 0.8));
         if let Some(i) = plato {
             self.proyectiles.swap_remove(i);
         }
@@ -3531,19 +3887,300 @@ mod tests {
     }
 
     #[test]
+    fn el_confeti_brinca_y_revienta_en_papelillos_que_se_apagan() {
+        // A la altura del pecho y la jugadora quieta e invulnerable: viene a
+        // brincos, prende la mecha al tenerla cerca y revienta sin contar
+        // como caido. El rosa suelta un papelillo rosa.
+        for rosa in [false, true] {
+            let mut p = Paseo::new(
+                con(vec![Aparicion {
+                    y: SUELO_Y - 36.0,
+                    rosa,
+                    ..aparece(Tipo::Confeti, 600.0)
+                }]),
+                1,
+            );
+            let (mut alto, mut bajo) = (f32::MAX, f32::MIN);
+            let mut reventado = None;
+            for t in 0..400 {
+                p.jugadora.iframes = 10;
+                p.step(InputFrame::NONE);
+                assert_eq!(p.caidos, 0, "nadie lo ha tumbado");
+                match p.enemigos.first() {
+                    Some(e) => (alto, bajo) = (alto.min(e.pos.y), bajo.max(e.pos.y)),
+                    None => {
+                        reventado = Some(t);
+                        break;
+                    }
+                }
+            }
+            assert!(reventado.is_some(), "no ha reventado");
+            assert!(
+                bajo - alto > BRINCO_CONFETI * 0.9,
+                "no brinca: {alto} {bajo}"
+            );
+            let papelillos: Vec<&Fugaz> = p
+                .fugaces
+                .iter()
+                .filter(|f| f.clase == Clase::Papelillo)
+                .collect();
+            assert_eq!(papelillos.len(), PAPELILLOS);
+            assert_eq!(
+                papelillos.iter().filter(|f| f.rosa).count(),
+                usize::from(rosa)
+            );
+            assert!(papelillos.iter().all(|f| f.ttl < 2.0));
+            // Revienta antes de llegar: a la distancia de la mecha.
+            let x = papelillos[0].pos.x - p.jugadora.pos.x;
+            assert!(x > 100.0 && x < MECHA_CONFETI_X, "revienta en {x}");
+            correr(&mut p, 0, (VIDA_PAPELILLO / DT) as usize + 1);
+            assert!(p.fugaces.is_empty(), "los papelillos no se apagan");
+        }
+    }
+
+    #[test]
+    fn el_apache_se_esfuma_y_sale_a_tu_otro_lado() {
+        let mut def = con(vec![aparece(Tipo::Apache, 700.0)]);
+        def.salida = 400.0;
+        let mut p = Paseo::new(def, 1);
+        // En el primer tiempo ya la tiene a tiro: humareda donde estaba, y el
+        // a su izquierda, por el otro lado.
+        p.step(InputFrame::NONE);
+        let e = &p.enemigos[0];
+        assert!(!e.presente(), "tenia que esfumarse");
+        assert_eq!(e.pos.x, 400.0 - LADO_APACHE);
+        assert_eq!(p.fugaces[0].clase, Clase::Humo);
+        assert_eq!(p.fugaces[0].pos.x, 700.0);
+        // Esfumado no se le dispara, y la humareda no hace dano.
+        let pos = e.pos;
+        p.disparos.push(Disparo {
+            pos,
+            vel: Vec2::ZERO,
+            ttl: 0.5,
+        });
+        p.fugaces[0].pos = p.jugadora.pos;
+        p.step(InputFrame::NONE);
+        assert_eq!(
+            p.enemigos[0].vida,
+            Tipo::Apache.vida(),
+            "le han dado esfumado"
+        );
+        assert_eq!(p.vidas, VIDAS, "la humareda pega");
+        p.disparos.clear();
+        // Sale al compas siguiente, de cara a ella, y si no se mueve el
+        // navajazo le llega.
+        correr(&mut p, 0, OCULTO_APACHE as usize - 1);
+        let e = &p.enemigos[0];
+        assert!(e.presente() && e.dir == 1.0, "no ha salido de cara");
+        let mut dado = false;
+        for _ in 0..GOLPE_APACHE {
+            p.step(InputFrame::NONE);
+            dado |= p.events.player_died;
+        }
+        assert!(dado, "el navajazo no llega a quien se queda quieta");
+
+        // Y alejandose al ver la sombra, no.
+        let mut def = con(vec![aparece(Tipo::Apache, 700.0)]);
+        def.salida = 400.0;
+        let mut p = Paseo::new(def, 1);
+        p.step(InputFrame::NONE);
+        correr(&mut p, DERECHA, CICLO_APACHE as usize);
+        assert_eq!(p.vidas, VIDAS, "no se esquiva corriendo");
+    }
+
+    #[test]
+    fn la_tabla_del_molino_lleva_por_arriba_al_otro_lado() {
+        // Un vacio de 400 con el molino en medio, y la jugadora sobre la
+        // tabla de la izquierda, a ras de acera.
+        let mut def = calle();
+        def.suelo = vec![(0.0, 400.0), (840.0, 3200.0)];
+        def.plataformas = [0.0, 0.25, 0.5, 0.75]
+            .map(|fase| Plataforma {
+                x: 580.0,
+                y: SUELO_Y,
+                ancho: 80.0,
+                mueve: Some(Mueve::Gira {
+                    radio: 150.0,
+                    periodo: 480,
+                    fase,
+                }),
+            })
+            .to_vec();
+        def.salida = 470.0;
+        let mut p = Paseo::new(def, 1);
+        // Se la suelta un poco por encima, que la tabla ya esta subiendo.
+        p.jugadora.pos.y -= 6.0;
+        p.jugadora.on_ground = false;
+        correr(&mut p, 0, 8);
+        // Media vuelta sin tocar nada: sube, pasa por arriba y baja.
+        let mut cima = f32::MAX;
+        for _ in 8..240 {
+            p.step(InputFrame::NONE);
+            assert!(p.jugadora.on_ground, "se ha caido del aspa");
+            cima = cima.min(p.jugadora.pos.y + PIES);
+        }
+        assert!((cima - (SUELO_Y - 150.0)).abs() < 2.0, "cima {cima}");
+        assert!(
+            (p.jugadora.pos.x - 770.0).abs() < 3.0,
+            "x {}",
+            p.jugadora.pos.x
+        );
+        // Y de un salto, a la otra acera.
+        correr(&mut p, DERECHA | InputFrame::JUMP, 60);
+        assert!(p.jugadora.on_ground && p.jugadora.pos.x > 840.0);
+        assert_eq!(p.vidas, VIDAS);
+    }
+
+    /// Una pista con Monsieur Loyal: arena en 1000 y su ficha.
+    fn con_loyal() -> PaseoDef {
+        let mut def = con(vec![Aparicion {
+            portero: true,
+            ..aparece(Tipo::Loyal, 1700.0)
+        }]);
+        def.tiempo = 24;
+        def.porteria = Some(Porteria {
+            desde: 1000.0,
+            ficha: Some(0),
+        });
+        def.fichas = vec![(1500.0, 435.0)];
+        def.puerta = 2500.0;
+        def
+    }
+
+    /// Anda hasta que se cierra la pista, invulnerable.
+    fn hasta_la_pista(p: &mut Paseo) {
+        while p.cierre().is_none() {
+            p.jugadora.iframes = 5;
+            p.step(pulsar(DERECHA));
+            assert!(
+                !p.fugaces.iter().any(|f| f.clase == Clase::Paloma),
+                "empieza antes de cerrar"
+            );
+            assert!(p.tick < 600, "la pista no se cierra");
+        }
+    }
+
+    #[test]
+    fn monsieur_loyal_cambia_de_numeros_con_la_vida() {
+        // Quieta e invulnerable en la pista, una vuelta entera de numeros en
+        // cada fase: cuantas palomas por chistera, y si saca el baston.
+        for (fase, vida) in [(0, 400), (1, 200), (2, 100)] {
+            let mut p = Paseo::new(con_loyal(), 1);
+            hasta_la_pista(&mut p);
+            p.enemigos[0].vida = vida;
+            assert_eq!(p.enemigos[0].fase(), fase);
+            let (mut barridos, mut aros, mut chisteras) = (0, 0, Vec::new());
+            for _ in 0..(6 * NUMERO_LOYAL[fase]) {
+                p.jugadora.iframes = 5;
+                p.step(InputFrame::NONE);
+                let recien = |clase: Clase, vida: f32| {
+                    p.fugaces
+                        .iter()
+                        .filter(|f| f.clase == clase && (f.ttl - (vida - DT)).abs() < 1e-4)
+                        .collect::<Vec<_>>()
+                };
+                let palomas = recien(Clase::Paloma, VIDA_PALOMA);
+                if !palomas.is_empty() {
+                    assert_eq!(palomas.iter().filter(|f| f.rosa).count(), 1, "una rosa");
+                    chisteras.push(palomas.len());
+                }
+                aros += recien(Clase::Aro, VIDA_ARO).len();
+                barridos += recien(Clase::Barrido, VIDA_BARRIDO).len();
+                assert!(p.fugaces.iter().all(|f| f.ttl < 2.0), "nada vive 2 s");
+            }
+            assert!(!chisteras.is_empty() && aros > 0, "fase {fase}");
+            assert!(chisteras.iter().all(|&n| n == 3 + fase), "{chisteras:?}");
+            assert_eq!(barridos > 0, fase > 0, "el baston, solo tras la primera");
+        }
+    }
+
+    #[test]
+    fn tumbar_a_monsieur_loyal_abre_la_pista() {
+        // Plantada en la pista y disparando de frente con la aguja: cae en
+        // el tiempo de un portero, y al caer se abre la pista y sale la ficha.
+        let mut p = Paseo::new(con_loyal(), 1);
+        hasta_la_pista(&mut p);
+        assert_eq!(p.portero().map(|e| e.vida_max()), Some(400));
+        let desde = p.tick;
+        while p.portero_vivo() {
+            p.jugadora.iframes = 5;
+            p.step(pulsar(DISPARA));
+            let e = p.portero();
+            assert!(
+                e.is_none_or(|e| (1060.0..=1900.0).contains(&e.pos.x)),
+                "se sale"
+            );
+            assert!(p.tick - desde < 60 * 45, "no cae");
+        }
+        let segundos = (p.tick - desde) as f32 * DT;
+        assert!((25.0..40.0).contains(&segundos), "dura {segundos} s");
+        assert!(p.cierre().is_none() && p.ficha_visible(0));
+        correr(&mut p, DERECHA, 300);
+        assert!(p.completado.is_some());
+    }
+
+    #[test]
     fn montmartre_se_puede_subir_entera() {
         // El bot de Viena en la cuesta: corre, dispara y salta ante cada foso.
-        // Las escaleras se suben andando, asi que no hace falta mas. Prueba
-        // que ningun foso de la subida es mas ancho que un salto.
+        // Las escaleras se suben andando. Dos cosas mas: ante el vacio del
+        // molino espera a que asome una tabla, salta a ella, se deja llevar y
+        // salta a la otra acera; y en la pista se vuelve hacia Monsieur Loyal
+        // y le dispara de frente hasta tumbarlo.
         let mut p = Paseo::new(montmartre(), 3);
-        let mut salto = 0;
-        for _ in 0..(60 * 60) {
+        let (mut salto, mut tabla) = (0, None);
+        for _ in 0..(60 * 150) {
             p.jugadora.iframes = 5;
-            let x = p.jugadora.pos.x;
-            if p.jugadora.on_ground && !p.def.hay_suelo(x + 24.0) {
+            let j = &p.jugadora;
+            let (x, pies) = (j.pos.x, j.pos.y + PIES);
+            let en_tabla = j.on_ground
+                && p.sobre
+                    .is_some_and(|i| p.def.plataformas[i].mueve.is_some());
+            // Un vacio que no se salta: el siguiente tramo, lejos.
+            let vacio = !p.def.hay_suelo(x + 24.0)
+                && p.def
+                    .suelo
+                    .iter()
+                    .find(|&&(a, _)| a > x)
+                    .is_some_and(|&(a, _)| a - x > 250.0);
+            let mut lado = DERECHA;
+            if j.on_ground {
+                tabla = None;
+            }
+            if en_tabla {
+                // Quieta en la tabla hasta tener la otra acera a tiro.
+                lado = 0;
+                let x2 = x + 120.0;
+                if p.def.hay_suelo(x2) && (p.def.altura(x2) - pies).abs() < 40.0 {
+                    (salto, lado) = (22, DERECHA);
+                }
+            } else if j.on_ground && vacio {
+                // Al borde, hasta que una tabla suba por delante a ras de pie.
+                lado = 0;
+                tabla = p.def.plataformas.iter().position(|pl| {
+                    pl.mueve.is_some()
+                        && pl.x > x + 30.0
+                        && pl.x < x + 110.0
+                        && (pl.y - pies).abs() < 30.0
+                });
+                if tabla.is_some() {
+                    (salto, lado) = (22, DERECHA);
+                }
+            } else if j.on_ground && !p.def.hay_suelo(x + 24.0) {
                 salto = 20;
             }
-            let bits = DERECHA | DISPARA | if salto > 0 { InputFrame::JUMP } else { 0 };
+            if let Some(pl) = tabla.map(|i| p.def.plataformas[i]) {
+                // En el aire hacia la tabla: a su centro, no mas alla.
+                let dx = pl.x + pl.ancho * 0.5 - x;
+                lado = if dx > 6.0 { DERECHA } else { 0 };
+            }
+            if let Some(e) = p.portero().filter(|_| p.cierre().is_some()) {
+                lado = if e.pos.x < x {
+                    InputFrame::LEFT
+                } else {
+                    DERECHA
+                };
+            }
+            let bits = lado | DISPARA | if salto > 0 { InputFrame::JUMP } else { 0 };
             salto = if salto > 0 { salto - 1 } else { 0 };
             p.step(pulsar(bits));
             if p.completado.is_some() {
@@ -3553,6 +4190,10 @@ mod tests {
         assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
         assert_eq!(p.vidas, VIDAS, "no ha caido a ningun foso");
         assert!(p.jugadora.pos.y < SUELO_Y - 400.0, "no ha llegado arriba");
+        assert!(
+            !p.portero_vivo() && p.ficha_visible(5),
+            "Loyal sigue en pie"
+        );
     }
 
     // --- Las fichas y el equipo ---
@@ -3572,7 +4213,7 @@ mod tests {
         let mut total = 0;
         for def in PaseoDef::de_serie() {
             let n = def.fichas.len();
-            assert!((3..=5).contains(&n), "{}: {n} fichas", def.nombre);
+            assert!((3..=6).contains(&n), "{}: {n} fichas", def.nombre);
             total += n;
             for &(x, y) in &def.fichas {
                 assert!(
@@ -3588,7 +4229,11 @@ mod tests {
                 );
             }
         }
-        assert!(total >= 16, "los precios de la modista cuentan con 16");
+        // Las de los porteros van aparte: sobran para la modista, no faltan.
+        assert!(
+            total >= 16,
+            "los precios de la modista cuentan con 16: {total}"
+        );
     }
 
     #[test]

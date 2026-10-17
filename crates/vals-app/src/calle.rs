@@ -864,6 +864,9 @@ fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tiempo: u32, tintas: (Col
         Tipo::Compadrito => calle_arrabal::compadrito(e, l, t, tintas, &tinte),
         Tipo::Florista => calle_arrabal::florista(e, l, tintas, &tinte),
         Tipo::Rosa => calle_arrabal::rosa(e, l, edad, t, tintas.0, &tinte),
+        Tipo::Confeti => calle_montmartre::confeti(e, l, t, &tinte),
+        Tipo::Apache => calle_montmartre::apache(e, l, t, tintas, &tinte),
+        Tipo::Loyal => calle_montmartre::loyal(e, l, t, tintas, &tinte),
     });
 }
 

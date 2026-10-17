@@ -22,8 +22,11 @@
 //! una corista que viene a por ti.
 
 use macroquad::prelude::*;
-use vals_core::math::{PI, sin_cos};
-use vals_core::paseo::{Clase, Enemigo, Escalera, Paseo, PaseoDef, VISTA_H, VISTA_W};
+use vals_core::math::{PI, atan2, sin_cos};
+use vals_core::paseo::{
+    CICLO_APACHE, Clase, Enemigo, Escalera, GOLPE_APACHE, Mueve, Numero, OCULTO_APACHE,
+    PLANTADO_APACHE, Paseo, PaseoDef, VISTA_H, VISTA_W,
+};
 use vals_core::rng::Pcg32;
 
 use crate::calle::{self, HUESO, ROSA, con_tinta};
@@ -677,8 +680,143 @@ pub fn calle(p: &Paseo, l: &Layout, alpha: f32, t: f32, pulso: f32) {
     let fondo = calle::camara_y(p, alpha) + VISTA_H + 10.0;
     suelo(p, l, cam, fondo, t);
     barandillas(p, l, cam, pulso);
+    galette(p, l, fondo, pulso);
     plataformas(p, l);
     molino_rojo(p, l, alpha, t, pulso);
+    pista(p, l, fondo, pulso);
+}
+
+/// El molino de la Galette, el numero de en medio: la torre de piedra que
+/// sube del vacio, la caseta de madera y las cuatro aspas girando, con una
+/// tabla en cada punta. Las tablas son las plataformas que giran (`Gira`), y
+/// las aspas se pintan con su mismo angulo: se ve lo que se pisa.
+fn galette(p: &Paseo, l: &Layout, fondo: f32, pulso: f32) {
+    let mut ejes: Vec<(f32, f32)> = Vec::new();
+    for pl in &p.def.plataformas {
+        let Some(m @ Mueve::Gira { .. }) = pl.mueve else {
+            continue;
+        };
+        let d = m.desvio(p.tick);
+        let eje = (pl.x + pl.ancho * 0.5 - d.x, pl.y - d.y);
+        if ejes
+            .iter()
+            .any(|e| (e.0 - eje.0).abs() + (e.1 - eje.1).abs() < 1.0)
+        {
+            continue;
+        }
+        ejes.push(eje);
+        let (x, y) = eje;
+        // La torre, ancha abajo, de sillares oscuros.
+        tri(
+            l,
+            (x - 34.0, y + 30.0),
+            (x - 58.0, fondo),
+            (x + 58.0, fondo),
+            PIEDRA,
+        );
+        tri(
+            l,
+            (x - 34.0, y + 30.0),
+            (x + 34.0, y + 30.0),
+            (x + 58.0, fondo),
+            PIEDRA,
+        );
+        linea(l, (x - 34.0, y + 30.0), (x - 58.0, fondo), 3.0, TINTA);
+        linea(l, (x + 34.0, y + 30.0), (x + 58.0, fondo), 3.0, TINTA);
+        let mut fy = y + 52.0;
+        while fy < fondo {
+            let a = 34.0 + 24.0 * (fy - y - 30.0) / (fondo - y - 30.0).max(1.0);
+            linea(l, (x - a, fy), (x + a, fy), 1.2, JUNTA);
+            fy += 22.0;
+        }
+        // La caseta de madera con su tejado a dos aguas y su puerta encendida.
+        rect(l, x - 40.0, y - 26.0, 80.0, 58.0, MADERA);
+        let mut px = x - 30.0;
+        while px < x + 40.0 {
+            linea(l, (px, y - 26.0), (px, y + 32.0), 1.0, fade(TINTA, 0.4));
+            px += 10.0;
+        }
+        draw_rect(l, x - 40.0, y - 26.0, 80.0, 58.0, 2.5);
+        tri(
+            l,
+            (x - 48.0, y - 24.0),
+            (x, y - 64.0),
+            (x + 48.0, y - 24.0),
+            ROJO_OSCURO,
+        );
+        linea(l, (x - 48.0, y - 24.0), (x, y - 64.0), 3.0, TINTA);
+        linea(l, (x + 48.0, y - 24.0), (x, y - 64.0), 3.0, TINTA);
+        rect(
+            l,
+            x - 9.0,
+            y + 6.0,
+            18.0,
+            26.0,
+            fade(VENTANA, 0.8 + 0.2 * pulso),
+        );
+        draw_rect(l, x - 9.0, y + 6.0, 18.0, 26.0, 2.0);
+        // El letrero del baile, que la Galette era eso: un bal.
+        rect(l, x - 36.0, y + 34.0, 72.0, 16.0, CREMA);
+        draw_rect(l, x - 36.0, y + 34.0, 72.0, 16.0, 2.0);
+        let s = l.to_screen(x, y + 46.0);
+        fuentes::centrado("BAL", s.x, s.y, l.len(13.0), Cara::Titulo, ROJO);
+        // Las aspas, con el angulo de la primera tabla.
+        let radio = d.length();
+        aspas(l, (x, y), radio, atan2(d.y, d.x), CREMA, 2.5);
+    }
+    // Las tablas de las puntas: madera clara con su canto, y una bombilla
+    // colgando debajo, que en la noche es lo que se sigue con la vista.
+    for pl in p.def.plataformas.iter().filter(|pl| pl.mueve.is_some()) {
+        let (x, y, w) = (pl.x, pl.y, pl.ancho);
+        rect(l, x - 2.0, y - 2.0, w + 4.0, 13.0, TINTA);
+        rect(l, x, y, w, 9.0, PELDANO);
+        linea(l, (x, y), (x + w, y), 3.0, TINTA);
+        for bx in [x + 10.0, x + w - 10.0] {
+            linea(l, (bx, y + 11.0), (bx, y + 18.0), 1.5, TINTA);
+            circulo(l, bx, y + 21.0, 3.5, fade(LUZ, 0.7 + 0.3 * pulso));
+        }
+    }
+}
+
+/// La pista de Monsieur Loyal mientras esta cerrada: un cordon de terciopelo
+/// entre postes de laton a cada lado, que dice "de aqui no se sale", y el
+/// foco encima de el.
+fn pista(p: &Paseo, l: &Layout, fondo: f32, pulso: f32) {
+    let Some(a) = p.cierre() else {
+        return;
+    };
+    if let Some(e) = p.portero() {
+        let pies = p.def.altura(e.pos.x);
+        tri(
+            l,
+            (e.pos.x - 20.0, fondo - VISTA_H - 10.0),
+            (e.pos.x - 90.0, pies),
+            (e.pos.x + 90.0, pies),
+            fade(LUZ, 0.07 + 0.04 * pulso),
+        );
+        let s = l.to_screen(e.pos.x, pies);
+        draw_ellipse(s.x, s.y, l.len(80.0), l.len(9.0), 0.0, fade(LUZ, 0.12));
+    }
+    for x in [a + 14.0, a + VISTA_W - 14.0] {
+        let s = p.def.altura(x);
+        let hacia = if x < a + VISTA_W * 0.5 { 1.0 } else { -1.0 };
+        rect(l, x - 3.0, s - 50.0, 6.0, 50.0, ORO);
+        draw_rect(l, x - 3.0, s - 50.0, 6.0, 50.0, 1.5);
+        circulo(l, x, s - 52.0, 5.0, ORO);
+        rect(l, x - 9.0, s - 5.0, 18.0, 5.0, TINTA);
+        // El cordon, colgando en curva hasta fuera de la vista.
+        let mut antes = (x, s - 46.0);
+        for i in 1..=6 {
+            let f = i as f32 / 6.0;
+            let punto = (
+                x + hacia * 60.0 * f,
+                s - 46.0 + 14.0 * (1.0 - (2.0 * f - 1.0).powi(2)),
+            );
+            linea(l, antes, punto, 5.0, TINTA);
+            linea(l, antes, punto, 3.0, ROJO);
+            antes = punto;
+        }
+    }
 }
 
 /// Cuantos peldanos tiene una escalera: de unos 14 de alto cada uno.
@@ -889,7 +1027,8 @@ fn barandillas(p: &Paseo, l: &Layout, cam: f32, pulso: f32) {
 /// un cartel se lee de lejos.
 fn plataformas(p: &Paseo, l: &Layout) {
     let def = &p.def;
-    for pl in &def.plataformas {
+    // Las que giran son del molino (`galette`).
+    for pl in def.plataformas.iter().filter(|pl| pl.mueve.is_none()) {
         let (x, y, w) = (pl.x, pl.y, pl.ancho);
         let cx = x + w * 0.5;
         let debajo = def.suelo_en(cx);
@@ -1473,11 +1612,407 @@ pub fn pintor(e: &Enemigo, l: &Layout, (rosa, _): (Color, Color), tinte: &dyn Fn
     );
 }
 
+/// El anillo que late de lo que se parria.
+fn anillo_rosa(l: &Layout, x: f32, y: f32, r: f32, t: f32, a: f32) {
+    let k = 0.5 + 0.5 * (t * 0.2).sin();
+    let s = l.to_screen(x, y);
+    draw_circle_lines(
+        s.x,
+        s.y,
+        l.len(r + 4.0 * k),
+        2.0,
+        fade(WHITE, (0.4 + 0.4 * k) * a),
+    );
+}
+
+/// Un cucurucho de confeti a rayas, con la boca llena de papelillos. Con la
+/// mecha prendida tiembla y le chispea la punta: es el aviso de que revienta.
+pub fn confeti(e: &Enemigo, l: &Layout, t: f32, tinte: &dyn Fn(Color) -> Color) {
+    let mecha = e.gesto.min(1.0);
+    let temblor = (t * 2.1).sin() * 2.5 * mecha;
+    let (x, y) = (e.pos.x + temblor, e.pos.y);
+    let papel = tinte(if e.rosa { ROSA } else { CREMA });
+    let punta = (x - 14.0, y + 12.0);
+    let (b0, b1) = ((x + 1.0, y - 15.0), (x + 15.0, y - 1.0));
+    con_tinta(|g, es_tinta| {
+        let c = if es_tinta { TINTA } else { papel };
+        tri(
+            l,
+            (punta.0 - g, punta.1 + g),
+            (b0.0 - g, b0.1 - g),
+            (b1.0 + g, b1.1 + g),
+            c,
+        );
+        circulo(l, x + 8.0, y - 8.0, 9.0 + g, c);
+    });
+    // Las rayas del papel y los papelillos asomando por la boca.
+    for f in [0.35, 0.65] {
+        let a = (
+            punta.0 + (b0.0 - punta.0) * f,
+            punta.1 + (b0.1 - punta.1) * f,
+        );
+        let b = (
+            punta.0 + (b1.0 - punta.0) * f,
+            punta.1 + (b1.1 - punta.1) * f,
+        );
+        linea(l, a, b, 2.5, tinte(ROJO));
+    }
+    for (i, (dx, dy)) in [(-3.0, -3.0), (4.0, -6.0), (2.0, 2.0), (-1.0, -10.0)]
+        .into_iter()
+        .enumerate()
+    {
+        rect(l, x + 7.0 + dx, y - 9.0 + dy, 4.0, 4.0, PINTURAS[i % 3]);
+    }
+    // La mecha, en la punta, con su chispa si esta prendida.
+    let fin = (punta.0 - 7.0, punta.1 + 5.0 + (t * 0.3).sin() * 2.0);
+    linea(l, punta, fin, 2.0, TINTA);
+    if mecha > 0.0 {
+        circulo(l, fin.0, fin.1, 4.0 + 3.0 * mecha, fade(LUZ, 0.5));
+        circulo(l, fin.0, fin.1, 2.5, AMARILLO);
+    }
+    if e.rosa {
+        anillo_rosa(l, x, y - 2.0, 20.0, t, 1.0);
+    }
+}
+
+/// Un apache de la danse apache: gorra de visera, marinera a rayas, panuelo
+/// rojo al cuello y la navaja. Esfumado, solo se ve su sombra en la acera,
+/// creciendo donde va a salir: eso es el aviso, y dura un compas.
+pub fn apache(
+    e: &Enemigo,
+    l: &Layout,
+    t: f32,
+    (_, granate): (Color, Color),
+    tinte: &dyn Fn(Color) -> Color,
+) {
+    let (x, pies, d) = (e.pos.x, e.pos.y + 38.0, e.dir);
+    if !e.presente() {
+        // De 0 a 1 mientras dura el esfumado.
+        let k = (CICLO_APACHE - e.reloj) as f32 / OCULTO_APACHE as f32;
+        let s = l.to_screen(x, pies - 2.0);
+        draw_ellipse(
+            s.x,
+            s.y,
+            l.len(8.0 + 18.0 * k),
+            l.len(3.0 + 4.0 * k),
+            0.0,
+            fade(TINTA, 0.25 + 0.5 * k),
+        );
+        // El canto claro de la sombra: sobre la acera oscura, la tinta sola
+        // no se ve, y este es el aviso del apache.
+        draw_ellipse_lines(
+            s.x,
+            s.y,
+            l.len(8.0 + 18.0 * k),
+            l.len(3.0 + 4.0 * k),
+            0.0,
+            l.len(2.0),
+            fade(HUESO, 0.35 + 0.55 * k),
+        );
+        // Polvo que se arremolina, y al final la silueta que ya se adivina.
+        for i in 0..6 {
+            let a = t * 0.15 + i as f32 * 1.05;
+            let (sn, cs) = sin_cos(a);
+            let r = 26.0 * (1.0 - k) + 8.0;
+            circulo(
+                l,
+                x + cs * r,
+                pies - 20.0 - sn * r * 0.6,
+                3.0 + 2.0 * k,
+                fade(HUESO, 0.25 + 0.5 * k),
+            );
+        }
+        if k > 0.6 {
+            let a = (k - 0.6) / 0.4 * 0.5;
+            rect(l, x - 9.0, pies - 64.0, 18.0, 64.0, fade(TINTA, a));
+            circulo(l, x, pies - 74.0, 9.0, fade(TINTA, a));
+        }
+        return;
+    }
+    // En el navajazo se echa hacia delante; recien salido, se agacha.
+    let g = GOLPE_APACHE + PLANTADO_APACHE - e.reloj.min(GOLPE_APACHE + PLANTADO_APACHE);
+    let agachado = if e.reloj > PLANTADO_APACHE && g < 8 {
+        6.0
+    } else {
+        0.0
+    };
+    let lean = d * 7.0 * e.gesto;
+    let (hx, hy) = (x + lean, pies - 74.0 + agachado);
+    let mano = if e.gesto > 0.0 {
+        (x + d * (18.0 + 34.0 * e.gesto), pies - 46.0)
+    } else {
+        // Plantado: la navaja abajo, al costado.
+        (x + d * 14.0, pies - 34.0)
+    };
+    let (raya, blanco, piel, pantalon) = (tinte(MORRIS), tinte(HUESO), tinte(PIEL), tinte(MEDIA));
+    con_tinta(|g, es_tinta| {
+        let c = |col: Color| if es_tinta { TINTA } else { col };
+        // Las piernas abiertas en guardia.
+        linea(
+            l,
+            (x - 4.0, pies - 30.0),
+            (x - d * 9.0, pies),
+            6.5 + 2.0 * g,
+            c(pantalon),
+        );
+        linea(
+            l,
+            (x + 4.0, pies - 30.0),
+            (x + d * 10.0, pies),
+            6.5 + 2.0 * g,
+            c(pantalon),
+        );
+        // La marinera.
+        tri(
+            l,
+            (hx - 11.0 - g, pies - 64.0 + agachado - g),
+            (hx + 11.0 + g, pies - 64.0 + agachado - g),
+            (x + 10.0 + g, pies - 28.0 + g),
+            c(blanco),
+        );
+        tri(
+            l,
+            (hx - 11.0 - g, pies - 64.0 + agachado - g),
+            (x + 10.0 + g, pies - 28.0 + g),
+            (x - 10.0 - g, pies - 28.0 + g),
+            c(blanco),
+        );
+        // Los brazos: el de atras en jarras, el de delante con la navaja.
+        linea(
+            l,
+            (hx - d * 8.0, pies - 58.0 + agachado),
+            (x - d * 16.0, pies - 42.0),
+            4.0 + 2.0 * g,
+            c(blanco),
+        );
+        linea(
+            l,
+            (hx + d * 8.0, pies - 58.0 + agachado),
+            mano,
+            4.0 + 2.0 * g,
+            c(blanco),
+        );
+        circulo(l, hx, hy, 8.0 + g, c(piel));
+    });
+    // Las rayas de la marinera, el panuelo, la gorra y la navaja.
+    for k in 0..4 {
+        let f = (k as f32 + 0.5) / 4.0;
+        let yy = pies - 64.0 + agachado + (36.0 - agachado) * f;
+        let ancho = 10.0 + 0.5 * f;
+        let cx = hx + (x - hx) * f;
+        linea(l, (cx - ancho, yy), (cx + ancho, yy), 2.5, raya);
+    }
+    tri(
+        l,
+        (hx - 7.0, pies - 66.0 + agachado),
+        (hx + 7.0, pies - 66.0 + agachado),
+        (hx, pies - 58.0 + agachado),
+        tinte(ROJO),
+    );
+    let ondea = (t * 0.4).sin() * 3.0;
+    tri(
+        l,
+        (hx - d * 4.0, pies - 65.0 + agachado),
+        (hx - d * 16.0, pies - 60.0 + agachado + ondea),
+        (hx - d * 12.0, pies - 54.0 + agachado + ondea),
+        tinte(ROJO),
+    );
+    let gorra = l.to_screen(hx - d * 1.0, hy - 6.0);
+    draw_ellipse(gorra.x, gorra.y, l.len(10.0), l.len(5.0), 0.0, TINTA);
+    draw_ellipse(
+        gorra.x,
+        gorra.y,
+        l.len(8.5),
+        l.len(3.6),
+        0.0,
+        tinte(granate),
+    );
+    linea(l, (hx, hy - 4.0), (hx + d * 13.0, hy - 2.0), 3.0, TINTA);
+    // Ojo, y la colilla en la boca.
+    circulo(l, hx + d * 4.0, hy - 1.0, 1.4, TINTA);
+    linea(
+        l,
+        (hx + d * 6.0, hy + 4.0),
+        (hx + d * 12.0, hy + 5.0),
+        1.8,
+        HUESO,
+    );
+    let filo = (mano.0 + d * 13.0, mano.1 - 3.0);
+    linea(l, mano, filo, 3.5, TINTA);
+    linea(l, mano, filo, 1.6, fade(WHITE, 0.9));
+    circulo(l, mano.0, mano.1, 3.5, piel);
+    if e.gesto > 0.5 {
+        // El brillo del filo, en el momento en que pega.
+        circulo(l, filo.0, filo.1, 5.0 * e.gesto, fade(LUZ, 0.5));
+    }
+}
+
+/// Monsieur Loyal, el maestro de ceremonias: frac rojo con alamares de oro,
+/// calzon blanco, botas de montar, bigote de puntas y la chistera. Cada numero
+/// se anuncia en un tiempo con su gesto: la chistera en alto (palomas), el aro
+/// echado atras (aros) o el baston por encima de la cabeza (baston).
+pub fn loyal(
+    e: &Enemigo,
+    l: &Layout,
+    t: f32,
+    (rosa, _): (Color, Color),
+    tinte: &dyn Fn(Color) -> Color,
+) {
+    let (x, pies, d) = (e.pos.x, e.pos.y + 52.0, e.dir);
+    let numero = e.numero().unwrap_or(Numero::Palomas);
+    let k = e.gesto;
+    // Respira con el galop: el pecho sube y baja un poco.
+    let pecho = (t * PI / 24.0).sin().abs() * 2.0;
+    let (frac, calzon, bota, piel, guante) = (
+        tinte(ROJO),
+        tinte(CREMA),
+        tinte(MEDIA),
+        tinte(PIEL),
+        tinte(HUESO),
+    );
+    let hombro = (x + d * 10.0, pies - 92.0 - pecho);
+    let cabeza = (x + d * 2.0, pies - 108.0 - pecho);
+    // Donde va la mano de delante segun el numero.
+    let mano = match numero {
+        Numero::Palomas => (x + d * 16.0, pies - 96.0 - 34.0 * k),
+        Numero::Aros => (x - d * (6.0 + 26.0 * k), pies - 70.0 - 10.0 * k),
+        Numero::Baston => (x - d * (4.0 + 10.0 * k), pies - 96.0 - 40.0 * k),
+    };
+    let mano = if k == 0.0 {
+        (x + d * 22.0, pies - 62.0)
+    } else {
+        mano
+    };
+    con_tinta(|g, es_tinta| {
+        let c = |col: Color| if es_tinta { TINTA } else { col };
+        // Las botas y el calzon.
+        for lado in [-1.0, 1.0] {
+            let px = x + lado * 7.0;
+            linea(
+                l,
+                (px, pies - 56.0),
+                (px + lado * 2.0, pies - 30.0),
+                9.0 + 2.0 * g,
+                c(calzon),
+            );
+            linea(
+                l,
+                (px + lado * 2.0, pies - 34.0),
+                (px + lado * 2.0, pies - 2.0),
+                9.0 + 2.0 * g,
+                c(bota),
+            );
+            let pb = l.to_screen(px + lado * 2.0 + d * 4.0, pies - 2.0);
+            draw_ellipse(pb.x, pb.y, l.len(8.0 + g), l.len(4.0 + g), 0.0, c(bota));
+        }
+        // Los faldones del frac, por detras, y el cuerpo.
+        tri(
+            l,
+            (x - d * 4.0, pies - 64.0),
+            (x - d * 22.0 - d * g, pies - 30.0 + g),
+            (x - d * 8.0, pies - 34.0 + g),
+            c(frac),
+        );
+        rect(
+            l,
+            x - 14.0 - g,
+            pies - 98.0 - pecho - g,
+            28.0 + 2.0 * g,
+            40.0 + pecho + g,
+            c(frac),
+        );
+        // El brazo de atras, en jarras, y el de delante haciendo el numero.
+        linea(
+            l,
+            (x - d * 10.0, pies - 90.0 - pecho),
+            (x - d * 20.0, pies - 70.0),
+            6.0 + 2.0 * g,
+            c(frac),
+        );
+        linea(l, hombro, mano, 6.0 + 2.0 * g, c(frac));
+        circulo(l, mano.0, mano.1, 4.5 + g, c(guante));
+        circulo(l, cabeza.0, cabeza.1, 10.0 + g, c(piel));
+    });
+    // La pechera, la pajarita y los alamares de oro.
+    tri(
+        l,
+        (x - 5.0, pies - 98.0 - pecho),
+        (x + 5.0, pies - 98.0 - pecho),
+        (x, pies - 78.0),
+        tinte(HUESO),
+    );
+    tri(
+        l,
+        (x - 5.0, pies - 98.0 - pecho),
+        (x, pies - 95.0 - pecho),
+        (x - 5.0, pies - 92.0 - pecho),
+        TINTA,
+    );
+    tri(
+        l,
+        (x + 5.0, pies - 98.0 - pecho),
+        (x, pies - 95.0 - pecho),
+        (x + 5.0, pies - 92.0 - pecho),
+        TINTA,
+    );
+    for i in 0..4 {
+        let yy = pies - 88.0 + i as f32 * 7.0;
+        linea(l, (x - 12.0, yy), (x - 5.0, yy), 2.0, ORO);
+        linea(l, (x + 5.0, yy), (x + 12.0, yy), 2.0, ORO);
+    }
+    rect(l, x - 14.0, pies - 62.0, 28.0, 4.0, TINTA);
+    // El bigote de puntas retorcidas y el ojo.
+    let (cx, cy) = cabeza;
+    for lado in [-1.0, 1.0] {
+        let a = (cx + d * 5.0, cy + 4.0);
+        let b = (cx + d * 5.0 + lado * 9.0, cy + 2.0);
+        linea(l, a, b, 3.5, TINTA);
+        circulo(l, b.0 + lado * 1.5, b.1 - 2.0, 2.2, TINTA);
+    }
+    circulo(l, cx + d * 5.0, cy - 3.0, 1.6, TINTA);
+    // La chistera: en la cabeza, o en la mano en alto para las palomas.
+    let (sx, sy, inclina) = if numero == Numero::Palomas && k > 0.0 {
+        (mano.0, mano.1 - 6.0, d * 0.5 * k)
+    } else {
+        (cx - d * 1.0, cy - 9.0, 0.0)
+    };
+    let alto = 24.0;
+    let copa = |dy: f32| (sx + inclina * dy, sy - dy);
+    let (b, tope) = (copa(0.0), copa(alto));
+    linea(l, b, tope, 19.0, TINTA);
+    linea(l, b, tope, 15.0, tinte(MEDIA));
+    linea(l, copa(3.0), copa(7.0), 15.0, tinte(rosa));
+    linea(l, (b.0 - 14.0, b.1), (b.0 + 14.0, b.1), 4.0, TINTA);
+    if numero == Numero::Palomas && k > 0.5 {
+        // Asoma la paloma.
+        circulo(l, b.0, b.1 + 6.0, 6.0, TINTA);
+        circulo(l, b.0, b.1 + 6.0, 4.5, HUESO);
+    }
+    // Lo que lleva en la mano: el aro echado atras, o el baston en alto. Si
+    // no, el baston va en la otra mano, apoyado en la acera.
+    if numero == Numero::Aros && k > 0.0 {
+        let s = l.to_screen(mano.0, mano.1);
+        draw_circle_lines(s.x, s.y, l.len(17.0), l.len(5.0), TINTA);
+        draw_circle_lines(s.x, s.y, l.len(17.0), l.len(2.5), ORO);
+    }
+    let (puno, punta) = if numero == Numero::Baston && k > 0.0 {
+        (mano, (mano.0 - d * 40.0, mano.1 - 26.0 * k))
+    } else {
+        ((x - d * 20.0, pies - 70.0), (x - d * 26.0, pies))
+    };
+    linea(l, puno, punta, 4.5, TINTA);
+    linea(l, puno, punta, 2.0, tinte(MADERA));
+    circulo(l, puno.0, puno.1 - 3.0, 4.0, ORO);
+    if numero == Numero::Baston && k > 0.7 {
+        circulo(l, punta.0, punta.1, 6.0 * k, fade(LUZ, 0.5));
+    }
+}
+
 /// Lo fugaz del cancan: volantes, corchos, burbujas y pintura. Todo con su
 /// canto de tinta, y lo que se va apagando se desvanece en sus ultimas decimas:
 /// que se vea que se acaba es lo que deja fiarse de que se acaba.
 pub fn fugaces(p: &Paseo, l: &Layout, t: f32, (rosa, _): (Color, Color)) {
-    for f in &p.fugaces {
+    for (i, f) in p.fugaces.iter().enumerate() {
         let (x, y) = (f.pos.x, f.pos.y);
         let k = (f.ttl / 0.2).min(1.0);
         match f.clase {
@@ -1541,6 +2076,117 @@ pub fn fugaces(p: &Paseo, l: &Layout, t: f32, (rosa, _): (Color, Color)) {
                 draw_ellipse(s.x, s.y, l.len(15.5), l.len(3.8), 0.0, fade(c, a));
                 for (dx, r) in [(-20.0, 2.5), (19.0, 2.0), (8.0, 1.6)] {
                     circulo(l, x + dx, y - 1.0 - r, r, fade(c, a));
+                }
+            }
+            Clase::Papelillo => {
+                // Un cuadradito que da vueltas al caer: una raya gorda que
+                // se acorta y se alarga.
+                // Sin rosa en el papel: rosa solo es lo que se parria.
+                let c = if f.rosa {
+                    ROSA
+                } else {
+                    [PINTURAS[0], PINTURAS[1], CREMA][i % 3]
+                };
+                let (s, co) = sin_cos(t * 0.5 + x * 0.05);
+                let (a, b) = ((x - co * 5.0, y - s * 2.0), (x + co * 5.0, y + s * 2.0));
+                linea(l, a, b, 8.0, fade(TINTA, k));
+                linea(l, a, b, 5.0, fade(c, k));
+                if f.rosa {
+                    anillo_rosa(l, x, y, 14.0, t, k);
+                }
+            }
+            Clase::Paloma => {
+                // Una paloma blanca de cara a donde vuela: cuerpo, cola en
+                // abanico, cabeza con su pico y el ala batiendo encima.
+                let n = f.vel.length().max(1e-3);
+                let d = vec2(f.vel.x / n, f.vel.y / n);
+                let c = if f.rosa { ROSA } else { HUESO };
+                let ala = (t * 0.7 + i as f32).sin() * 10.0;
+                let giro = atan2(d.y, d.x).to_degrees();
+                let cuerpo = l.to_screen(x, y);
+                let cola = (x - d.x * 13.0, y - d.y * 13.0);
+                let cabeza = (x + d.x * 12.0, y + d.y * 12.0 - 3.0);
+                for (g, col) in [(2.2, TINTA), (0.0, c)] {
+                    let col = fade(col, k);
+                    tri(
+                        l,
+                        (x - d.x * 6.0, y),
+                        (cola.0 - d.y * (7.0 + g), cola.1 + d.x * (7.0 + g) - g),
+                        (cola.0 + d.y * (7.0 + g), cola.1 - d.x * (7.0 + g) + g),
+                        col,
+                    );
+                    draw_ellipse(
+                        cuerpo.x,
+                        cuerpo.y,
+                        l.len(12.0 + g),
+                        l.len(6.5 + g),
+                        giro,
+                        col,
+                    );
+                    circulo(l, cabeza.0, cabeza.1, 5.0 + g, col);
+                    tri(
+                        l,
+                        (x - d.x * (6.0 + g), y - 2.0),
+                        (x + d.x * (7.0 + g), y - 2.0),
+                        (x - d.x * 4.0, y - 16.0 - ala - g),
+                        col,
+                    );
+                }
+                tri(
+                    l,
+                    (cabeza.0 + d.x * 4.0, cabeza.1 - 2.0),
+                    (cabeza.0 + d.x * 4.0, cabeza.1 + 2.0),
+                    (cabeza.0 + d.x * 9.0, cabeza.1),
+                    fade(AMARILLO, k),
+                );
+                circulo(l, cabeza.0 + d.x * 1.5, cabeza.1 - 1.0, 1.3, fade(TINTA, k));
+                if f.rosa {
+                    anillo_rosa(l, x, y, 20.0, t, k);
+                }
+            }
+            Clase::Aro => {
+                // El aro de circo, rojo y oro, girando al rodar.
+                let s = l.to_screen(x, y);
+                let r = l.len(15.0);
+                draw_circle_lines(s.x, s.y, r, l.len(6.5), fade(TINTA, k));
+                draw_circle_lines(s.x, s.y, r, l.len(3.5), fade(ORO, k));
+                let giro = -f.vel.x.signum() * t * 0.25;
+                for i in 0..4 {
+                    let (sn, cs) = sin_cos(giro + PI * 0.5 * i as f32);
+                    circulo(l, x + cs * 15.0, y + sn * 15.0, 2.6, fade(ROJO, k));
+                }
+            }
+            Clase::Barrido => {
+                // El silbido del baston a ras de suelo: una estela blanca.
+                let d = f.vel.x.signum();
+                for (i, largo) in [60.0, 40.0, 24.0].into_iter().enumerate() {
+                    let yy = y + 4.0 - i as f32 * 6.0;
+                    linea(
+                        l,
+                        (x - d * largo, yy),
+                        (x, yy),
+                        5.0 - i as f32,
+                        fade(TINTA, 0.7 * k),
+                    );
+                    linea(l, (x - d * largo, yy), (x, yy), 2.5, fade(HUESO, k));
+                }
+                circulo(l, x, y, 6.0, fade(ORO, k));
+            }
+            Clase::Humo => {
+                // La humareda del apache: se abre y se va.
+                let a = (f.ttl / 0.5).min(1.0);
+                let r = 10.0 + 22.0 * (1.0 - a);
+                for i in 0..5 {
+                    let (sn, cs) = sin_cos(i as f32 * 1.26);
+                    let (hx, hy) = (x + cs * r * 0.8, y - 20.0 + sn * r * 0.5);
+                    circulo(l, hx, hy, r * 0.5 + 2.0, fade(TINTA, 0.5 * a));
+                    circulo(
+                        l,
+                        hx,
+                        hy,
+                        r * 0.5,
+                        fade(color_u8!(150, 132, 140, 255), 0.7 * a),
+                    );
                 }
             }
         }
