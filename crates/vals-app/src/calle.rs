@@ -867,6 +867,9 @@ fn enemigo(e: &Enemigo, l: &Layout, tick: u64, t: f32, tiempo: u32, tintas: (Col
         Tipo::Confeti => calle_montmartre::confeti(e, l, t, &tinte),
         Tipo::Apache => calle_montmartre::apache(e, l, t, tintas, &tinte),
         Tipo::Loyal => calle_montmartre::loyal(e, l, t, tintas, &tinte),
+        Tipo::Gaviota => calle_arrabal::gaviota(e, l, t, &tinte),
+        Tipo::Malevo => calle_arrabal::malevo(e, l, t, tintas, &tinte),
+        Tipo::Guapo => calle_arrabal::guapo(e, l, t, tiempo, tintas, &tinte),
     });
 }
 
@@ -1157,6 +1160,10 @@ fn fichas(p: &Paseo, l: &Layout, t: f32) {
 /// raya dice hacia donde va; un punto no.
 fn disparos(p: &Paseo, l: &Layout) {
     for d in &p.disparos {
+        if d.rosa {
+            calle_arrabal::devuelta(d, l, p.tick as f32);
+            continue;
+        }
         let dir = d.vel.normalize_or_zero();
         let cola = d.pos - dir * 16.0;
         let (a, b) = ((cola.x, cola.y), (d.pos.x, d.pos.y));

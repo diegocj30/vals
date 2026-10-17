@@ -219,6 +219,82 @@ pub const COLGADA_ROSA: u64 = 60;
 /// Una rosa marchita cae despacio, como cae una flor.
 const GRAVEDAD_ROSA: f32 = 320.0;
 
+/// El compadrito colgado del cable del tranvia se suelta cuando lo tiene
+/// debajo y te tiene cerca, pero no encima: nunca cae sobre la cabeza.
+const SALTO_CERCA: f32 = 80.0;
+const SALTO_LEJOS: f32 = 320.0;
+
+/// La gaviota, en ticks: un tiempo de remonte (sube a su altura y abre las
+/// alas: el aviso), uno de picado frenando hasta cero y dos colgada. Un
+/// compas, y arranca en un tiempo de la musica, como el compadrito.
+pub const REMONTE_GAVIOTA: u32 = 30;
+pub const PICADO_GAVIOTA: u32 = 30;
+pub const COLGADA_GAVIOTA: u32 = 60;
+pub const CICLO_GAVIOTA: u32 = REMONTE_GAVIOTA + PICADO_GAVIOTA + COLGADA_GAVIOTA;
+const ALCANCE_GAVIOTA: f32 = 520.0;
+/// Lo mas largo de un picado: llega a donde estabas si estas mas cerca.
+const PICADO_MAX: f32 = 300.0;
+
+/// Hasta donde ve el malevo. Se vuelve hacia ti al empezar cada compas, y no
+/// antes: el que se le pone detras tiene un compas para tumbarlo.
+const ALCANCE_MALEVO: f32 = 560.0;
+/// Lo que quita una rosa devuelta de un parry: tumba a un malevo de una.
+pub const DANO_DEVUELTA: i32 = 20;
+const VEL_DEVUELTA: f32 = 720.0;
+const ALCANCE_DEVUELTA: f32 = 560.0;
+
+/// El guapo aguanta unos 24 segundos de aguja sin fallar una; esquivando, de
+/// 30 a 45.
+pub const VIDA_GUAPO: i32 = 360;
+/// La estocada del guapo: unas 380 unidades, casi media arena. La finta es la
+/// misma estocada en pequeno, unas 50: sale y se clava enseguida.
+const ESTOCADA_GUAPO: f32 = 1500.0;
+const FINTA_GUAPO: f32 = 200.0;
+/// Lo que se separa de las paredes de la arena.
+const MARGEN_ARENA: f32 = 50.0;
+/// El abanico de rosas: de tres, y de cinco desde la segunda fase. Lo que se
+/// abre de una a la siguiente.
+const ABRE_ROSAS: f32 = 0.3;
+/// Lo que baja la primera rosa del abanico, en radianes: llega a la altura del
+/// pecho de la jugadora.
+const BAJA_ROSA: f32 = 0.25;
+
+/// Lo que hace el guapo en cada tiempo de la musica.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Paso {
+    /// Se echa atras: viene la estocada.
+    Amago,
+    /// Una estocada corta que se clava enseguida. Avisa de la de verdad.
+    Finta,
+    /// Se lanza a tope y frena hasta cero.
+    Estocada,
+    Plantado,
+    /// Echa el brazo atras con el ramo.
+    Carga,
+    /// Tira el abanico de rosas.
+    Tira,
+}
+
+/// Las jugadas del guapo, de un compas cada una, por fase: la de estocada y
+/// la de rosas, una y otra. Cada fase anade un engano a la anterior.
+const JUGADAS: [[[Paso; 4]; 2]; 3] = {
+    use Paso::*;
+    [
+        [
+            [Amago, Estocada, Plantado, Plantado],
+            [Carga, Tira, Plantado, Plantado],
+        ],
+        [
+            [Finta, Amago, Estocada, Plantado],
+            [Carga, Tira, Carga, Tira],
+        ],
+        [
+            [Amago, Estocada, Estocada, Plantado],
+            [Carga, Tira, Estocada, Plantado],
+        ],
+    ]
+};
+
 /// Lo que llena el medidor cada disparo que entra. El parry sigue siendo el
 /// chorro; esto es el goteo, igual que el graze en los combates.
 const METER_POR_IMPACTO: f32 = 0.8;
@@ -328,6 +404,39 @@ const NUMEROS: [Numero; 6] = [
     Numero::Baston,
     Numero::Aros,
 ];
+
+/// Cuanto se ha movido en este tick la plataforma que pisa quien tiene los
+/// pies en `(x, pies)`, si se mueve. Va despues de recolocarlas, asi que se
+/// mira donde estaba antes: lo que el tranvia lleva encima no se le escurre.
+fn arrastre(def: &PaseoDef, bases: &[Vec2], t: u64, x: f32, pies: f32) -> Option<Vec2> {
+    def.plataformas.iter().zip(bases).find_map(|(pl, base)| {
+        let m = pl.mueve?;
+        let antes = *base + m.desvio(t);
+        let encima = (pies - antes.y).abs() < 1.0 && x >= antes.x && x <= antes.x + pl.ancho;
+        encima.then(|| Vec2::new(pl.x, pl.y) - antes)
+    })
+}
+
+/// Una rosa recien tirada, la tire quien la tire: la florista, el malevo o el
+/// guapo.
+fn rosa_lanzada(pos: Vec2, vel: Vec2, rosa: bool, tick: u64) -> Enemigo {
+    Enemigo {
+        tipo: Tipo::Rosa,
+        pos,
+        vida: Tipo::Rosa.vida(),
+        dir: vel.x.signum(),
+        nacio: tick,
+        rosa,
+        golpe: 0,
+        reloj: 0,
+        lanzados: 0,
+        base_y: pos.y,
+        avance: 0.0,
+        gesto: 0.0,
+        vel,
+        portero: false,
+    }
+}
 
 /// Un tramo de acera, de `.0` a `.1`. Entre dos tramos hay un foso.
 pub type Tramo = (f32, f32);
@@ -470,6 +579,19 @@ pub enum Tipo {
     /// en el aire y se marchita. No se pone en el RON; nace de la florista.
     /// Una de cada tres es rosa de verdad y se parria.
     Rosa,
+    /// Una gaviota del puerto. Se cierne quieta hasta tenerte a tiro; en un
+    /// tiempo de la musica remonta (el aviso), pica a donde estabas frenando
+    /// hasta cero y se queda colgada en el aire dos tiempos. Las rosas se
+    /// parrian.
+    Gaviota,
+    /// Un malevo plantado con el poncho enrollado en el brazo: los disparos de
+    /// frente se los come el poncho. Cae por la espalda, o con una rosa
+    /// devuelta de un parry. Tira la rosa que lleva en la boca, la mitad de
+    /// las veces de las de parry.
+    Malevo,
+    /// El guapo del barrio, el portero del arrabal: estocadas que frenan en
+    /// seco, fintas que las avisan y rosas que se quedan colgadas, a compas.
+    Guapo,
     // --- Chicago. El charleston gira y va en clave 3-3-2, y
     // sus tres enemigos tambien.
     /// Una flapper plantada, bailando el charleston en el sitio, con el collar
@@ -526,6 +648,9 @@ impl Tipo {
             Tipo::Compadrito => 8,
             Tipo::Florista => 6,
             Tipo::Rosa => 1,
+            Tipo::Gaviota => 3,
+            Tipo::Malevo => 12,
+            Tipo::Guapo => VIDA_GUAPO,
             Tipo::Flapper => 8,
             Tipo::Saxo => 10,
             Tipo::Saltarin => 7,
@@ -552,6 +677,9 @@ impl Tipo {
             Tipo::Compadrito => 22.0,
             Tipo::Florista => 20.0,
             Tipo::Rosa => 14.0,
+            Tipo::Gaviota => 16.0,
+            Tipo::Malevo => 22.0,
+            Tipo::Guapo => 26.0,
             Tipo::Flapper | Tipo::Saxo | Tipo::Saltarin => 22.0,
             Tipo::Corista => 20.0,
             Tipo::Botella => 14.0,
@@ -573,6 +701,9 @@ impl Tipo {
             Tipo::Director => 48.0,
             Tipo::Compadrito => 38.0,
             Tipo::Florista => 36.0,
+            Tipo::Gaviota => 0.0,
+            Tipo::Malevo => 38.0,
+            Tipo::Guapo => 44.0,
             Tipo::Flapper => 38.0,
             Tipo::Saxo | Tipo::Saltarin => 36.0,
             Tipo::Corista => 44.0,
@@ -604,6 +735,9 @@ impl Tipo {
             Tipo::Confeti => 12,
             Tipo::Apache => 13,
             Tipo::Loyal => 14,
+            Tipo::Gaviota => 15,
+            Tipo::Malevo => 16,
+            Tipo::Guapo => 17,
         }
     }
 }
@@ -878,6 +1012,24 @@ impl Enemigo {
         self.pos + Vec2::new(self.dir * 22.0, -30.0)
     }
 
+    /// En que paso va el guapo y cuanto lleva de el, de 0 a 1. Antes de que
+    /// se cierre la arena, plantado.
+    pub fn paso(&self, tiempo: u32) -> Option<(Paso, f32)> {
+        if self.tipo != Tipo::Guapo {
+            return None;
+        }
+        let t = tiempo.max(1);
+        let jugada = JUGADAS[self.gesto as usize][self.lanzados as usize % 2];
+        let k = (self.reloj / t) as usize % 4;
+        Some((jugada[k], (self.reloj % t) as f32 / t as f32))
+    }
+
+    /// Si el poncho del malevo para este disparo: lo que le viene de frente.
+    /// La rosa devuelta pasa.
+    fn para(&self, d: &Disparo) -> bool {
+        self.tipo == Tipo::Malevo && !d.rosa && d.vel.x * self.dir < 0.0
+    }
+
     /// La pierna de una corista: de la cadera a la punta del botin. Parada
     /// cuelga recta; con `gesto` a 1 apunta arriba y un poco hacia ti, que es
     /// la patada del cancan.
@@ -925,6 +1077,8 @@ pub struct Disparo {
     pub pos: Vec2,
     pub vel: Vec2,
     ttl: f32,
+    /// La rosa devuelta de un parry: pasa el poncho y pega fuerte.
+    pub rosa: bool,
 }
 
 /// Todo el estado de un paseo.
@@ -1476,7 +1630,12 @@ impl Paseo {
         // Sale de la mano, a media altura: de frente pasa por encima de una
         // nota baja y le da a una pareja en el pecho.
         let (pos, ttl) = (self.boca(), tiro.ttl_calle());
-        let disparo = |vel: Vec2| Disparo { pos, vel, ttl };
+        let disparo = |vel: Vec2| Disparo {
+            pos,
+            vel,
+            ttl,
+            rosa: false,
+        };
         if tiro == Tiro::Abanico {
             // Tres, abiertos hacia donde apunta: el de arriba alcanza lo que
             // vuela y el de abajo lo que viene por la acera sin plantarse.
@@ -1527,12 +1686,39 @@ impl Paseo {
             return;
         }
         p.on_parry(n);
+        self.devolver(centro);
+        let p = &mut self.jugadora;
         if !p.on_ground {
             p.vel.y = -JUMP_SPEED * 0.8;
         }
         self.events.parried += n;
         self.impacto = centro;
         self.retirar_caidos();
+    }
+
+    /// La rosa devuelta: lo rosa que se parria sale de vuelta hacia el malevo
+    /// o el guapo mas cercano que este a la vista. Es lo que tumba al malevo
+    /// de frente, y lo que hace que en el arrabal el parry pague.
+    fn devolver(&mut self, desde: Vec2) {
+        let blanco = self
+            .enemigos
+            .iter()
+            .filter(|e| {
+                matches!(e.tipo, Tipo::Malevo | Tipo::Guapo)
+                    && (e.pos.x - desde.x).abs() < ALCANCE_DEVUELTA
+            })
+            .min_by(|a, b| {
+                let (da, db) = (a.pos.distance_squared(desde), b.pos.distance_squared(desde));
+                da.total_cmp(&db)
+            });
+        if let Some(e) = blanco {
+            self.disparos.push(Disparo {
+                pos: desde,
+                vel: (e.pos - desde).normalize_or(Vec2::X) * VEL_DEVUELTA,
+                ttl: 1.0,
+                rosa: true,
+            });
+        }
     }
 
     /// El super, igual que en los combates: medidor lleno, todo o nada. Aqui
@@ -1581,7 +1767,10 @@ impl Paseo {
             // El primer plato sale con un poco de azar: dos camareros que se
             // despiertan juntos no deben tirar a la vez.
             let mut reloj = CADENCIA_CAMARERO / 2 + self.rng.next_u32() % 30;
-            if a.tipo == Tipo::Compadrito {
+            if matches!(
+                a.tipo,
+                Tipo::Compadrito | Tipo::Gaviota | Tipo::Malevo | Tipo::Guapo
+            ) {
                 // El compadrito espera a tenerte cerca y a que caiga un tiempo.
                 reloj = 0;
             }
@@ -1605,6 +1794,12 @@ impl Paseo {
                 vel: Vec2::ZERO,
                 portero: a.portero,
             });
+            // La gaviota rosa se parria, como la nota rosa.
+            if a.tipo == Tipo::Gaviota
+                && let Some(e) = self.enemigos.last_mut()
+            {
+                e.rosa = a.rosa;
+            }
         }
     }
 
@@ -1618,6 +1813,8 @@ impl Paseo {
         let arena = self.cierre().is_some();
         // La pista de Monsieur Loyal, si esta cerrada.
         let (pista_loyal, muro) = (self.cierre(), self.muro);
+        // La arena del portero, si esta cerrada: el guapo espera a eso.
+        let arena_guapo = self.cierre();
         for e in &mut self.enemigos {
             e.golpe = e.golpe.saturating_sub(1);
             let edad = self.tick - e.nacio;
@@ -1951,6 +2148,65 @@ impl Paseo {
                 }
                 Tipo::Compadrito => {
                     let dx = objetivo.x - e.pos.x;
+                    // Subido al tranvia, el tranvia se lo lleva.
+                    let alto = e.tipo.alto();
+                    if let Some(d) =
+                        arrastre(&self.def, &self.bases, self.tick, e.pos.x, e.pos.y + alto)
+                    {
+                        e.pos += d;
+                    }
+                    let pies = e.pos.y + alto;
+                    if !self.def.hay_pie(e.pos.x, pies) {
+                        // Sin nada debajo: colgado del cable del tranvia, o
+                        // cayendo de el. `gesto` es eso, para el dibujo.
+                        e.gesto = 1.0;
+                        if e.vel == Vec2::ZERO {
+                            // Se suelta en un tiempo, si el tranvia va a
+                            // estar debajo al caer y te tiene cerca.
+                            let caida = (2.0 * 90.0 / GRAVITY).sqrt() / DT;
+                            let llega = self.tick + 1 + caida as u64;
+                            let debajo =
+                                self.def
+                                    .plataformas
+                                    .iter()
+                                    .zip(&self.bases)
+                                    .any(|(pl, base)| {
+                                        let Some(m) = pl.mueve else { return false };
+                                        let x = base.x + m.desvio(llega).x;
+                                        pl.y > pies
+                                            && e.pos.x > x + 40.0
+                                            && e.pos.x < x + pl.ancho - 40.0
+                                    });
+                            let cerca = (SALTO_CERCA..SALTO_LEJOS).contains(&dx.abs());
+                            if debajo && cerca && self.tick.is_multiple_of(tiempo) {
+                                e.vel.y = 1.0;
+                            }
+                            continue;
+                        }
+                        e.vel.y += GRAVITY * DT;
+                        let nuevos = pies + e.vel.y * DT;
+                        let x = e.pos.x;
+                        let cruza = |y: f32| pies <= y + 0.5 && nuevos >= y;
+                        let cae = self
+                            .def
+                            .plataformas
+                            .iter()
+                            .filter(|pl| x >= pl.x && x <= pl.x + pl.ancho)
+                            .map(|pl| pl.y)
+                            .chain(self.def.suelo_en(x))
+                            .find(|&y| cruza(y));
+                        match cae {
+                            Some(y) => {
+                                // Cae y se clava, como al acabar la estocada.
+                                e.pos.y = y - alto;
+                                e.vel = Vec2::ZERO;
+                                e.gesto = 0.0;
+                                e.reloj = PLANTADO_COMPADRITO;
+                            }
+                            None => e.pos.y = nuevos - alto,
+                        }
+                        continue;
+                    }
                     if e.reloj == 0 {
                         // Quieto hasta tenerte a tiro, y entonces arranca en
                         // el siguiente tiempo de la musica: se lanza a compas.
@@ -1973,10 +2229,11 @@ impl Paseo {
                     }
                     let v = ESTOCADA_V * quedan as f32 / ESTOCADA_COMPADRITO as f32;
                     let nx = e.pos.x + e.dir * v * DT;
-                    if self.def.hay_suelo(nx + e.dir * e.tipo.radio()) {
+                    if self.def.hay_pie(nx + e.dir * e.tipo.radio(), pies) {
                         e.pos.x = nx;
                     } else {
-                        // Al borde del Riachuelo se clava antes de tiempo.
+                        // Al borde del Riachuelo, o del techo del tranvia, se
+                        // clava antes de tiempo.
                         e.reloj = PLANTADO_COMPADRITO;
                     }
                 }
@@ -2220,14 +2477,141 @@ impl Paseo {
                         e.lanzados += 1;
                     }
                 }
+                Tipo::Gaviota => {
+                    let dx = objetivo.x - e.pos.x;
+                    if e.reloj == 0 {
+                        // Se cierne donde esta hasta tenerte a tiro, y arranca
+                        // en un tiempo de la musica.
+                        if dx.abs() > ALCANCE_GAVIOTA || !self.tick.is_multiple_of(tiempo) {
+                            continue;
+                        }
+                        e.reloj = CICLO_GAVIOTA;
+                    }
+                    e.reloj -= 1;
+                    let picado = PICADO_GAVIOTA + COLGADA_GAVIOTA;
+                    if e.reloj >= picado {
+                        // El remonte: vuelve a su altura frenando, y en el
+                        // ultimo tick apunta a donde estas.
+                        e.pos.y += (e.base_y - e.pos.y) * 0.15;
+                        if dx != 0.0 {
+                            e.dir = dx.signum();
+                        }
+                        if e.reloj == picado {
+                            let suelo = self.def.altura(objetivo.x) - 40.0;
+                            let d = Vec2::new(objetivo.x, objetivo.y.min(suelo)) - e.pos;
+                            let largo = d.length().min(PICADO_MAX);
+                            // Frenando en linea recta hasta cero: con `n`
+                            // ticks recorre v0 (n + 1) / 2 por tick.
+                            let n = PICADO_GAVIOTA as f32;
+                            e.vel = d.normalize_or(Vec2::new(e.dir, 0.0)) * 2.0 * largo
+                                / ((n + 1.0) * DT);
+                        }
+                    } else if e.reloj >= COLGADA_GAVIOTA {
+                        let quedan = (e.reloj - COLGADA_GAVIOTA + 1) as f32;
+                        e.pos += e.vel * quedan / PICADO_GAVIOTA as f32 * DT;
+                    }
+                }
+                Tipo::Malevo => {
+                    // Lo que se sacude el poncho al parar un disparo.
+                    e.gesto = (e.gesto - 1.0 / 8.0).max(0.0);
+                    let dx = objetivo.x - e.pos.x;
+                    let compas = 4 * tiempo;
+                    if dx.abs() > ALCANCE_MALEVO {
+                        continue;
+                    }
+                    if self.tick.is_multiple_of(compas) {
+                        // Se vuelve de golpe al empezar el compas, y echa mano
+                        // a la rosa: la tira dos tiempos despues.
+                        if dx != 0.0 {
+                            e.dir = dx.signum();
+                        }
+                        e.reloj = 2 * self.def.tiempo.max(1);
+                    }
+                    if e.reloj == 0 {
+                        continue;
+                    }
+                    e.reloj -= 1;
+                    if e.reloj > 0 {
+                        continue;
+                    }
+                    e.lanzados += 1;
+                    let origen = e.pos + Vec2::new(e.dir * 16.0, -26.0);
+                    let hacia = (objetivo - origen).normalize_or(Vec2::new(e.dir, 0.0));
+                    // La primera, rosa: el malevo se ensena con lo que lo tumba.
+                    let rosa = e.lanzados % 2 == 1;
+                    nuevas.push(rosa_lanzada(origen, hacia * ROSA_V, rosa, self.tick));
+                }
+                Tipo::Guapo => {
+                    // Quieto, mirandote, hasta que se cierra la arena.
+                    let dx = objetivo.x - e.pos.x;
+                    let Some(desde) = arena_guapo else {
+                        if dx != 0.0 {
+                            e.dir = dx.signum();
+                        }
+                        continue;
+                    };
+                    if e.reloj == 0 {
+                        // Cada jugada empieza en un tiempo, con la fase de
+                        // ahora: un cambio de fase no corta una jugada a medias.
+                        if !self.tick.is_multiple_of(tiempo) {
+                            continue;
+                        }
+                        e.gesto = e.fase() as f32;
+                    }
+                    let t = self.def.tiempo.max(1);
+                    let jugada = JUGADAS[e.gesto as usize][e.lanzados as usize % 2];
+                    let (paso, dentro) = (jugada[(e.reloj / t) as usize % 4], e.reloj % t);
+                    if dentro == 0 {
+                        // Se vuelve hacia ti en seco en cada tiempo.
+                        if dx != 0.0 {
+                            e.dir = dx.signum();
+                        }
+                        e.vel = match paso {
+                            Paso::Estocada => Vec2::new(e.dir * ESTOCADA_GUAPO, 0.0),
+                            Paso::Finta => Vec2::new(e.dir * FINTA_GUAPO, 0.0),
+                            _ => Vec2::ZERO,
+                        };
+                        if paso == Paso::Tira {
+                            // De la mano hacia ti y abriendose hacia arriba:
+                            // la de abajo va a la altura del pecho y es la de
+                            // parry; las otras se quedan colgadas encima, que
+                            // es por donde se salta la estocada.
+                            let n = if e.gesto == 0.0 { 3 } else { 5 };
+                            let origen = e.pos + Vec2::new(e.dir * 20.0, -30.0);
+                            for k in 0..n {
+                                let (s, c) = sin_cos(BAJA_ROSA - ABRE_ROSAS * k as f32);
+                                let v = Vec2::new(e.dir * c, s) * ROSA_V;
+                                nuevas.push(rosa_lanzada(origen, v, k == 0, self.tick));
+                            }
+                        }
+                    }
+                    if matches!(paso, Paso::Estocada | Paso::Finta) {
+                        // La aceleracion negativa del jefe: de tope a cero en
+                        // linea recta, y contra la pared de la arena se clava.
+                        let quedan = (t - dentro) as f32 / t as f32;
+                        let (a, b) = (desde + MARGEN_ARENA, desde + VISTA_W - MARGEN_ARENA);
+                        let nx = e.pos.x + e.vel.x * quedan * DT;
+                        e.pos.x = nx.clamp(a, b);
+                        if nx != e.pos.x {
+                            e.vel = Vec2::ZERO;
+                        }
+                    }
+                    e.reloj += 1;
+                    if e.reloj >= 4 * t {
+                        e.reloj = 0;
+                        e.lanzados += 1;
+                    }
+                }
             }
         }
         self.enemigos.extend(nuevas);
-        // Una rosa que se ha caido por debajo de la calle ya no es nada. Se va
-        // sin contar como caida, que nadie la ha tumbado.
+        // Una rosa que se ha caido por debajo de la calle ya no es nada, ni un
+        // compadrito que ha caido al agua desde el cable. Se van sin contar
+        // como caida, que nadie los ha tumbado.
         let def = &self.def;
-        self.enemigos
-            .retain(|e| e.tipo != Tipo::Rosa || e.pos.y < def.altura(e.pos.x) + 90.0);
+        self.enemigos.retain(|e| {
+            !matches!(e.tipo, Tipo::Rosa | Tipo::Compadrito) || e.pos.y < def.altura(e.pos.x) + 90.0
+        });
         // Y una hoja que llega a la acera se queda alli, que ya no es nada.
         self.enemigos
             .retain(|e| e.tipo != Tipo::Hoja || e.pos.y < def.altura(e.pos.x) - 8.0);
@@ -2372,7 +2756,18 @@ impl Paseo {
                 e.vida > 0 && e.presente() && e.pos.distance_squared(d.pos) <= r * r
             });
             if let Some(e) = blanco {
-                e.vida -= self.equipo.tiro.dano_calle();
+                if e.para(&d) {
+                    // El poncho se come el disparo: ni dano ni medidor. Solo
+                    // se sacude, que es lo que dice que ahi no se tira.
+                    e.gesto = 1.0;
+                    self.disparos.swap_remove(i);
+                    continue;
+                }
+                e.vida -= if d.rosa {
+                    DANO_DEVUELTA
+                } else {
+                    self.equipo.tiro.dano_calle()
+                };
                 e.golpe = 6;
                 self.events.boss_hit = true;
                 self.impacto = d.pos;
@@ -2683,6 +3078,40 @@ mod tests {
         for a in arrabal.enemigos.iter().filter(|a| a.tipo == Tipo::Florista) {
             assert!(arrabal.hay_pie(a.x, a.y), "florista en el aire: {a:?}");
         }
+        // Sus voladores son gaviotas, trae malevos y acaba con el guapo en su
+        // arena, antes de la puerta.
+        for t in [Tipo::Gaviota, Tipo::Malevo] {
+            assert!(arrabal.enemigos.iter().any(|a| a.tipo == t), "falta {t:?}");
+        }
+        assert!(!arrabal.enemigos.iter().any(|a| a.tipo == Tipo::Nota));
+        let po = arrabal.porteria.expect("el arrabal acaba con portero");
+        let guapo: Vec<&Aparicion> = arrabal.enemigos.iter().filter(|a| a.portero).collect();
+        assert!(guapo.len() == 1 && guapo[0].tipo == Tipo::Guapo);
+        assert!((po.desde..po.desde + VISTA_W).contains(&guapo[0].x));
+        assert!(
+            arrabal.puerta > po.desde + VISTA_W,
+            "la puerta, pasada la arena"
+        );
+        assert!(po.ficha.is_some_and(|i| i < arrabal.fichas.len()));
+        // La sudestada: un tramo sin acera que no se salta, y el tranvia de
+        // una orilla a la otra.
+        let pl = arrabal
+            .plataformas
+            .iter()
+            .find(|pl| pl.mueve.is_some())
+            .expect("falta el tranvia");
+        let Some(Mueve::Vaiven { dx, .. }) = pl.mueve else {
+            panic!("el tranvia va y viene")
+        };
+        assert!(
+            !arrabal.hay_suelo(pl.x + pl.ancho * 0.5),
+            "el tranvia, en el agua"
+        );
+        assert!(arrabal.hay_suelo(pl.x - 20.0), "sale de una orilla");
+        assert!(
+            arrabal.hay_suelo(pl.x + pl.ancho + dx + 20.0),
+            "y llega a la otra"
+        );
 
         // Montmartre: sube, lleva a su jefe y trae los enemigos del cancan.
         let mont = defs
@@ -3580,16 +4009,51 @@ mod tests {
 
     #[test]
     fn el_arrabal_se_puede_andar_entero() {
-        // El mismo bot que en Viena: corre, dispara y salta ante cada foso.
+        // El bot de Viena, que corre, dispara de frente y salta ante cada
+        // foso, con tres cosas mas: ante la sudestada espera al tranvia y se
+        // sube, en el tranvia se queda quieto hasta la otra orilla, y en la
+        // arena se pone de cara al guapo. A los malevos los pasa de largo.
         let mut p = Paseo::new(de_serie("El Tango"), 3);
         let mut salto = 0;
-        for _ in 0..(60 * 60) {
+        let mut tranvia = false;
+        let mut tumbado = false;
+        for _ in 0..(60 * 150) {
             p.jugadora.iframes = 5;
-            let x = p.jugadora.pos.x;
-            if p.jugadora.on_ground && !p.def.hay_suelo(x + 24.0) {
-                salto = 20;
+            let (x, suelo) = (p.jugadora.pos.x, p.jugadora.on_ground);
+            let sobre = p
+                .sobre
+                .map(|i| p.def.plataformas[i])
+                .filter(|pl| pl.mueve.is_some() && suelo);
+            let orilla = p.def.suelo.iter().map(|t| t.0).find(|&a| a > x);
+            let mut lado = DERECHA;
+            if let Some(pl) = sobre {
+                // Quieto en el techo, hasta que el tranvia llega a la orilla.
+                tranvia = true;
+                if orilla.is_none_or(|a| a - (pl.x + pl.ancho) > 20.0) {
+                    lado = 0;
+                }
+            } else if let Some(g) = p.cierre().and(p.portero()) {
+                let dx = g.pos.x - x;
+                lado = match dx {
+                    d if d > 40.0 => DERECHA,
+                    d if d < -40.0 => InputFrame::LEFT,
+                    _ => 0,
+                };
+            } else if suelo && !p.def.hay_suelo(x + 24.0) {
+                // Un foso que se salta, o el tranvia ya en la parada.
+                let corto = orilla.is_some_and(|a| a - x < 220.0);
+                let tranvia =
+                    p.def.plataformas.iter().any(|pl| {
+                        pl.mueve.is_some() && pl.x < x + 40.0 && pl.x + pl.ancho > x + 200.0
+                    });
+                if corto || tranvia {
+                    salto = 20;
+                } else {
+                    lado = 0;
+                }
             }
-            let bits = DERECHA | DISPARA | if salto > 0 { InputFrame::JUMP } else { 0 };
+            tumbado |= p.def.porteria.is_some() && !p.portero_vivo();
+            let bits = lado | DISPARA | if salto > 0 { InputFrame::JUMP } else { 0 };
             salto = if salto > 0 { salto - 1 } else { 0 };
             p.step(pulsar(bits));
             if p.completado.is_some() {
@@ -3597,6 +4061,8 @@ mod tests {
             }
         }
         assert!(p.completado.is_some(), "atascada en x {}", p.jugadora.pos.x);
+        assert!(tranvia, "ha cruzado la sudestada sin el tranvia");
+        assert!(tumbado, "el guapo tenia que caer");
         assert_eq!(p.vidas, VIDAS, "ha caido al Riachuelo");
     }
 
@@ -3712,6 +4178,315 @@ mod tests {
         }
         assert!(vistas >= 6, "tira con cadencia: {vistas}");
         assert_eq!(rosas, vistas / 3);
+    }
+
+    #[test]
+    fn la_gaviota_remonta_pica_frenando_y_se_queda_colgada() {
+        let mut p = Paseo::new(uno(Tipo::Gaviota, 400.0, 250.0), 1);
+        // Despierta y arranca en el tick 0, que es un tiempo.
+        p.step(InputFrame::NONE);
+        assert_eq!(p.enemigos[0].reloj, CICLO_GAVIOTA - 1, "no ha arrancado");
+        let mut pos = vec![p.enemigos[0].pos];
+        for _ in 1..CICLO_GAVIOTA {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+            pos.push(p.enemigos[0].pos);
+        }
+        let pasos: Vec<f32> = pos.windows(2).map(|w| w[0].distance(w[1])).collect();
+        let r = REMONTE_GAVIOTA as usize - 1;
+        let (remonte, resto) = pasos.split_at(r);
+        let (picado, colgada) = resto.split_at(PICADO_GAVIOTA as usize);
+        // Ya estaba a su altura: el remonte es el aviso, sin moverse.
+        assert!(remonte.iter().all(|&d| d == 0.0), "{remonte:?}");
+        assert!(picado[0] > 15.0, "sale a tope: {}", picado[0]);
+        for w in picado.windows(2) {
+            assert!(w[1] < w[0] && w[1] > 0.0, "no frena: {picado:?}");
+        }
+        // Estaba a mas de `PICADO_MAX`: llega justo hasta ahi, hacia ella.
+        let largo: f32 = picado.iter().sum();
+        assert!((largo - PICADO_MAX).abs() < 1.0, "pica {largo}");
+        assert!(colgada.iter().all(|&d| d == 0.0), "no se queda colgada");
+        let g = p.enemigos[0].pos;
+        assert!(g.y > 250.0 && g.x < 400.0, "ha picado hacia otro lado: {g}");
+    }
+
+    #[test]
+    fn la_gaviota_rosa_se_parria() {
+        let mut p = Paseo::new(
+            con(vec![Aparicion {
+                rosa: true,
+                ..aparece(Tipo::Gaviota, 130.0)
+            }]),
+            1,
+        );
+        p.def.enemigos[0].y = 420.0;
+        p.jugadora.iframes = 10;
+        p.step(InputFrame::NONE);
+        p.step(pulsar(InputFrame::PARRY));
+        assert_eq!(p.events.parried, 1);
+        assert!(p.enemigos.is_empty());
+        assert_eq!(p.vidas, VIDAS);
+    }
+
+    fn malevo(p: &Paseo) -> Option<&Enemigo> {
+        p.enemigos.iter().find(|e| e.tipo == Tipo::Malevo)
+    }
+
+    #[test]
+    fn el_poncho_del_malevo_para_lo_de_frente_y_no_la_espalda() {
+        let mut def = uno(Tipo::Malevo, 400.0, 0.0);
+        def.tiempo = 30;
+        let mut p = Paseo::new(def, 1);
+        let mut sacudido = false;
+        for _ in 0..60 {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(DISPARA));
+            sacudido |= malevo(&p).is_some_and(|m| m.gesto > 0.0);
+        }
+        let m = malevo(&p).expect("el malevo sigue ahi");
+        assert_eq!(m.vida, Tipo::Malevo.vida(), "de frente no se le hace nada");
+        assert!(sacudido, "el poncho tenia que sacudirse");
+        // A su espalda, plantada y mirandole: no se vuelve hasta el compas.
+        p.jugadora.pos.x = 560.0;
+        let espalda = InputFrame::FOCUS | InputFrame::LEFT | DISPARA;
+        for _ in 0..30 {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(espalda));
+        }
+        let m = malevo(&p).expect("en medio segundo no cae de espaldas");
+        assert!(m.vida < Tipo::Malevo.vida() - 4, "vida {}", m.vida);
+    }
+
+    #[test]
+    fn el_malevo_tira_en_el_tercer_tiempo_y_la_primera_es_de_parry() {
+        let mut def = uno(Tipo::Malevo, 400.0, 0.0);
+        def.tiempo = 30;
+        let mut p = Paseo::new(def, 1);
+        let mut tiradas = Vec::new();
+        for _ in 0..(120 * 4) {
+            p.jugadora.iframes = 10;
+            let (tick, antes) = (p.tick, p.enemigos.len());
+            p.step(InputFrame::NONE);
+            if let Some(r) = p.enemigos.last().filter(|_| p.enemigos.len() > antes)
+                && r.tipo == Tipo::Rosa
+            {
+                assert!(r.vel.x < 0.0, "hacia ella");
+                tiradas.push((tick % 120, r.rosa));
+            }
+        }
+        // Dos tiempos despues del uno del compas, una de parry y otra no.
+        assert_eq!(
+            tiradas,
+            [(59, true), (59, false), (59, true), (59, false)],
+            "{tiradas:?}"
+        );
+    }
+
+    #[test]
+    fn la_rosa_devuelta_tumba_al_malevo_de_frente() {
+        let mut p = Paseo::new(uno(Tipo::Malevo, 400.0, 0.0), 1);
+        p.step(InputFrame::NONE);
+        p.proyectiles.push(Proyectil {
+            pos: p.jugadora.pos + Vec2::new(20.0, -10.0),
+            vel: Vec2::ZERO,
+            rosa: true,
+            forma: Forma::Plato,
+        });
+        p.step(pulsar(InputFrame::PARRY));
+        assert_eq!(p.events.parried, 1);
+        let d = p
+            .disparos
+            .iter()
+            .find(|d| d.rosa)
+            .expect("sale la devuelta");
+        assert!(d.vel.x > 0.0, "hacia el malevo");
+        let mut cayo = false;
+        for _ in 0..40 {
+            p.step(InputFrame::NONE);
+            cayo |= p.caidos > 0;
+        }
+        assert!(cayo && malevo(&p).is_none(), "la devuelta lo tumba");
+    }
+
+    /// Una calle cortada por la sudestada: el tranvia de orilla a orilla y un
+    /// compadrito colgado del cable en medio.
+    fn con_tranvia() -> PaseoDef {
+        let mut def = uno(Tipo::Compadrito, 650.0, 300.0);
+        def.suelo = vec![(0.0, 200.0), (1400.0, 3200.0)];
+        def.plataformas = vec![Plataforma {
+            x: 210.0,
+            y: 380.0,
+            ancho: 320.0,
+            mueve: Some(Mueve::Vaiven {
+                dx: 860.0,
+                dy: 0.0,
+                periodo: 600,
+                fase: 0.0,
+            }),
+        }];
+        def
+    }
+
+    #[test]
+    fn el_compadrito_se_tira_del_cable_al_tranvia_y_viaja_en_el() {
+        let mut p = Paseo::new(con_tranvia(), 1);
+        // La jugadora, ya en el techo del tranvia.
+        p.jugadora.pos = Vec2::new(300.0, 380.0 - PIES);
+        let (mut cayo, mut viaja) = (false, Vec::new());
+        for _ in 0..300 {
+            p.jugadora.iframes = 10;
+            p.step(InputFrame::NONE);
+            let e = &p.enemigos[0];
+            cayo |= e.vel.y > 0.0;
+            if cayo && e.vel == Vec2::ZERO {
+                assert_eq!(e.pos.y + e.tipo.alto(), 380.0, "no esta en el techo");
+                viaja.push(e.pos.x);
+            }
+        }
+        assert!(cayo, "no se ha soltado del cable");
+        assert!(viaja.len() > 60, "no ha caido en el tranvia");
+        // Plantado tras caer, y aun asi avanza: lo lleva el tranvia.
+        let plantado = PLANTADO_COMPADRITO as usize - 2;
+        assert!(viaja[plantado] - viaja[0] > 30.0, "{viaja:?}");
+        assert_eq!(p.vidas, VIDAS, "ella tambien sigue en el tranvia");
+        // Y no se baja: la estocada se clava en el borde del techo.
+        let pl = p.def.plataformas[0];
+        let x = p.enemigos[0].pos.x;
+        assert!(x >= pl.x && x <= pl.x + pl.ancho, "se ha tirado: {x}");
+    }
+
+    #[test]
+    fn el_colgado_no_se_suelta_sin_tranvia_debajo() {
+        let mut def = con_tranvia();
+        def.plataformas.clear();
+        let mut p = Paseo::new(def, 1);
+        p.jugadora.pos.x = 450.0;
+        correr(&mut p, 0, 240);
+        let e = &p.enemigos[0];
+        assert_eq!(e.vel, Vec2::ZERO);
+        assert_eq!(e.pos.y + e.tipo.alto(), 300.0, "sigue colgado");
+    }
+
+    /// Una calle con el guapo en su arena: de 1000 a 1960.
+    fn con_guapo() -> PaseoDef {
+        let mut def = con_portero();
+        def.enemigos[0].tipo = Tipo::Guapo;
+        def.tiempo = 30;
+        def
+    }
+
+    /// Anda hasta que se cierra la arena.
+    fn en_la_arena() -> Paseo {
+        let mut p = Paseo::new(con_guapo(), 1);
+        while p.cierre().is_none() {
+            p.jugadora.iframes = 5;
+            p.step(pulsar(DERECHA));
+            let g = p.portero().map_or(1800.0, |g| g.pos.x);
+            assert_eq!(g, 1800.0, "se mueve antes de cerrarse la arena");
+            assert!(p.tick < 600, "la arena no se cierra");
+        }
+        p
+    }
+
+    /// Los pasos del guapo durante `n` ticks quieta, con lo que avanza en
+    /// cada uno.
+    fn pasos_del_guapo(p: &mut Paseo, n: usize) -> Vec<(Paso, f32)> {
+        let mut pasos = Vec::new();
+        for _ in 0..n {
+            p.jugadora.iframes = 10;
+            let g = p.portero().expect("el guapo");
+            let (x, (paso, _)) = (g.pos.x, g.paso(30).expect("es el guapo"));
+            p.step(InputFrame::NONE);
+            let g = p.portero().expect("el guapo");
+            pasos.push((paso, (g.pos.x - x).abs()));
+        }
+        pasos
+    }
+
+    #[test]
+    fn el_guapo_amaga_y_se_lanza_frenando_en_seco() {
+        let mut p = en_la_arena();
+        let pasos = pasos_del_guapo(&mut p, 240);
+        let estocada: Vec<f32> = pasos
+            .iter()
+            .filter(|(paso, _)| *paso == Paso::Estocada)
+            .map(|(_, d)| *d)
+            .collect();
+        assert_eq!(estocada.len(), 30, "una estocada por compas de estocada");
+        assert!(estocada[0] > 20.0, "sale a tope: {}", estocada[0]);
+        for w in estocada.windows(2) {
+            assert!(w[1] < w[0], "no frena: {estocada:?}");
+        }
+        let largo: f32 = estocada.iter().sum();
+        assert!(largo > 300.0, "la estocada se queda corta: {largo}");
+        // Todo lo demas, quieto: amaga, se planta y tira sin moverse.
+        assert!(
+            pasos
+                .iter()
+                .all(|(paso, d)| *paso == Paso::Estocada || *d == 0.0)
+        );
+        assert!(!pasos.iter().any(|(paso, _)| *paso == Paso::Finta));
+        // Y tira tres rosas a la vez, la de abajo de parry.
+        let rosas: Vec<&Enemigo> = p.enemigos.iter().filter(|e| e.tipo == Tipo::Rosa).collect();
+        assert_eq!(rosas.len(), 3, "un abanico de tres");
+        assert_eq!(rosas.iter().filter(|r| r.rosa).count(), 1);
+    }
+
+    #[test]
+    fn el_guapo_cambia_de_jugadas_con_la_vida() {
+        // Con dos tercios: finta antes de la estocada, corta, y dos abanicos
+        // de cinco por compas de rosas.
+        let mut p = en_la_arena();
+        p.enemigos[0].vida = VIDA_GUAPO * 2 / 3 - 1;
+        assert_eq!(p.enemigos[0].fase(), 1);
+        let pasos = pasos_del_guapo(&mut p, 240);
+        let finta: f32 = pasos
+            .iter()
+            .filter(|(paso, _)| *paso == Paso::Finta)
+            .map(|(_, d)| *d)
+            .sum();
+        assert!(finta > 20.0 && finta < 80.0, "la finta: {finta}");
+        pasos_del_guapo(&mut p, 30);
+        let rosas = p.enemigos.iter().filter(|e| e.tipo == Tipo::Rosa).count();
+        assert_eq!(rosas, 10, "dos abanicos de cinco");
+
+        // Con un tercio: dos estocadas seguidas.
+        let mut p = en_la_arena();
+        p.enemigos[0].vida = VIDA_GUAPO / 3 - 1;
+        assert_eq!(p.enemigos[0].fase(), 2);
+        let pasos = pasos_del_guapo(&mut p, 120);
+        let estocadas = pasos
+            .iter()
+            .filter(|(paso, _)| *paso == Paso::Estocada)
+            .count();
+        assert_eq!(estocadas, 60, "dos tiempos de estocada en un compas");
+    }
+
+    #[test]
+    fn el_guapo_cae_a_tiros_y_abre_la_arena() {
+        let mut p = en_la_arena();
+        let antes = p.portero().expect("el guapo").vida;
+        // Plantada y de cara a el, disparando.
+        let fuego = InputFrame::FOCUS | DERECHA | DISPARA;
+        for _ in 0..30 {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(fuego));
+        }
+        let g = p.portero().expect("medio segundo no basta");
+        assert!(g.vida < antes, "los disparos no le hacen nada");
+        assert_eq!(p.cierre(), Some(1000.0), "con el en pie, cerrada");
+        p.enemigos[0].vida = 1;
+        let mut cayo = false;
+        for _ in 0..120 {
+            p.jugadora.iframes = 10;
+            p.step(pulsar(fuego));
+            cayo |= p.caidos > 0 && p.portero().is_none();
+        }
+        assert!(cayo, "el guapo tenia que caer");
+        assert!(
+            p.cierre().is_none() && p.ficha_visible(0),
+            "la arena se abre"
+        );
     }
 
     // --- Montmartre ---
@@ -3957,6 +4732,7 @@ mod tests {
             pos,
             vel: Vec2::ZERO,
             ttl: 0.5,
+            rosa: false,
         });
         p.fugaces[0].pos = p.jugadora.pos;
         p.step(InputFrame::NONE);

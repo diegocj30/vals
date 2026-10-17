@@ -2,7 +2,7 @@
 //
 // La Boca al caer la noche: conventillos de chapa pintada, el puerto con sus
 // gruas y el Transbordador al fondo, el tranvia y el Riachuelo, que es lo que
-// hay en los fosos. Al final, la puerta de la milonga.
+// hay en los fosos. Al final, el guapo del barrio en la puerta de la milonga.
 //
 // El tango, en el jefe, es la ACELERACION NEGATIVA: balas que salen a tope y
 // frenan en seco. Los enemigos de aqui se mueven igual:
@@ -10,54 +10,84 @@
 //   Compadrito   amaga un tiempo (se echa atras: es el aviso), se lanza en una
 //                estocada que frena hasta cero y se queda plantado dos
 //                tiempos. Arranca siempre en un tiempo de la musica. Se salta.
+//                Con `y` y nada debajo esta colgado del cable del tranvia: se
+//                suelta en un tiempo cuando el tranvia le va a pasar debajo y
+//                te tiene cerca (pero no encima), y cae clavado en el techo.
 //   Florista     en un balcon, tira rosas derechas a ti. Esta arriba: se la
 //                tumba plantada (SHIFT) y apuntando arriba.
-//   (Rosa)       la tira la florista, no se pone aqui. Sale disparada, frena,
-//                se queda COLGADA en el aire dos tiempos y cae marchita. Se
-//                dispara o se rodea; una de cada tres es rosa y se parria.
-//   Nota         las del bandoneon, las mismas de Viena: cruzan en onda.
+//   (Rosa)       la tiran la florista, el malevo y el guapo; no se pone aqui.
+//                Sale disparada, frena, se queda COLGADA en el aire dos
+//                tiempos y cae marchita. Se dispara o se rodea; las rosas de
+//                verdad se parrian.
+//   Gaviota      se cierne a la altura `y`. Cuando te tiene a tiro, en un
+//                tiempo remonta (el aviso), pica a donde estabas frenando
+//                hasta cero y se queda colgada dos tiempos. `rosa: true` se
+//                parria.
+//   Malevo       plantado, con el poncho en el brazo: los disparos de frente
+//                no le hacen nada. Se vuelve hacia ti al empezar cada compas
+//                y en el tercer tiempo tira la rosa que lleva en la boca (la
+//                primera y una de cada dos, de parry). Lo tumba una ROSA
+//                DEVUELTA: lo que se parria a la vista de un malevo sale de
+//                vuelta hacia el. O ponerse detras y tirarle a la espalda.
+//   Guapo        el portero (`portero: true`), en la arena de `porteria`.
+//                Jugadas de un compas, una de estocada y otra de rosas: amago
+//                y estocada de media arena que frena en seco; con dos tercios
+//                de vida, una finta antes de la estocada y dos abanicos de
+//                rosas; con un tercio, estocadas dobles y se lanza a traves de
+//                sus propias rosas. La rosa devuelta tambien le pega.
 //
-// Cuatro tramos, de izquierda a derecha (la puerta esta en x 7050):
+// Cinco tramos, de izquierda a derecha (la puerta esta en x 9200):
 //
 //   1. La parada del tranvia     0 - 1900   el anden y su marquesina. Ensena
 //                                           al compadrito: se le ve amagar.
 //   2. El conventillo         2080 - 3880   balcones y tejados de chapa, con
-//                                           floristas arriba. Apuntar arriba.
+//                                           floristas arriba y el primer
+//                                           malevo, que pide el parry.
 //   3. La Vuelta de Rocha     3880 - 5500   el muelle: tablones cortos sobre el
-//                                           Riachuelo y botes amarrados. Rosas
-//                                           colgadas encima de los saltos.
-//   4. Caminito               5500 - 7400   todo junto, y la puerta.
+//                                           Riachuelo y botes amarrados, con
+//                                           gaviotas.
+//   4. La sudestada           5500 - 6540   la calle inundada, sin acera: se
+//                                           cruza en el techo del tranvia, que
+//                                           va y viene, con compadritos que se
+//                                           tiran del cable. En el tranvia no
+//                                           se salta a la ligera: no te lleva
+//                                           en el aire.
+//   5. Caminito               6540 - 8100   todo junto.
+//      La milonga             8100 - 9060   la arena del guapo, y la puerta.
 //
-// Un punto mas dificil que Viena, que es el segundo baile: mas fosos, un
-// enemigo que te persigue a golpes y rosas que se quedan donde vas a saltar.
+// El paseo mas dificil, que el tango es el ultimo baile: mas fosos, enemigos
+// que piden saltar, apuntar y parriar, un tramo sin acera y un portero.
 //
 // En nativo hay HOT-RELOAD: guarda y el nivel se rehace sin recompilar, con la
 // jugadora donde estaba.
 //
 // Coordenadas: x a la derecha, y hacia abajo. El suelo esta en y 470. El salto
 // sube unas 155 unidades y cruza unas 200 corriendo; la estocada de un
-// compadrito cubre unas 230.
+// compadrito cubre unas 230, y la del guapo unas 380.
 //
 // Guia de campos: la misma de `viena.ron`. `tiempo` son los ticks por tiempo
 // del tango: 120 negras por minuto, 30 ticks. En los enemigos, `y` es la
-// superficie donde esta de pie una florista (0 o sin poner, la acera) o la
-// altura de vuelo de una nota.
+// superficie donde esta de pie una florista o un malevo (0 o sin poner, la
+// acera), la altura de vuelo de una gaviota o donde llegan los pies de un
+// compadrito colgado. La plataforma con `mueve` es el tranvia: ver
+// `Mueve::Vaiven` en `paseo.rs`.
 (
   nombre: "El paseo del arrabal",
   jefe: "El Tango",
   subtitulo: "Por la Vuelta de Rocha",
   tiempo: 30,
-  largo: 7400.0,
+  largo: 9600.0,
   salida: 140.0,
-  puerta: 7050.0,
+  puerta: 9200.0,
   suelo: [
     (0.0, 1900.0),
     (2080.0, 2900.0),
     (3080.0, 3880.0),
     (4060.0, 4400.0),
     (4580.0, 4860.0),
-    (5040.0, 5900.0),
-    (6070.0, 7400.0),
+    (5040.0, 5500.0),
+    (6540.0, 6940.0),
+    (7110.0, 9600.0),
   ],
   plataformas: [
     // La parada: el anden, bajo, y el techo de la marquesina encima.
@@ -78,45 +108,66 @@
     (x: 4640.0, y: 350.0, ancho: 150.0),
     (x: 4900.0, y: 430.0, ancho: 100.0),
     (x: 5250.0, y: 425.0, ancho: 90.0),
+    // La sudestada: el techo del tranvia, de orilla a orilla. Cinco segundos
+    // la ida y cinco la vuelta, frenando en cada parada.
+    (
+      x: 5510.0,
+      y: 380.0,
+      ancho: 320.0,
+      mueve: Some(Vaiven(dx: 700.0, dy: 0.0, periodo: 600)),
+    ),
     // Caminito.
-    (x: 5600.0, y: 360.0, ancho: 150.0),
-    (x: 5930.0, y: 385.0, ancho: 110.0),
-    (x: 6180.0, y: 425.0, ancho: 90.0),
-    (x: 6400.0, y: 340.0, ancho: 160.0),
+    (x: 6640.0, y: 360.0, ancho: 150.0),
+    (x: 6970.0, y: 385.0, ancho: 110.0),
+    (x: 7220.0, y: 425.0, ancho: 90.0),
+    (x: 7440.0, y: 340.0, ancho: 160.0),
   ],
   enemigos: [
     // --- La parada del tranvia ---
     (tipo: Compadrito, x: 1000.0),
-    (tipo: Nota, x: 1260.0, y: 330.0),
-    (tipo: Nota, x: 1330.0, y: 300.0),
+    (tipo: Gaviota, x: 1290.0, y: 290.0),
     (tipo: Compadrito, x: 1560.0),
     (tipo: Compadrito, x: 1820.0),
     // --- El conventillo ---
     (tipo: Florista, x: 2375.0, y: 360.0),
+    // El primer malevo, con sitio: la primera rosa que tira es de parry, y
+    // devuelta lo tumba.
+    (tipo: Malevo, x: 2500.0),
     (tipo: Compadrito, x: 2650.0),
-    (tipo: Nota, x: 2860.0, y: 270.0, rosa: true),
+    (tipo: Gaviota, x: 2860.0, y: 270.0, rosa: true),
     (tipo: Florista, x: 3325.0, y: 355.0),
     (tipo: Compadrito, x: 3500.0),
     (tipo: Florista, x: 3615.0, y: 315.0),
     (tipo: Compadrito, x: 3800.0),
     // --- La Vuelta de Rocha ---
     (tipo: Compadrito, x: 4330.0),
-    (tipo: Nota, x: 4500.0, y: 310.0),
+    (tipo: Gaviota, x: 4500.0, y: 310.0),
     (tipo: Florista, x: 4715.0, y: 350.0),
-    (tipo: Nota, x: 4960.0, y: 300.0, rosa: true),
-    (tipo: Nota, x: 5020.0, y: 330.0),
+    (tipo: Gaviota, x: 4960.0, y: 300.0, rosa: true),
+    (tipo: Gaviota, x: 5020.0, y: 330.0),
     (tipo: Compadrito, x: 5350.0),
+    // Para la espera del tranvia.
+    (tipo: Gaviota, x: 5450.0, y: 260.0),
+    // --- La sudestada: colgados del cable ---
+    (tipo: Compadrito, x: 5800.0, y: 300.0),
+    (tipo: Compadrito, x: 6060.0, y: 300.0),
+    (tipo: Gaviota, x: 6200.0, y: 250.0, rosa: true),
+    (tipo: Compadrito, x: 6320.0, y: 300.0),
     // --- Caminito ---
-    (tipo: Florista, x: 5675.0, y: 360.0),
-    (tipo: Compadrito, x: 5780.0),
-    (tipo: Compadrito, x: 5860.0),
-    (tipo: Nota, x: 6000.0, y: 290.0),
-    (tipo: Nota, x: 6060.0, y: 250.0),
-    (tipo: Compadrito, x: 6320.0),
-    (tipo: Florista, x: 6480.0, y: 340.0),
-    (tipo: Compadrito, x: 6720.0),
-    (tipo: Nota, x: 6850.0, y: 300.0, rosa: true),
+    (tipo: Florista, x: 6715.0, y: 360.0),
+    (tipo: Compadrito, x: 6880.0),
+    (tipo: Gaviota, x: 7040.0, y: 290.0),
+    (tipo: Gaviota, x: 7100.0, y: 250.0),
+    (tipo: Gaviota, x: 7300.0, y: 280.0, rosa: true),
+    (tipo: Compadrito, x: 7360.0),
+    (tipo: Florista, x: 7520.0, y: 340.0),
+    // El segundo malevo, con la florista detras: sus rosas tambien valen.
+    (tipo: Malevo, x: 7680.0),
+    (tipo: Compadrito, x: 7800.0),
+    // --- La milonga ---
+    (tipo: Guapo, x: 8800.0, portero: true),
   ],
+  porteria: Some((desde: 8100.0, ficha: Some(4))),
   // Las fichas. Se quedan al llegar a la puerta, no al cogerlas.
   fichas: [
     // En el techo de la marquesina del tranvia.
@@ -126,6 +177,8 @@
     // En el bote amarrado sobre el Riachuelo: hay que caer en el, no saltarlo.
     (3970.0, 395.0),
     // Detras de la ultima florista, en su balcon de Caminito.
-    (6535.0, 305.0),
+    (7575.0, 305.0),
+    // La que suelta el guapo al caer, en medio de la arena.
+    (8580.0, 435.0),
   ],
 )

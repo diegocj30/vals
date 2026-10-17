@@ -25,8 +25,9 @@
 use macroquad::prelude::*;
 use vals_core::math::{PI, sin_cos};
 use vals_core::paseo::{
-    AMAGO_COMPADRITO, CADENCIA_FLORISTA, COLGADA_ROSA, ESTOCADA_COMPADRITO, Enemigo,
-    PLANTADO_COMPADRITO, Paseo, SUELO_Y, VISTA_W, VUELO_ROSA,
+    AMAGO_COMPADRITO, CADENCIA_FLORISTA, COLGADA_GAVIOTA, COLGADA_ROSA, Disparo,
+    ESTOCADA_COMPADRITO, Enemigo, PICADO_GAVIOTA, PLANTADO_COMPADRITO, Paseo, Paso, SUELO_Y,
+    VISTA_W, VUELO_ROSA,
 };
 use vals_core::rng::Pcg32;
 
@@ -108,7 +109,8 @@ pub(crate) fn calle(
     tintas: (Color, Color),
 ) {
     acera(p, l, cam, t, RIACHUELO);
-    plataformas(p, l, tintas);
+    sudestada(p, l, cam, t);
+    plataformas(p, l, t, pulso, tintas);
     puerta(p, l, alpha, pulso, tintas);
 }
 
@@ -668,9 +670,16 @@ fn farolas(p: &Paseo, l: &Layout, cam: f32, pulso: f32) {
 /// largo, un bote amarrado si esta sobre el Riachuelo, cajones del puerto si
 /// esta en el muelle. Lo alto es de las casas: balcones de hierro y, lo mas
 /// alto, tejados de chapa. La superficie siempre clara, que es informacion.
-fn plataformas(p: &Paseo, l: &Layout, tintas: (Color, Color)) {
+fn plataformas(p: &Paseo, l: &Layout, t: f32, pulso: f32, tintas: (Color, Color)) {
     for pl in &p.def.plataformas {
         let (x, y, w) = (pl.x, pl.y, pl.ancho);
+        if let Some(m) = pl.mueve {
+            // Lo que se mueve es el tranvia de la sudestada. Hacia donde va,
+            // para la ola que levanta.
+            let v = m.desvio(p.tick + 1).x - m.desvio(p.tick).x;
+            tranvia_inundado(l, x, y, w, v, t, pulso);
+            continue;
+        }
         let cx = x + w * 0.5;
         if SUELO_Y - y < 60.0 {
             if !p.def.hay_suelo(cx) {
@@ -1042,9 +1051,17 @@ pub(crate) fn compadrito(
     let hombros = (x + inclina, pies - 62.0 + agacha * 1.2);
     let cabeza = (hombros.0 + d * 2.0, hombros.1 - 12.0);
     // Los pies: juntos, abiertos en el amago, en zancada en la estocada y
-    // cruzados al plantarse.
+    // cruzados al plantarse. Colgado del cable, las piernas se mecen.
     let plantado = amago == 0.0 && estocada == 0.0;
-    let (delante, detras) = if estocada > 0.0 {
+    let colgado = e.gesto > 0.0;
+    let mece = if colgado && e.vel.y == 0.0 {
+        (t * PI / 30.0).sin() * 5.0
+    } else {
+        0.0
+    };
+    let (delante, detras) = if colgado {
+        (x + d * 5.0 + mece, x - d * 4.0 + mece)
+    } else if estocada > 0.0 {
         (
             x + d * (8.0 + 22.0 * estocada),
             x - d * (8.0 + 20.0 * estocada),
@@ -1087,7 +1104,7 @@ pub(crate) fn compadrito(
     }
 
     // El baile en reposo: un vaiven con el compas del tango, 30 ticks.
-    let vaiven = if plantado {
+    let vaiven = if plantado && !colgado {
         (0.5 + 0.5 * (t * PI / 15.0).cos()) * 1.5
     } else {
         0.0
@@ -1117,7 +1134,9 @@ pub(crate) fn compadrito(
         );
         // Los brazos: en el amago uno atras, arriba; en la estocada, los dos
         // tendidos; plantado, en jarras.
-        let mano_a = if amago > 0.0 {
+        let mano_a = if colgado {
+            (x - 5.0, pies - 82.0)
+        } else if amago > 0.0 {
             (
                 hombros.0 - d * (14.0 + 10.0 * amago),
                 hombros.1 - 8.0 * amago,
@@ -1127,7 +1146,9 @@ pub(crate) fn compadrito(
         } else {
             (hombros.0 + d * 10.0, hombros.1 + 22.0)
         };
-        let mano_b = if estocada > 0.0 {
+        let mano_b = if colgado {
+            (x + 6.0, pies - 82.0)
+        } else if estocada > 0.0 {
             (hombros.0 - d * 18.0, hombros.1 - 4.0)
         } else {
             (hombros.0 - d * 10.0, hombros.1 + 22.0)
@@ -1329,4 +1350,686 @@ pub(crate) fn rosa(
             fade(WHITE, 0.4 + 0.4 * k),
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// La sudestada
+// ---------------------------------------------------------------------------
+
+/// Por donde va el cable del tranvia: de el cuelgan los compadritos.
+const CABLE: f32 = 224.0;
+
+/// La calle inundada: en los fosos que no se saltan, el agua sube hasta la
+/// acera y tapa los rieles. Encima, el cable del trole de orilla a orilla, con
+/// un poste a cada lado y otro asomando del agua en medio.
+fn sudestada(p: &Paseo, l: &Layout, cam: f32, t: f32) {
+    for par in p.def.suelo.windows(2) {
+        let (a, b) = (par[0].1, par[1].0);
+        if b - a < 600.0 || b < cam - 40.0 || a > cam + VISTA_W + 40.0 {
+            continue;
+        }
+        // El agua, hasta casi el bordillo.
+        let nivel = SUELO_Y - 4.0;
+        rect(l, a, nivel, b - a, 80.0, RIACHUELO);
+        linea(l, (a, nivel), (b, nivel), 2.0, fade(LUZ, 0.35));
+        // Los rieles, bajo el agua.
+        for y in [SUELO_Y + 10.0, SUELO_Y + 20.0] {
+            linea(l, (a, y), (b, y), 2.0, fade(RIEL, 0.25));
+        }
+        // Ondas que van y vienen, y lo que flota: un cajon y un sombrero.
+        for i in 0..3 {
+            let y = nivel + 12.0 + i as f32 * 14.0;
+            let d = (t * 0.04 + i as f32 * 2.0).sin() * 16.0;
+            let mut x = a + 30.0 + (i * 37) as f32;
+            while x < b - 40.0 {
+                linea(l, (x + d, y), (x + d + 26.0, y), 1.5, fade(LUZ, 0.2));
+                x += 90.0;
+            }
+        }
+        let flota = |k: f32| (t * 0.05 + k).sin() * 2.5;
+        let cx = a + (b - a) * 0.3;
+        rect(l, cx - 12.0, nivel - 8.0 + flota(0.0), 24.0, 12.0, TINTA);
+        rect(l, cx - 10.0, nivel - 6.0 + flota(0.0), 20.0, 8.0, CAJON);
+        let sx = a + (b - a) * 0.72;
+        let sy = nivel - 2.0 + flota(1.3);
+        rect(l, sx - 14.0, sy - 2.0, 28.0, 4.0, TINTA);
+        rect(l, sx - 7.0, sy - 9.0, 14.0, 8.0, TINTA);
+
+        // Los postes y el cable, que cae en curva de uno a otro.
+        let postes = [a - 24.0, (a + b) * 0.5, b + 24.0];
+        for (i, &x) in postes.iter().enumerate() {
+            let pie = if i == 1 { nivel } else { SUELO_Y };
+            rect(l, x - 4.0, CABLE - 16.0, 8.0, pie - CABLE + 16.0, TINTA);
+            rect(l, x - 14.0, CABLE - 10.0, 28.0, 4.0, TINTA);
+        }
+        for tramo in postes.windows(2) {
+            let (x0, x1) = (tramo[0], tramo[1]);
+            let mut antes = (x0, CABLE);
+            for n in 1..=16 {
+                let f = n as f32 / 16.0;
+                let ahora = (x0 + (x1 - x0) * f, CABLE + 18.0 * 4.0 * f * (1.0 - f));
+                linea(l, antes, ahora, 3.0, TINTA);
+                antes = ahora;
+            }
+        }
+    }
+}
+
+/// El tranvia en la inundacion: bordo y crema como el del fondo, mas grande,
+/// con el agua por las ruedas. El techo es lo que se pisa y va claro, sin nada
+/// encima mas que el trole, que sube por detras hasta el cable. Delante, segun
+/// hacia donde vaya, la ola que levanta.
+fn tranvia_inundado(l: &Layout, x: f32, y: f32, w: f32, v: f32, t: f32, pulso: f32) {
+    let nivel = SUELO_Y - 4.0;
+    let traqueteo = (t * 0.45).sin().round();
+    // El trole, por detras de la caja.
+    let (cola, lado) = if v >= 0.0 {
+        (x + 40.0, -1.0)
+    } else {
+        (x + w - 40.0, 1.0)
+    };
+    let toma = cola + lado * 70.0;
+    linea(l, (cola, y + traqueteo), (toma, CABLE + 6.0), 3.0, TINTA);
+    circulo(l, toma, CABLE + 6.0, 3.5, TINTA);
+    if pulso > 0.85 {
+        circulo(l, toma, CABLE + 6.0, 5.0, fade(LUZ, 0.9));
+    }
+    // La caja: crema arriba con las ventanillas, bordo abajo.
+    let (cuerpo, bajo) = (y + 8.0 + traqueteo, nivel + 30.0);
+    rect(
+        l,
+        x - 3.0,
+        cuerpo - 3.0,
+        w + 6.0,
+        bajo - cuerpo + 6.0,
+        TINTA,
+    );
+    rect(l, x, cuerpo, w, 48.0, TRANVIA_CREMA);
+    rect(l, x, cuerpo + 48.0, w, bajo - cuerpo - 48.0, TRANVIA);
+    linea(
+        l,
+        (x, cuerpo + 48.0),
+        (x + w, cuerpo + 48.0),
+        2.0,
+        fade(TINTA, 0.8),
+    );
+    let mut rng = Pcg32::new(0x5D_E57A);
+    let n = ((w - 20.0) / 34.0) as i32;
+    for i in 0..n {
+        let vx = x + 12.0 + i as f32 * 34.0;
+        rect(
+            l,
+            vx,
+            cuerpo + 8.0,
+            26.0,
+            30.0,
+            fade(VENTANA, 0.8 + 0.2 * pulso),
+        );
+        draw_rect_lines(l, vx, cuerpo + 8.0, 26.0, 30.0, 1.5);
+        if rng.next_f32() < 0.6 {
+            circulo(l, vx + 13.0, cuerpo + 24.0, 5.0, fade(TINTA, 0.75));
+            rect(l, vx + 6.0, cuerpo + 29.0, 14.0, 9.0, fade(TINTA, 0.75));
+        }
+    }
+    // El numero de la linea y un faro a cada lado.
+    rect(
+        l,
+        x + w * 0.5 - 25.0,
+        cuerpo + 54.0,
+        50.0,
+        16.0,
+        TRANVIA_CREMA,
+    );
+    draw_rect_lines(l, x + w * 0.5 - 25.0, cuerpo + 54.0, 50.0, 16.0, 1.5);
+    let s = l.to_screen(x + w * 0.5, cuerpo + 67.0);
+    fuentes::centrado("64", s.x, s.y, l.len(13.0), Cara::Titulo, TINTA);
+    for fx in [x + 8.0, x + w - 8.0] {
+        circulo(l, fx, cuerpo + 62.0, 6.0, TINTA);
+        circulo(l, fx, cuerpo + 62.0, 4.5, fade(LUZ, 0.9));
+    }
+    // El techo, claro: es donde se pisa.
+    tabla(l, x - 4.0, y + traqueteo, w + 8.0, 8.0);
+    // El agua por delante de las ruedas, y la ola de proa.
+    rect(l, x - 30.0, nivel + 6.0, w + 60.0, 40.0, RIACHUELO);
+    linea(
+        l,
+        (x - 30.0, nivel + 6.0),
+        (x + w + 30.0, nivel + 6.0),
+        2.0,
+        fade(LUZ, 0.35),
+    );
+    if v.abs() > 0.5 {
+        let (proa, lado) = if v > 0.0 { (x + w, 1.0) } else { (x, -1.0) };
+        let alto = (v.abs() * 2.5).min(14.0);
+        tri(
+            l,
+            (proa, nivel + 6.0),
+            (proa + lado * 30.0, nivel + 6.0),
+            (proa + lado * 4.0, nivel + 6.0 - alto),
+            fade(HUESO, 0.7),
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Las gaviotas, los malevos y el guapo
+// ---------------------------------------------------------------------------
+
+const PLUMA: Color = color_u8!(176, 172, 182, 255);
+const PICO: Color = color_u8!(232, 186, 70, 255);
+
+/// Una gaviota del puerto. **Las alas dicen en que va**: cerniendose planea
+/// con las alas abiertas; en el remonte las sube y grazna, que es el aviso;
+/// en el picado las pliega hacia atras y deja rayas que se acortan al frenar;
+/// colgada aletea en el sitio. La de parry, rosa y con su anillo.
+pub(crate) fn gaviota(e: &Enemigo, l: &Layout, t: f32, tinte: &dyn Fn(Color) -> Color) {
+    let (x, y, d) = (e.pos.x, e.pos.y, e.dir);
+    let r = e.reloj;
+    let picado = PICADO_GAVIOTA + COLGADA_GAVIOTA;
+    let remonta = r >= picado;
+    let pica = r < picado && r >= COLGADA_GAVIOTA;
+    let frena = if pica {
+        (r - COLGADA_GAVIOTA) as f32 / PICADO_GAVIOTA as f32
+    } else {
+        0.0
+    };
+    let cuerpo = tinte(if e.rosa { ROSA } else { HUESO });
+    let ala = tinte(if e.rosa {
+        mezcla(ROSA, HUESO, 0.4)
+    } else {
+        PLUMA
+    });
+    // El eje del cuerpo: de lado, o a lo largo del picado. `n` va hacia
+    // arriba del ave, mire adonde mire.
+    let v = e.vel.normalize_or_zero();
+    let eje = if pica && v.x.abs() + v.y.abs() > 0.0 {
+        vec2(v.x, v.y)
+    } else {
+        vec2(d, 0.0)
+    };
+    let n = vec2(eje.y, -eje.x) * d;
+    let punto = |a: f32, b: f32| {
+        let p = vec2(x, y) + eje * a + n * b;
+        (p.x, p.y)
+    };
+    // Las rayas del picado, detras, mas cortas segun frena.
+    if pica {
+        for k in [-6.0, 0.0, 6.0] {
+            let a = punto(-18.0, k);
+            let b = punto(-18.0 - 60.0 * frena, k);
+            linea(l, a, b, 2.5, fade(TINTA, 0.75));
+        }
+    }
+    // Las alas: hombro, codo y punta, y cuanto suben.
+    let aleteo = if remonta {
+        0.8 + 0.5 * (t * 0.9).sin()
+    } else if pica {
+        -0.2
+    } else if r > 0 {
+        0.3 + 0.6 * (t * 0.5).sin()
+    } else {
+        0.15 + 0.15 * (t * 0.12 + x * 0.01).sin()
+    };
+    let plegada = if pica { 1.0 } else { 0.0 };
+    let hombro = punto(2.0, 2.0);
+    let codo = punto(-4.0 - 10.0 * plegada, 16.0 + 14.0 * aleteo);
+    let punta = punto(
+        -14.0 - 22.0 * plegada,
+        30.0 + 22.0 * aleteo - 10.0 * plegada,
+    );
+    let cabeza = punto(13.0, 4.0);
+    // El ala de detras, mas corta y en sombra.
+    let codo_lejos = punto(4.0 - 8.0 * plegada, 13.0 + 11.0 * aleteo);
+    let punta_lejos = punto(-4.0 - 18.0 * plegada, 24.0 + 17.0 * aleteo - 8.0 * plegada);
+    let sombra = mezcla(ala, TINTA, 0.35);
+    con_tinta(|g, es_tinta| {
+        let c = if es_tinta { TINTA } else { sombra };
+        linea(l, hombro, codo_lejos, 6.0 + 2.0 * g, c);
+        linea(l, codo_lejos, punta_lejos, 4.0 + 2.0 * g, c);
+    });
+    con_tinta(|g, es_tinta| {
+        let c = |col: Color| if es_tinta { TINTA } else { col };
+        linea(l, hombro, codo, 7.0 + 2.0 * g, c(ala));
+        linea(l, codo, punta, 5.0 + 2.0 * g, c(ala));
+        let p = l.to_screen(x, y);
+        let giro = eje.y.atan2(eje.x).to_degrees();
+        draw_ellipse(p.x, p.y, l.len(15.0 + g), l.len(7.5 + g), giro, c(cuerpo));
+        circulo(l, cabeza.0, cabeza.1, 6.0 + g, c(cuerpo));
+        tri(
+            l,
+            punto(-12.0, 2.0),
+            punto(-22.0, 7.0 + g),
+            punto(-22.0, -4.0 - g),
+            c(cuerpo),
+        );
+    });
+    // Las puntas negras, el pico y el ojo.
+    let casi = (
+        codo.0 + (punta.0 - codo.0) * 0.6,
+        codo.1 + (punta.1 - codo.1) * 0.6,
+    );
+    linea(l, casi, punta, 4.0, TINTA);
+    let abre = if remonta { 3.0 } else { 0.0 };
+    tri(
+        l,
+        punto(17.0, 5.0),
+        punto(27.0, 3.0 + abre),
+        punto(17.0, 1.0),
+        PICO,
+    );
+    if remonta {
+        tri(
+            l,
+            punto(17.0, 3.0),
+            punto(26.0, -1.0 - abre),
+            punto(17.0, 0.0),
+            PICO,
+        );
+        // El graznido: dos rayitas delante del pico.
+        for k in [0.0, 1.0] {
+            let a = punto(32.0 + 6.0 * k, 4.0 + 6.0 * k);
+            let b = punto(38.0 + 6.0 * k, 6.0 + 8.0 * k);
+            linea(l, a, b, 2.0, TINTA);
+        }
+    }
+    let ojo = punto(15.0, 6.0);
+    circulo(l, ojo.0, ojo.1, 1.4, TINTA);
+    if e.rosa {
+        anillo(l, x, y, t);
+    }
+}
+
+/// El anillo que late de lo que se parria, igual que el de las notas.
+fn anillo(l: &Layout, x: f32, y: f32, t: f32) {
+    let k = 0.5 + 0.5 * (t * 0.2).sin();
+    let p = l.to_screen(x, y);
+    draw_circle_lines(
+        p.x,
+        p.y,
+        l.len(22.0 + 4.0 * k),
+        2.0,
+        fade(WHITE, 0.4 + 0.4 * k),
+    );
+}
+
+/// El malevo: chambergo bajo, bigotazo, panuelo negro, faja carmin y botas,
+/// abierto de piernas. **El poncho es el escudo**: enrollado en el brazo de
+/// delante, colgando a rayas delante del pecho, y cuando para un disparo se
+/// sacude y destella. Lleva una rosa en la boca; para tirarla la saca y echa
+/// el brazo atras dos tiempos antes, que es el aviso.
+pub(crate) fn malevo(
+    e: &Enemigo,
+    l: &Layout,
+    t: f32,
+    (carmin, negro): (Color, Color),
+    tinte: &dyn Fn(Color) -> Color,
+) {
+    let (x, pies, d) = (e.pos.x, e.pos.y + 38.0, e.dir);
+    let saco = tinte(color_u8!(54, 44, 48, 255));
+    let pantalon = tinte(negro);
+    let piel = tinte(PIEL);
+    let faja = tinte(carmin);
+    // El vaiven del tango, en el compas.
+    let vaiven = (0.5 + 0.5 * (t * PI / 15.0).cos()) * 1.5;
+    let cadera = (x, pies - 32.0);
+    let hombros = (x - d * 2.0, pies - 62.0 + vaiven);
+    let cabeza = (hombros.0 + d * 2.0, hombros.1 - 13.0);
+    // La mano de atras: en la cintura, o cargando la rosa.
+    let carga = if e.reloj > 0 {
+        1.0 - e.reloj as f32 / 60.0
+    } else {
+        0.0
+    };
+    let mano = if e.reloj > 0 {
+        (
+            hombros.0 - d * (10.0 + 14.0 * carga),
+            hombros.1 - 4.0 - 16.0 * carga,
+        )
+    } else {
+        (hombros.0 - d * 12.0, hombros.1 + 26.0)
+    };
+    con_tinta(|g, es_tinta| {
+        let c = |col: Color| if es_tinta { TINTA } else { col };
+        // Abierto de piernas, con las botas.
+        for px in [x + d * 13.0, x - d * 12.0] {
+            linea(l, cadera, (px, pies - 8.0), 8.0 + 2.0 * g, c(pantalon));
+            rect(
+                l,
+                px - 6.0 - g,
+                pies - 14.0 - g,
+                12.0 + 2.0 * g,
+                14.0 + 2.0 * g,
+                TINTA,
+            );
+        }
+        linea(
+            l,
+            (cadera.0, cadera.1 + 4.0),
+            hombros,
+            22.0 + 2.0 * g,
+            c(saco),
+        );
+        linea(
+            l,
+            (hombros.0, hombros.1 + 4.0),
+            mano,
+            6.0 + 2.0 * g,
+            c(saco),
+        );
+        circulo(l, cabeza.0, cabeza.1, 8.5 + g, c(piel));
+    });
+    // La faja, el panuelo y el bigotazo.
+    rect(l, x - 11.0, pies - 38.0, 22.0, 6.0, faja);
+    draw_rect_lines(l, x - 11.0, pies - 38.0, 22.0, 6.0, 1.2);
+    tri(
+        l,
+        (hombros.0 - 7.0, hombros.1 - 2.0),
+        (hombros.0 + 7.0, hombros.1 - 2.0),
+        (hombros.0 + d * 2.0, hombros.1 + 9.0),
+        TINTA,
+    );
+    linea(
+        l,
+        (cabeza.0 + d * 1.0, cabeza.1 + 3.5),
+        (cabeza.0 + d * 11.0, cabeza.1 + 5.5),
+        3.0,
+        TINTA,
+    );
+    circulo(l, cabeza.0 + d * 4.0, cabeza.1 - 1.5, 1.4, TINTA);
+    // El chambergo, de ala baja y sin cinta: no es un compadrito.
+    let (sx, sy) = (cabeza.0, cabeza.1 - 6.0);
+    rect(l, sx - 17.0, sy - 2.0, 34.0, 5.0, TINTA);
+    rect(l, sx - 9.0, sy - 9.0, 18.0, 8.0, TINTA);
+    // La rosa: en la boca, o en la mano cargando.
+    let (rx, ry) = if e.reloj > 0 {
+        mano
+    } else {
+        (cabeza.0 + d * 12.0, cabeza.1 + 4.0)
+    };
+    if e.reloj == 0 {
+        linea(l, (cabeza.0 + d * 6.0, ry), (rx, ry), 2.0, VERDE);
+    }
+    circulo(l, rx, ry, 4.6, TINTA);
+    circulo(l, rx, ry, 3.4, carmin);
+
+    // El poncho, delante: colgado del brazo, a rayas de las dos tintas. Al
+    // parar un disparo se sacude hacia atras y destella.
+    let sacude = e.gesto;
+    let (px, py) = (x + d * (16.0 - 4.0 * sacude), hombros.1 + 4.0);
+    let (ancho, largo) = (16.0, 46.0);
+    let lado = |k: f32| px + d * ancho * k;
+    let bajo = |k: f32| (lado(k), py + largo + 4.0 * (t * 0.2 + k * 3.0).sin());
+    let rayas = [carmin, HUESO, negro, HUESO, carmin];
+    let franja = 1.0 / rayas.len() as f32;
+    con_tinta(|g, es_tinta| {
+        // El brazo que lo sujeta, de frente.
+        let c = if es_tinta { TINTA } else { saco };
+        linea(l, (hombros.0, hombros.1 + 4.0), (px, py), 6.0 + 2.0 * g, c);
+        for (i, col) in rayas.iter().enumerate() {
+            let (k0, k1) = (i as f32 * franja - 0.5, (i + 1) as f32 * franja - 0.5);
+            let col = if es_tinta {
+                TINTA
+            } else {
+                tinte(mezcla(*col, WHITE, sacude * 0.7))
+            };
+            let (a, b) = (bajo(k0), bajo(k1));
+            let (x0, x1) = (lado(k0).min(lado(k1)), lado(k0).max(lado(k1)));
+            rect(l, x0 - g, py - g, x1 - x0 + 2.0 * g, largo + g, col);
+            tri(l, (lado(k0), py + largo), a, b, col);
+            tri(l, (lado(k0), py + largo), (lado(k1), py + largo), b, col);
+        }
+    });
+    // El rollo del poncho en el brazo y los flecos.
+    circulo(l, px, py, 8.0, TINTA);
+    circulo(l, px, py, 6.0, tinte(carmin));
+    for k in 0..5 {
+        let (fx, fy) = bajo(k as f32 / 4.0 - 0.5);
+        linea(l, (fx, fy), (fx, fy + 6.0), 1.5, TINTA);
+    }
+}
+
+/// El guapo del barrio: mas alto y mas ancho que un compadrito, saco cruzado
+/// a rayas, lengue blanco, clavel en la solapa y el chambergo ladeado. **Lo
+/// que hace se le lee en el cuerpo**: en el amago se echa atras con el puno
+/// cerrado; la finta es media estocada; en la estocada va tendido con rayas
+/// que se acortan al frenar; plantado hace el corte, con un pie cruzado; y
+/// para tirar echa atras el ramo. Pierde el chambergo en la segunda fase y el
+/// saco en la tercera, que es como se ve que va perdiendo.
+pub(crate) fn guapo(
+    e: &Enemigo,
+    l: &Layout,
+    t: f32,
+    tiempo: u32,
+    (carmin, negro): (Color, Color),
+    tinte: &dyn Fn(Color) -> Color,
+) {
+    let (x, pies, d) = (e.pos.x, e.pos.y + 44.0, e.dir);
+    let (paso, k) = e.paso(tiempo).unwrap_or((Paso::Plantado, 0.0));
+    let fase = e.fase();
+    let saco = tinte(if fase < 2 { negro } else { HUESO });
+    let pantalon = tinte(color_u8!(70, 62, 70, 255));
+    let piel = tinte(PIEL);
+    let blanco = tinte(HUESO);
+    // Cuanto empuja: la estocada y la finta salen a tope y frenan.
+    let empuje = match paso {
+        Paso::Estocada => 1.0 - k,
+        Paso::Finta => 0.5 * (1.0 - k),
+        _ => 0.0,
+    };
+    let amago = if paso == Paso::Amago {
+        (k * PI).sin()
+    } else {
+        0.0
+    };
+    let inclina = d * (-12.0 * amago + 22.0 * empuje);
+    let agacha = 9.0 * amago + 8.0 * empuje;
+    let vaiven = if paso == Paso::Plantado {
+        (0.5 + 0.5 * (t * PI / 15.0).cos()) * 1.8
+    } else {
+        0.0
+    };
+    let cadera = (x - inclina * 0.2, pies - 40.0 + agacha);
+    let hombros = (x + inclina, pies - 78.0 + agacha * 1.2 + vaiven);
+    let cabeza = (hombros.0 + d * 2.5, hombros.1 - 15.0);
+    let (delante, detras) = match paso {
+        Paso::Estocada | Paso::Finta => (
+            x + d * (10.0 + 30.0 * empuje),
+            x - d * (10.0 + 26.0 * empuje),
+        ),
+        Paso::Plantado => (x - d * 4.0, x + d * 7.0),
+        _ => (x + d * (8.0 + 6.0 * amago), x - d * (8.0 + 8.0 * amago)),
+    };
+
+    // Las rayas de la estocada, detras, mas cortas segun frena.
+    if empuje > 0.0 {
+        for (n, h) in [(0.0, 22.0), (1.0, 48.0), (2.0, 74.0)] {
+            let largo = 110.0 * empuje * (1.0 - n * 0.2);
+            let y = pies - h;
+            let x0 = x - d * (26.0 + n * 6.0);
+            linea(l, (x0, y), (x0 - d * largo, y), 3.5, fade(TINTA, 0.8));
+        }
+    }
+    // El polvo al clavarse, al empezar el corte.
+    if paso == Paso::Plantado && k < 0.5 {
+        let f = 1.0 - k * 2.0;
+        for (i, dx) in [(0.0, 12.0), (1.0, 26.0), (2.0, 40.0)] {
+            let r = 5.0 + 8.0 * (1.0 - f) + i * 1.5;
+            let cx = delante + d * dx * (1.5 - f);
+            let cy = pies - 5.0 - 7.0 * (1.0 - f) * i;
+            circulo(l, cx, cy, r + 2.0, fade(TINTA, 0.8 * f));
+            circulo(l, cx, cy, r, fade(HUESO, 0.9 * f));
+        }
+    }
+
+    // Las manos: el puno atras en el amago, tendidas en la estocada, el ramo
+    // atras al cargar, adelante al tirar, y en jarras plantado.
+    let (mano_a, mano_b) = match paso {
+        Paso::Amago => (
+            (
+                hombros.0 - d * (16.0 + 10.0 * amago),
+                hombros.1 - 10.0 * amago,
+            ),
+            (hombros.0 + d * 12.0, hombros.1 + 18.0),
+        ),
+        Paso::Estocada | Paso::Finta => (
+            (hombros.0 + d * 30.0, hombros.1 + 6.0),
+            (hombros.0 - d * 22.0, hombros.1 - 4.0),
+        ),
+        Paso::Carga => (
+            (
+                hombros.0 - d * (14.0 + 14.0 * k),
+                hombros.1 - 6.0 - 20.0 * k,
+            ),
+            (hombros.0 + d * 12.0, hombros.1 + 22.0),
+        ),
+        Paso::Tira => (
+            (hombros.0 + d * 30.0, hombros.1 - 4.0),
+            (hombros.0 - d * 12.0, hombros.1 + 26.0),
+        ),
+        Paso::Plantado => (
+            (hombros.0 + d * 12.0, hombros.1 + 28.0),
+            (hombros.0 - d * 12.0, hombros.1 + 28.0),
+        ),
+    };
+    con_tinta(|g, es_tinta| {
+        let c = |col: Color| if es_tinta { TINTA } else { col };
+        linea(l, cadera, (delante, pies - 5.0), 9.0 + 2.0 * g, c(pantalon));
+        linea(l, cadera, (detras, pies - 5.0), 9.0 + 2.0 * g, c(pantalon));
+        for px in [delante, detras] {
+            rect(
+                l,
+                px - 8.0 - g,
+                pies - 7.0 - g,
+                16.0 + 2.0 * g,
+                7.0 + 2.0 * g,
+                c(blanco),
+            );
+        }
+        linea(
+            l,
+            (cadera.0, cadera.1 + 8.0),
+            hombros,
+            28.0 + 2.0 * g,
+            c(saco),
+        );
+        for m in [mano_a, mano_b] {
+            linea(l, (hombros.0, hombros.1 + 4.0), m, 8.0 + 2.0 * g, c(saco));
+            circulo(l, m.0, m.1, 4.5 + g, c(piel));
+        }
+        circulo(l, cabeza.0, cabeza.1, 10.0 + g, c(piel));
+    });
+    // Los botines de dos tonos: la puntera negra.
+    for px in [delante, detras] {
+        rect(l, px - 8.0 + d * 8.0, pies - 7.0, 8.0, 7.0, TINTA);
+    }
+    // Las rayas del saco o, sin saco, los tiradores en carmin.
+    for n in [-1.0, 1.0] {
+        let dx = n * 7.0;
+        let (grosor, color) = if fase < 2 {
+            (1.2, fade(HUESO, 0.25))
+        } else {
+            (2.5, tinte(carmin))
+        };
+        linea(
+            l,
+            (cadera.0 + dx * 0.8, cadera.1 + 6.0),
+            (hombros.0 + dx, hombros.1 + 6.0),
+            grosor,
+            color,
+        );
+    }
+    if fase < 2 {
+        // El clavel en la solapa.
+        let (cx, cy) = (hombros.0 + d * 8.0, hombros.1 + 10.0);
+        circulo(l, cx, cy, 4.5, TINTA);
+        circulo(l, cx, cy, 3.4, carmin);
+    }
+    // El lengue: el panuelo de seda, que vuela hacia atras al lanzarse.
+    let vuelo = 12.0 + 26.0 * empuje;
+    let (hx, hy) = hombros;
+    tri(
+        l,
+        (hx - 8.0, hy - 3.0),
+        (hx + 8.0, hy - 3.0),
+        (hx - d * vuelo, hy + 12.0),
+        TINTA,
+    );
+    tri(
+        l,
+        (hx - 6.0, hy - 2.0),
+        (hx + 6.0, hy - 2.0),
+        (hx - d * (vuelo - 3.0), hy + 9.0),
+        blanco,
+    );
+    // La cara: la ceja, el ojo, la cicatriz y el bigote fino.
+    linea(
+        l,
+        (cabeza.0 + d * 2.0, cabeza.1 - 4.0),
+        (cabeza.0 + d * 9.0, cabeza.1 - 3.0),
+        2.0,
+        TINTA,
+    );
+    circulo(l, cabeza.0 + d * 5.0, cabeza.1 - 0.5, 1.6, TINTA);
+    linea(
+        l,
+        (cabeza.0 - d * 1.0, cabeza.1 + 1.0),
+        (cabeza.0 + d * 3.0, cabeza.1 + 7.0),
+        1.2,
+        fade(carmin, 0.9),
+    );
+    linea(
+        l,
+        (cabeza.0 + d * 3.0, cabeza.1 + 5.0),
+        (cabeza.0 + d * 10.0, cabeza.1 + 5.0),
+        1.8,
+        TINTA,
+    );
+    if fase == 0 {
+        // El chambergo ladeado, con cinta carmin.
+        let (sx, sy) = (cabeza.0 + d * 2.0, cabeza.1 - 8.0);
+        rect(l, sx - 21.0, sy - 2.0, 42.0, 6.0, TINTA);
+        rect(l, sx - 11.0, sy - 12.0, 22.0, 11.0, TINTA);
+        rect(l, sx - 10.0, sy - 5.0, 20.0, 3.0, tinte(carmin));
+    } else {
+        // Sin sombrero: el pelo engominado, con su raya.
+        arco(l, cabeza.0, cabeza.1 - 1.0, 10.0, 5.0, TINTA);
+        linea(
+            l,
+            (cabeza.0 - d * 3.0, cabeza.1 - 11.0),
+            (cabeza.0 + d * 6.0, cabeza.1 - 9.0),
+            1.2,
+            fade(HUESO, 0.5),
+        );
+    }
+    // El ramo, atras al cargar: la de abajo del abanico, la de parry.
+    if paso == Paso::Carga {
+        for (n, (dx, dy)) in [(0.0, -6.0), (-5.0, 0.0), (5.0, 1.0)]
+            .into_iter()
+            .enumerate()
+        {
+            let (rx, ry) = (mano_a.0 + dx, mano_a.1 + dy);
+            circulo(l, rx, ry, 4.8, TINTA);
+            circulo(l, rx, ry, 3.6, if n == 0 { ROSA } else { carmin });
+        }
+    }
+}
+
+/// La rosa devuelta de un parry: gira de vuelta hacia quien la tiro, con una
+/// estela rosa.
+pub(crate) fn devuelta(d: &Disparo, l: &Layout, t: f32) {
+    let dir = d.vel.normalize_or_zero();
+    for k in 1..=4 {
+        let p = d.pos - dir * 9.0 * k as f32;
+        let k = k as f32;
+        circulo(l, p.x, p.y, 6.0 - k, fade(ROSA, 0.6 - 0.12 * k));
+    }
+    con_tinta(|g, es_tinta| {
+        let col = if es_tinta { TINTA } else { ROSA };
+        for i in 0..5 {
+            let (s, c) = sin_cos(t * 0.6 + i as f32 * PI * 0.4);
+            circulo(l, d.pos.x + c * 5.0, d.pos.y + s * 5.0, 5.0 + g, col);
+        }
+    });
+    circulo(l, d.pos.x, d.pos.y, 4.0, mezcla(ROSA, TINTA, 0.35));
+    anillo(l, d.pos.x, d.pos.y, t);
 }
