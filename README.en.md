@@ -12,7 +12,7 @@ Every boss is a dance, and its bullets are the choreography.
 [![CI](https://github.com/diegocj30/vals/actions/workflows/ci.yml/badge.svg)](https://github.com/diegocj30/vals/actions/workflows/ci.yml)
 ![Rust](https://img.shields.io/badge/Rust-stable-1a1418?logo=rust)
 ![WebAssembly](https://img.shields.io/badge/WebAssembly-no_wasm--bindgen-654ff0?logo=webassembly&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-503-2f7d5b)
+![Tests](https://img.shields.io/badge/tests-502-2f7d5b)
 
 [Español](README.md) · **English**
 
@@ -101,7 +101,7 @@ how the bullets draw it, and a photo of every figure.
 
 ## How it's built
 
-| 0 images | 32,000 bullets at 144 fps | 4 KB per 30 s of play | 503 tests |
+| 0 images | 32,000 bullets at 144 fps | 4 KB per 30 s of play | 502 tests |
 |:---:|:---:|:---:|:---:|
 | Everything is drawn in code, and the music is synthesized at startup | Instanced rendering; with macroquad's primitives, 30 fps | A run is a seed plus the list of inputs | Including bots that play every promenade end to end |
 
