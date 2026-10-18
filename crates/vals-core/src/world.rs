@@ -501,7 +501,8 @@ impl World {
         // antes el super ponia `victory` a pelo y no avisaba de nada, asi que
         // rematar con el super no sonaba, no sacudia y no pasaba de jefe, y
         // pasar de figura con el super tampoco sonaba a cambio de figura.
-        if !self.boss.defeated && self.boss.damage(SUPER_DAMAGE) {
+        // Respirando tras cambiar de figura no se le hace dano, como a tiros.
+        if !self.boss.defeated && self.boss.respiro == 0 && self.boss.damage(SUPER_DAMAGE) {
             self.bullets.clear();
             if self.boss.defeated {
                 self.advance_boss();
@@ -512,7 +513,9 @@ impl World {
     }
 
     fn resolve_player_shots(&mut self) {
-        if self.boss.defeated || self.is_over() {
+        // Mientras respira tras cambiar de figura, los disparos le atraviesan:
+        // si no, eran tres cuartos de segundo de dano regalado.
+        if self.boss.defeated || self.is_over() || self.boss.respiro > 0 {
             return;
         }
         let impactos = self
@@ -670,6 +673,12 @@ mod tests {
                 assert_eq!(w.bullets.live_count(), 0);
                 w.step(NADA);
                 assert!(w.limpiadas.is_empty(), "no se vacia en el tick siguiente");
+                // Y mientras respira, los disparos le atraviesan.
+                let vida = w.boss.hp;
+                for _ in 2..crate::boss::RESPIRO_TICKS {
+                    w.step(disparo);
+                }
+                assert_eq!(w.boss.hp, vida, "respirando no se le hace dano");
                 return;
             }
         }
@@ -1202,6 +1211,8 @@ mod tests {
         for _ in 0..fases {
             w.player.pos = w.boss.pos + Vec2::new(0.0, 150.0);
             w.boss.hp = 1;
+            // Lo que se prueba es pasar de figura, no el respiro.
+            w.boss.respiro = 0;
             correr(w, DISPARAR, 40);
         }
     }
@@ -1218,6 +1229,8 @@ mod tests {
         for _ in 1..w.boss.phase_count() {
             w.player.pos = w.boss.pos + Vec2::new(0.0, 150.0);
             w.boss.hp = 1;
+            // Lo que se prueba es pasar de figura, no el respiro.
+            w.boss.respiro = 0;
             correr(&mut w, DISPARAR, 40);
             vistas.push(w.boss.phase_name().to_string());
         }
@@ -1544,6 +1557,7 @@ mod tests {
             w.boss.damage(hp);
         }
         w.boss.hp = 1;
+        w.boss.respiro = 0;
         w.player.meter = METER_MAX;
         w.step(SUPER);
         assert!(w.events.boss_down, "la caida del jefe tiene que sonar");
@@ -1846,6 +1860,8 @@ mod tests {
         for _ in 0..2 {
             w.player.pos = w.boss.pos + Vec2::new(0.0, 150.0);
             w.boss.hp = 1;
+            // Lo que se prueba es pasar de figura, no el respiro.
+            w.boss.respiro = 0;
             correr(&mut w, DISPARAR, 40);
         }
         assert_eq!(w.boss.phase, 2);

@@ -113,7 +113,9 @@ const HIT_FLASH_TICKS: u32 = 4;
 
 /// Ticks que la figura nueva espera antes de disparar. Sin este respiro el
 /// cambio de figura no se veia: la pantalla se vaciaba y en el mismo tick
-/// salia la primera rafaga de la siguiente.
+/// salia la primera rafaga de la siguiente. Mientras respira la jugadora
+/// tampoco le hace dano (`World`): si no, eran tres cuartos de segundo de
+/// disparos regalados.
 pub const RESPIRO_TICKS: u32 = 45;
 
 /// Una fase, tal y como se escribe en el RON.
