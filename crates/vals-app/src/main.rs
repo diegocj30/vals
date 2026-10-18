@@ -85,6 +85,21 @@ enum Escena {
     Libro,
 }
 
+impl Escena {
+    /// Para el registro de tirones.
+    fn nombre(self) -> &'static str {
+        match self {
+            Escena::Menu => "menu",
+            Escena::Prologo => "prologo",
+            Escena::Pista => "pista",
+            Escena::Paseo => "paseo",
+            Escena::Combate => "combate",
+            Escena::Modista => "modista",
+            Escena::Libro => "libro",
+        }
+    }
+}
+
 /// "VALS" en ASCII. Semilla por defecto.
 const SEED: u64 = 0x5641_4C53;
 
@@ -273,6 +288,8 @@ async fn run_game() {
     // Apagado de serie: es una herramienta, no parte del juego. F1 lo trae.
     let mut show_debug = false;
     let con_pruebas = pruebas();
+    let mut tirones = stats::Tirones::new(con_pruebas);
+    let mut tema_antes = None;
     let mut hot = HotReload::new();
     let mut frames: u32 = 0;
     let mut aviso: Option<(String, bool, u32)> = None;
@@ -343,6 +360,7 @@ async fn run_game() {
     let mut intento = libro::Intento::default();
 
     loop {
+        tirones.empezar(get_time());
         frames += 1;
         entrada.actualizar();
         let escena_antes = escena;
@@ -823,7 +841,11 @@ async fn run_game() {
                 Escena::Paseo => {
                     if let Some((_, p)) = paseo.as_mut() {
                         let andando = !p.terminado();
+                        let habia = p.enemigos.len();
                         p.step(input);
+                        if p.enemigos.len() > habia {
+                            tirones.suceso("aparicion");
+                        }
                         if andando {
                             intento.apuntar(&mut progreso.marcas, &p.events, 0);
                         }
@@ -915,6 +937,23 @@ async fn run_game() {
             });
         }
         stats.push_sim((get_time() - t0) as f32);
+        tirones.sim(get_time() - t0, steps);
+        for (paso, que) in [
+            (eventos.phase_changed, "figura"),
+            (eventos.boss_down, "jefe abajo"),
+            (eventos.super_fired, "super"),
+            (eventos.player_died, "muerte"),
+            (eventos.victory, "victoria"),
+            (eventos.fichas > 0, "ficha"),
+            (eventos.parried > 0, "parry"),
+            (escena != escena_antes, "escena"),
+            (frames.is_multiple_of(HOT_RELOAD_EVERY), "recarga"),
+        ] {
+            if paso {
+                tirones.suceso(que);
+            }
+        }
+        let t = get_time();
         // La musica se busca por (jefe, figura). La pista tiene la suya
         // propia: dejar sonando el vals en el mapa decia que el vals era el
         // juego, y el vals es UN jefe del juego.
@@ -924,7 +963,7 @@ async fn run_game() {
         // suena lo que toque, asi que los efectos en tono (la ficha, la
         // victoria) salen en el tono del tema que empieza.
         if hubo_interaccion {
-            audio.poner_musica(match escena {
+            let tema = match escena {
                 Escena::Combate => Tema::de(world.baile, world.boss.phase),
                 // En la calle suena la primera figura de su baile: el vals se
                 // oye desde fuera, y al entrar sigue sonando sin cortarse.
@@ -933,8 +972,13 @@ async fn run_game() {
                 // bailes ganados. En el final suenan los cuatro: es el salon
                 // entero, que es lo que cuenta el epilogo.
                 _ => Tema::Sala(ganados(&pista)),
-            });
+            };
+            audio.poner_musica(tema);
+            if tema_antes.replace(tema) != Some(tema) {
+                tirones.suceso("musica");
+            }
         }
+        tirones.musica(get_time() - t);
         // En el menu no suena nada ni sacude nada: el atractor es un fondo, no
         // una partida. Las chispas si, porque son lo que lo hace parecer vivo.
         match (escena, attract.as_ref()) {
@@ -1178,12 +1222,14 @@ async fn run_game() {
             }
         }
         stats.push_render((get_time() - t1) as f32);
+        tirones.dibujo(get_time() - t1);
         // Al cambiar de escena se guarda: el tiempo jugado y los golpes de un
         // intento que se deja a medias no tienen otro momento.
         if escena != escena_antes {
             progreso.guardar();
         }
 
+        tirones.acabar(escena.nombre(), get_time());
         next_frame().await;
     }
 }

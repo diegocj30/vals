@@ -101,3 +101,105 @@ impl FrameStats {
         }
     }
 }
+
+/// Por encima de esto un frame cuenta como tiron, en ms. A 60 Hz un frame dura
+/// 16,7 y a 144 Hz 6,9: pasar de 20 ya es perderse uno.
+const UMBRAL_TIRON_MS: f64 = 20.0;
+
+/// El registro de tirones, solo con `--pruebas`.
+///
+/// El p99 dice que hay tirones; esto dice **cuales**. Cada frame de mas de
+/// `UMBRAL_TIRON_MS` sale por la salida de error con su escena, lo que paso en
+/// el y en que se fue el tiempo: simulacion, musica, dibujo, el resto del
+/// bucle y lo de fuera, que es `next_frame` (las corrutinas, el envio a la GPU
+/// y la espera del vsync). Apagado no mide nada.
+pub struct Tirones {
+    activo: bool,
+    actual: Medida,
+    /// El frame anterior y cuando acabo: cuanto duro solo se sabe al empezar
+    /// el siguiente.
+    anterior: Option<(f64, Medida)>,
+    /// Lo que paso en el frame. Se reutiliza: cero reservas por frame.
+    sucesos: Vec<&'static str>,
+}
+
+/// Los tramos de un frame, en segundos.
+#[derive(Clone, Copy, Default)]
+struct Medida {
+    inicio: f64,
+    sim: f64,
+    musica: f64,
+    dibujo: f64,
+    pasos: u32,
+    escena: &'static str,
+}
+
+impl Tirones {
+    pub fn new(activo: bool) -> Self {
+        Self {
+            activo,
+            actual: Medida::default(),
+            anterior: None,
+            sucesos: Vec::with_capacity(16),
+        }
+    }
+
+    /// Al empezar un frame, con el reloj de `get_time`. Si el anterior fue un
+    /// tiron, lo cuenta.
+    pub fn empezar(&mut self, ahora: f64) {
+        if !self.activo {
+            return;
+        }
+        if let Some((fin, m)) = self.anterior.take() {
+            let ms = |s: f64| s * 1000.0;
+            let total = ms(ahora - m.inicio);
+            if total > UMBRAL_TIRON_MS {
+                let resto = ms(fin - m.inicio - m.sim - m.musica - m.dibujo);
+                eprintln!(
+                    "[tiron] {total:5.1} ms  {:<8} pasos {}  sim {:.2}  musica {:.2}  \
+                     dibujo {:.2}  resto {resto:.2}  fuera {:.2}  | {}",
+                    m.escena,
+                    m.pasos,
+                    ms(m.sim),
+                    ms(m.musica),
+                    ms(m.dibujo),
+                    ms(ahora - fin),
+                    self.sucesos.join(", "),
+                );
+            }
+        }
+        self.sucesos.clear();
+        self.actual = Medida {
+            inicio: ahora,
+            ..Medida::default()
+        };
+    }
+
+    /// Algo que ha pasado en este frame.
+    pub fn suceso(&mut self, que: &'static str) {
+        if self.activo && !self.sucesos.contains(&que) {
+            self.sucesos.push(que);
+        }
+    }
+
+    pub fn sim(&mut self, segundos: f64, pasos: u32) {
+        self.actual.sim = segundos;
+        self.actual.pasos = pasos;
+    }
+
+    pub fn musica(&mut self, segundos: f64) {
+        self.actual.musica = segundos;
+    }
+
+    pub fn dibujo(&mut self, segundos: f64) {
+        self.actual.dibujo = segundos;
+    }
+
+    /// Al acabar el frame, justo antes de `next_frame`.
+    pub fn acabar(&mut self, escena: &'static str, ahora: f64) {
+        if self.activo {
+            self.actual.escena = escena;
+            self.anterior = Some((ahora, self.actual));
+        }
+    }
+}
