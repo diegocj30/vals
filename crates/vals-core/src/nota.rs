@@ -79,7 +79,7 @@ const PAR: [(&str, u64); 5] = [
     ("El Tango", 110),
     ("El Charleston", 55),
     ("El Cancan", 80),
-    ("El Flamenco", 88),
+    ("El Flamenco", 68),
 ];
 
 /// Para un baile que no esta en la tabla: el del medio.

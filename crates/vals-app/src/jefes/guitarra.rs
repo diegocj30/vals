@@ -591,7 +591,7 @@ mod tests {
     #[test]
     fn las_cuerdas_vibran_en_los_acentos_del_compas_de_doce() {
         // Los mismos ticks en que se quiebran sus balas: el 3, el 6, el 8,
-        // el 10 y el 12 de cada compas de 240.
+        // el 10 y el 12 de cada compas.
         for compas in [0.0, 2.0] {
             for a in ACENTOS_FLAMENCO {
                 let t = compas * COMPAS + (a - 1) as f32 * TIEMPO;
@@ -602,8 +602,8 @@ mod tests {
         assert_eq!(acento(30.0).0, 0.0);
         assert_eq!(acento(COMPAS).0, 0.0);
         // Y cada acento va al lado contrario que el anterior.
-        let lados: Vec<i32> = [40.0, 100.0, 140.0, 180.0, 220.0, 280.0]
-            .map(|t| acento(t).2)
+        let lados: Vec<i32> = [2.0, 5.0, 7.0, 9.0, 11.0, 14.0]
+            .map(|n| acento(n * TIEMPO).2)
             .to_vec();
         assert_eq!(lados, vec![0, 1, 2, 3, 4, 5]);
     }

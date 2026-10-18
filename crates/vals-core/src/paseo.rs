@@ -499,9 +499,12 @@ pub const QUIEBROS_CLAVEL: u32 = 4;
 const ZIGZAG_CLAVEL: f32 = 0.5;
 
 /// El torito: hasta donde ve, la carrera y lo que tarda en clavarse. De tope
-/// a cero en seis ticks: un frenazo, no la frenada larga del tango.
+/// a cero en seis ticks: un frenazo, no la frenada larga del tango. La carrera
+/// dura un hueco largo del compas, tres tiempos, y a esta velocidad son unas
+/// 460 unidades, menos de lo que ve: a quien se queda quieta la embiste y se
+/// clava delante, no detras.
 const ALCANCE_TORITO: f32 = 520.0;
-const VEL_TORITO: f32 = 460.0;
+const VEL_TORITO: f32 = 384.0;
 pub const FRENO_TORITO: u32 = 6;
 
 /// La cantaora, portera de Triana: unos 12 segundos de aguja sin fallar uno.
@@ -3797,7 +3800,10 @@ mod tests {
         // Triana: lleva a su jefe, trae los enemigos de la buleria, cruza el
         // rio en barcas y acaba con la cantaora en su tablao.
         let triana = de_serie("El Flamenco");
-        assert_eq!(triana.tiempo, 20, "la buleria va a 180");
+        assert_eq!(
+            triana.tiempo, TIEMPO_FLAMENCO,
+            "la buleria va al compas del baile"
+        );
         for t in [
             Tipo::Bailaora,
             Tipo::Guitarrista,
@@ -6042,32 +6048,43 @@ mod tests {
 
     // --- Triana ---
 
+    use crate::bullets::TIEMPO_FLAMENCO;
+
+    /// Un tiempo de la buleria, en ticks: el mismo que el del baile. Las
+    /// cuentas de abajo van en tiempos: el tiempo `n` (del 1 al 12) del
+    /// primer compas entra en el tick `(n - 1) * T`.
+    const T: u64 = TIEMPO_FLAMENCO as u64;
+    /// Un compas entero.
+    const COMPAS: u64 = 12 * T;
+
     fn triana() -> PaseoDef {
         de_serie("El Flamenco")
     }
 
-    /// Una aparicion de Triana en la calle de pruebas, a 20 ticks por tiempo.
+    /// Una aparicion de Triana en la calle de pruebas, al tiempo del baile.
     fn en_triana(tipo: Tipo, x: f32, y: f32) -> PaseoDef {
         PaseoDef {
-            tiempo: 20,
+            tiempo: TIEMPO_FLAMENCO,
             ..uno(tipo, x, y)
         }
     }
 
     #[test]
     fn el_compas_de_doce_acentua_el_tres_el_seis_el_ocho_el_diez_y_el_doce() {
-        // A 20 ticks por tiempo el compas son 240, y el 3 entra en el 40.
-        let acentos: Vec<u64> = (0..480).filter(|&t| acento(t, 20)).collect();
-        assert_eq!(acentos, [40, 100, 140, 180, 220, 280, 340, 380, 420, 460]);
-        assert_eq!(compas(225, 20), (12, 5, true));
-        assert_eq!(compas(240, 20), (1, 0, false));
+        // El 3 entra a los dos tiempos, y el compas siguiente igual.
+        let tf = TIEMPO_FLAMENCO;
+        let acentos: Vec<u64> = (0..2 * COMPAS).filter(|&t| acento(t, tf)).collect();
+        let tiempos = [2, 5, 7, 9, 11, 14, 17, 19, 21, 23];
+        assert_eq!(acentos, tiempos.map(|n| n * T));
+        assert_eq!(compas(11 * T + 5, tf), (12, 5, true));
+        assert_eq!(compas(COMPAS, tf), (1, 0, false));
         // El aviso cuenta hasta el siguiente, de un compas al otro.
-        assert_eq!(al_acento(100, 20), 0);
-        assert_eq!(al_acento(101, 20), 39);
-        assert_eq!(al_acento(221, 20), 59);
-        for t in 0..480 {
-            let d = al_acento(t, 20);
-            assert!(acento(t + d, 20) && (t..t + d).all(|u| !acento(u, 20)));
+        assert_eq!(al_acento(5 * T, tf), 0);
+        assert_eq!(al_acento(5 * T + 1, tf), 2 * T - 1);
+        assert_eq!(al_acento(11 * T + 1, tf), 3 * T - 1);
+        for t in 0..2 * COMPAS {
+            let d = al_acento(t, tf);
+            assert!(acento(t + d, tf) && (t..t + d).all(|u| !acento(u, tf)));
         }
     }
 
@@ -6075,7 +6092,7 @@ mod tests {
     fn la_bailaora_solo_se_revuelve_en_el_acento_y_patea_plantada() {
         let mut p = Paseo::new(en_triana(Tipo::Bailaora, 600.0, 0.0), 1);
         // En el primer acento se planta de cara a ella y patea la bata.
-        while p.tick <= 40 {
+        while p.tick <= 2 * T {
             p.jugadora.iframes = 10;
             p.step(InputFrame::NONE);
         }
@@ -6089,10 +6106,10 @@ mod tests {
         }
         correr(&mut p, 0, 10);
         assert!(p.enemigos[0].pos.x < x, "no zapatea hacia ella");
-        // Ella se pone detras: sigue de espaldas hasta el acento del 100.
+        // Ella se pone detras: sigue de espaldas hasta el acento del 6.
         p.jugadora.pos.x = p.enemigos[0].pos.x + 150.0;
         p.jugadora.prev_pos = p.jugadora.pos;
-        while p.tick < 100 {
+        while p.tick < 5 * T {
             p.step(InputFrame::NONE);
             assert_eq!(p.enemigos[0].dir, -1.0, "se vuelve sin acento");
         }
@@ -6103,11 +6120,11 @@ mod tests {
 
     #[test]
     fn la_bata_de_la_bailaora_barre_el_suelo_y_se_salta() {
-        // Ella a 70 por delante en el acento del 40: quieta le llega la
+        // Ella a 70 por delante en el primer acento: quieta le llega la
         // bata, y saltando le pasa por debajo.
         for salta in [false, true] {
             let mut p = Paseo::new(en_triana(Tipo::Bailaora, 600.0, 0.0), 1);
-            while p.tick < 30 {
+            while p.tick < 2 * T - 10 {
                 p.jugadora.iframes = 10;
                 p.step(InputFrame::NONE);
             }
@@ -6115,7 +6132,7 @@ mod tests {
             p.jugadora.prev_pos = p.jugadora.pos;
             let bits = if salta { InputFrame::JUMP } else { 0 };
             let mut dado = false;
-            while p.tick < 74 {
+            while p.tick < 2 * T + 34 {
                 p.step(pulsar(bits));
                 dado |= p.events.player_died;
             }
@@ -6127,7 +6144,7 @@ mod tests {
     fn el_guitarrista_tira_una_falseta_por_acento_y_la_del_doce_rosa() {
         let mut p = Paseo::new(en_triana(Tipo::Guitarrista, 450.0, 330.0), 1);
         let (mut tiradas, mut rosas) = (0, 0);
-        for _ in 0..480 {
+        for _ in 0..2 * COMPAS {
             p.jugadora.iframes = 10;
             let tick = p.tick;
             let antes = p.enemigos.first().map_or(0, |e| e.lanzados);
@@ -6135,10 +6152,13 @@ mod tests {
             if p.enemigos[0].lanzados == antes {
                 continue;
             }
-            assert!(acento(tick, 20), "tira fuera del acento en {tick}");
+            assert!(
+                acento(tick, TIEMPO_FLAMENCO),
+                "tira fuera del acento en {tick}"
+            );
             let q = *p.proyectiles.last().expect("acaba de tirar");
             assert_eq!(q.forma, Forma::Falseta);
-            assert_eq!(q.rosa, compas(tick, 20).0 == 12);
+            assert_eq!(q.rosa, compas(tick, TIEMPO_FLAMENCO).0 == 12);
             let a_ella = (p.jugadora.pos - q.pos).normalize();
             assert!(q.vel.normalize().dot(a_ella) > 0.98, "no apunta");
             tiradas += 1;
@@ -6150,7 +6170,7 @@ mod tests {
     #[test]
     fn la_falseta_vuela_recta_y_quiebra_en_el_acento_siguiente() {
         let def = PaseoDef {
-            tiempo: 20,
+            tiempo: TIEMPO_FLAMENCO,
             ..calle()
         };
         let mut p = Paseo::new(def, 1);
@@ -6161,7 +6181,7 @@ mod tests {
             forma: Forma::Falseta,
         });
         let v = p.proyectiles[0].vel;
-        while p.tick < 40 {
+        while p.tick < 2 * T {
             p.step(InputFrame::NONE);
             assert_eq!(p.proyectiles[0].vel, v, "quiebra sin acento");
         }
@@ -6177,7 +6197,7 @@ mod tests {
         );
         // Y quebrada ya va recta: el acento siguiente no la toca.
         let v = q.vel;
-        while p.tick <= 100 {
+        while p.tick <= 5 * T {
             p.jugadora.iframes = 10;
             p.step(InputFrame::NONE);
         }
@@ -6188,13 +6208,16 @@ mod tests {
     fn las_palmas_estallan_en_los_acentos_y_se_saltan_entre_dos() {
         let mut p = Paseo::new(en_triana(Tipo::Palmas, 700.0, 0.0), 1);
         let mut golpes = 0;
-        for _ in 0..240 {
+        for _ in 0..COMPAS {
             p.jugadora.iframes = 10;
             let tick = p.tick;
             let antes = p.enemigos.first().map_or(0, |e| e.lanzados);
             p.step(InputFrame::NONE);
             if p.enemigos[0].lanzados > antes {
-                assert!(acento(tick, 20), "palmas fuera del acento en {tick}");
+                assert!(
+                    acento(tick, TIEMPO_FLAMENCO),
+                    "palmas fuera del acento en {tick}"
+                );
                 golpes += 1;
             }
             // El golpe dura un suspiro: nunca hay dos a la vez.
@@ -6207,16 +6230,16 @@ mod tests {
         def.salida = 640.0;
         let mut p = Paseo::new(def.clone(), 1);
         let mut dado = None;
-        while p.tick <= 40 && dado.is_none() {
+        while p.tick <= 2 * T && dado.is_none() {
             let tick = p.tick;
             p.step(InputFrame::NONE);
             dado = p.events.player_died.then_some(tick);
         }
-        assert_eq!(dado, Some(40), "de pie a su lado");
+        assert_eq!(dado, Some(2 * T), "de pie a su lado");
         // Y saltandolo en el hueco largo, del doce al tres, no.
         def.salida = 100.0;
         let mut p = Paseo::new(def, 1);
-        while p.tick <= 220 {
+        while p.tick <= 11 * T {
             p.jugadora.iframes = 10;
             p.step(InputFrame::NONE);
         }
@@ -6224,7 +6247,7 @@ mod tests {
         p.jugadora.pos.x = 700.0 - 105.0;
         p.jugadora.prev_pos = p.jugadora.pos;
         let mut dado = false;
-        while p.tick < 280 {
+        while p.tick < 14 * T {
             p.step(pulsar(DERECHA | InputFrame::JUMP));
             dado |= p.events.player_died;
         }
@@ -6237,7 +6260,7 @@ mod tests {
         let mut p = Paseo::new(en_triana(Tipo::Clavel, 600.0, 300.0), 1);
         let mut antes: Option<Vec2> = None;
         let mut quiebros = 0;
-        for _ in 0..300 {
+        for _ in 0..15 * T {
             p.jugadora.iframes = 10;
             let tick = p.tick;
             p.step(InputFrame::NONE);
@@ -6251,7 +6274,10 @@ mod tests {
             if let Some(v) = antes
                 && v.x != e.vel.x
             {
-                assert!(acento(tick, 20), "quiebra fuera del acento en {tick}");
+                assert!(
+                    acento(tick, TIEMPO_FLAMENCO),
+                    "quiebra fuera del acento en {tick}"
+                );
                 quiebros += 1;
             }
             antes = Some(e.vel);
@@ -6278,49 +6304,47 @@ mod tests {
     fn el_torito_embiste_a_tope_de_acento_a_acento_y_se_clava() {
         let mut p = Paseo::new(en_triana(Tipo::Torito, 600.0, 0.0), 1);
         let mut x = 600.0;
-        while p.tick < 141 {
+        let (uno, otro, clavado) = (2 * T, 5 * T, 5 * T + u64::from(FRENO_TORITO));
+        while p.tick <= 7 * T {
             p.jugadora.iframes = 10;
             let tick = p.tick;
             p.step(InputFrame::NONE);
             let e = &p.enemigos[0];
             let v = e.vel.x;
-            match tick {
-                // Escarba hasta el primer acento, sin moverse.
-                0..40 => assert!(v == 0.0 && e.pos.x == x, "en {tick}"),
+            if tick < uno || (clavado < tick && tick < 7 * T) {
+                // Escarba hasta el primer acento, sin moverse, y despues de
+                // clavarse, hasta el acento del 8.
+                assert!(v == 0.0 && e.pos.x == x, "en {tick}");
+            } else if tick <= otro {
                 // Embiste a tope, sin frenar, hasta el siguiente.
-                40..=100 => {
-                    assert_eq!(v, -VEL_TORITO, "en {tick}");
-                    assert!(e.embiste() || tick == 100);
-                }
+                assert_eq!(v, -VEL_TORITO, "en {tick}");
+                assert!(e.embiste() || tick == otro);
+            } else if tick <= clavado {
                 // Y ahi se clava: a cero en seis ticks.
-                101..=106 => {
-                    let quedan = (106 - tick) as f32 / FRENO_TORITO as f32;
-                    assert!((v + VEL_TORITO * quedan).abs() < 1e-2, "en {tick}: {v}");
-                }
-                // Y escarba hasta el acento del 140.
-                107..140 => assert!(v == 0.0 && e.pos.x == x, "en {tick}"),
-                _ => {}
+                let quedan = (clavado - tick) as f32 / FRENO_TORITO as f32;
+                assert!((v + VEL_TORITO * quedan).abs() < 1e-2, "en {tick}: {v}");
             }
             x = e.pos.x;
         }
-        assert!(p.enemigos[0].vel.x != 0.0, "no embiste en el 140");
+        assert!(p.enemigos[0].vel.x != 0.0, "no embiste en el 8");
     }
 
     #[test]
     fn al_torito_se_le_salta_y_de_frente_no_se_le_tumba() {
-        // Ella a 200 y el torito a 600: pasa por debajo de ella hacia el 92.
+        // Ella a 200 y el torito a 600: le llega unos 63 ticks despues del
+        // primer acento, y se salta un poco antes.
         for salta in [false, true] {
             let mut def = en_triana(Tipo::Torito, 600.0, 0.0);
             def.salida = 200.0;
             let mut p = Paseo::new(def, 1);
-            while p.tick < 80 {
+            while p.tick < 2 * T + 51 {
                 p.jugadora.iframes = 10;
                 p.step(InputFrame::NONE);
             }
             p.jugadora.iframes = 0;
             let bits = if salta { InputFrame::JUMP } else { 0 };
             let mut dado = false;
-            while p.tick < 130 {
+            while p.tick < 2 * T + 101 {
                 p.step(pulsar(bits));
                 dado |= p.events.player_died;
             }
@@ -6328,11 +6352,11 @@ mod tests {
         }
         // Disparandole de frente mientras embiste, nada; clavado, cae.
         let mut p = Paseo::new(en_triana(Tipo::Torito, 600.0, 0.0), 1);
-        while p.tick <= 40 {
+        while p.tick <= 2 * T {
             p.jugadora.iframes = 10;
             p.step(InputFrame::NONE);
         }
-        while p.tick < 100 {
+        while p.tick < 5 * T {
             p.jugadora.iframes = 10;
             p.step(pulsar(DISPARA));
             assert!(p.enemigos[0].embiste());
@@ -6348,7 +6372,7 @@ mod tests {
             portero: true,
             ..aparece(Tipo::Cantaora, 1600.0)
         }]);
-        def.tiempo = 20;
+        def.tiempo = TIEMPO_FLAMENCO;
         def.porteria = Some(Porteria {
             desde: 1000.0,
             ficha: Some(0),
@@ -6364,20 +6388,23 @@ mod tests {
     /// acento, su tiempo y lo que suelta de cada forma (ayes, falsetas,
     /// taconeos y rosas).
     fn lo_que_canta(p: &mut Paseo) -> Vec<(u64, [usize; 4])> {
-        while !p.tick.is_multiple_of(240) {
+        while !p.tick.is_multiple_of(COMPAS) {
             lo_nuevo(p);
         }
         let mut cantado = Vec::new();
-        for _ in 0..240 {
+        for _ in 0..COMPAS {
             let tick = p.tick;
             let nuevas = lo_nuevo(p);
             if nuevas.is_empty() {
                 continue;
             }
-            assert!(acento(tick, 20), "canta fuera del acento en {tick}");
+            assert!(
+                acento(tick, TIEMPO_FLAMENCO),
+                "canta fuera del acento en {tick}"
+            );
             let de = |f: Forma| nuevas.iter().filter(|q| q.forma == f).count();
             let rosas = nuevas.iter().filter(|q| q.rosa).count();
-            let n = compas(tick, 20).0;
+            let n = compas(tick, TIEMPO_FLAMENCO).0;
             cantado.push((
                 n,
                 [
@@ -6529,11 +6556,11 @@ mod tests {
             (pl.x + d, pl.x + d + pl.ancho)
         };
         for par in barcas.windows(2) {
-            let junta = (0..240).any(|t| tramo(&par[0], t).1 >= tramo(&par[1], t).0);
+            let junta = (0..COMPAS).any(|t| tramo(&par[0], t).1 >= tramo(&par[1], t).0);
             assert!(junta, "no se juntan: {par:?}");
         }
-        assert!((0..240).any(|t| tramo(&barcas[0], t).0 <= a));
-        assert!((0..240).any(|t| tramo(&barcas[3], t).1 >= b));
+        assert!((0..COMPAS).any(|t| tramo(&barcas[0], t).0 <= a));
+        assert!((0..COMPAS).any(|t| tramo(&barcas[3], t).1 >= b));
 
         // Quieta en cada barca, y andando solo cuando se junta con la
         // siguiente, se llega a la otra orilla sin mojarse.
@@ -6551,7 +6578,7 @@ mod tests {
                 });
             p.step(pulsar(if pisa { DERECHA } else { 0 }));
             subida |= p.sobre.is_some();
-            assert!(p.tick < 240 * 4, "atascada en x {}", p.jugadora.pos.x);
+            assert!(p.tick < COMPAS * 4, "atascada en x {}", p.jugadora.pos.x);
         }
         assert!(subida, "ha cruzado sin subir a las barcas");
         assert_eq!(p.vidas, VIDAS, "al rio");

@@ -61,8 +61,9 @@
 // cruza unas 200 corriendo.
 //
 // Guia de campos (los de Viena valen igual):
-//   tiempo        ticks por tiempo: 20, la buleria a 180. El compas de doce
-//                 son 240 ticks, cuatro segundos.
+//   tiempo        ticks por tiempo: 24, la buleria a 150, el mismo que el
+//                 baile (`TIEMPO_FLAMENCO`). El compas de doce son 288
+//                 ticks, cuatro segundos y ocho decimas.
 //   plataformas   las que van a ras de agua sobre el rio y con `mueve` son las
 //                 barcas: `Vaiven(dx, dy, periodo, fase)`, y con fases 0 y 0,5
 //                 cada una va a contratiempo de la de al lado. Las demas son
@@ -73,7 +74,7 @@
   nombre: "El paseo de Triana",
   jefe: "El Flamenco",
   subtitulo: "Por el puente de barcas",
-  tiempo: 20,
+  tiempo: 24,
   largo: 9500.0,
   salida: 140.0,
   puerta: 9100.0,
@@ -90,10 +91,10 @@
     // El puente de barcas: cuatro barcas de 200, cada una 150 de recorrido.
     // La primera y la ultima llegan a su muelle, y cada dos de al lado se
     // juntan en un extremo cada medio compas.
-    (x: 2300.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 240, fase: 0.0))),
-    (x: 2630.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 240, fase: 0.5))),
-    (x: 2960.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 240, fase: 0.0))),
-    (x: 3290.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 240, fase: 0.5))),
+    (x: 2300.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 288, fase: 0.0))),
+    (x: 2630.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 288, fase: 0.5))),
+    (x: 2960.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 288, fase: 0.0))),
+    (x: 3290.0, y: 470.0, ancho: 200.0, mueve: Some(Vaiven(dx: 150.0, dy: 0.0, periodo: 288, fase: 0.5))),
     // La calle Betis: balcones y un poyete.
     (x: 3900.0, y: 360.0, ancho: 140.0),
     (x: 4250.0, y: 410.0, ancho: 90.0),

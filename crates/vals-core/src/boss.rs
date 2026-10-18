@@ -869,6 +869,123 @@ mod medida {
     use super::tests::balas_de_la_fase;
     use super::*;
 
+    /// La luz mas estrecha que deja una rama de una figura donde se juega.
+    ///
+    /// Se ejecuta la rama sola, sin mover las balas (como en
+    /// `balas_de_la_fase`), y se mira cada tanda de `TANDA` ticks seguidos:
+    /// lo que sale junto llega junto, y una cortina es eso, abanicos a pocos
+    /// ticks unos de otros. Cada bala de la tanda se pone donde estara al
+    /// llegar a `DISTANCIA` del jefe, que es a lo que esta la jugadora cuando
+    /// aparece, y se mide el hueco mas ancho entre dos vecinas de borde a
+    /// borde, contando los de las paredes. Devuelve el de la peor tanda.
+    ///
+    /// No cuenta el quiebro, que tuerce igual a las que salen juntas y no
+    /// cierra lo que estaba abierto, y por eso sirve solo para el flamenco: el
+    /// frenazo del tango o el `ttl` del cancan cambian donde llega cada bala.
+    fn luz_de_la_rama(rama: &[Step], origen: Vec2, ticks: usize) -> f32 {
+        use crate::bullets::BULLET_KINDS;
+        use crate::{ARENA_H, ARENA_W};
+        const TANDA: usize = 18;
+        const DISTANCIA: f32 = 470.0;
+        let mut runner = PatternRunner::new(Pattern::compile(rama));
+        let mut bullets = Bullets::with_capacity(crate::MAX_BULLETS);
+        let mut o = origen;
+        // El angulo de cada bala a la distancia de la jugadora y su radio, por
+        // tick de salida.
+        let mut salidas: Vec<Vec<(f32, f32)>> = Vec::new();
+        for _ in 0..ticks {
+            let antes = bullets.live_count();
+            let mut ctx = RunCtx {
+                bullets: &mut bullets,
+                origin: &mut o,
+                player: crate::World::spawn_pos(),
+            };
+            runner.tick(&mut ctx);
+            // Sin `update` no muere ninguna, asi que las nuevas son las ultimas.
+            let nuevas = (antes..bullets.live_count())
+                .map(|i| bullets.get(i as u32))
+                .filter_map(|b| {
+                    let p = b.pos + b.vel.normalize_or_zero() * DISTANCIA;
+                    let dentro = (0.0..=ARENA_W).contains(&p.x) && (0.0..=ARENA_H).contains(&p.y);
+                    dentro.then(|| {
+                        (
+                            (p - origen).to_angle(),
+                            BULLET_KINDS[b.kind as usize].radius,
+                        )
+                    })
+                })
+                .collect();
+            salidas.push(nuevas);
+        }
+        // Lo que se ve de la circunferencia a esa distancia, por abajo: de la
+        // pared de la derecha a la de la izquierda.
+        let borde = ((ARENA_W - origen.x) / DISTANCIA).clamp(-1.0, 1.0).acos();
+        let otro = ((0.0 - origen.x) / DISTANCIA).clamp(-1.0, 1.0).acos();
+        let mut peor = f32::INFINITY;
+        for tanda in salidas.windows(TANDA) {
+            let mut b: Vec<(f32, f32)> = tanda.iter().flatten().copied().collect();
+            if b.is_empty() {
+                continue;
+            }
+            b.sort_by(|x, y| x.0.total_cmp(&y.0));
+            let primera = (b[0].0 - borde) * DISTANCIA - b[0].1;
+            let ultima = (otro - b[b.len() - 1].0) * DISTANCIA - b[b.len() - 1].1;
+            let luz = b
+                .windows(2)
+                .map(|p| (p[1].0 - p[0].0) * DISTANCIA - p[0].1 - p[1].1)
+                .fold(primera.max(ultima), f32::max);
+            peor = peor.min(luz);
+        }
+        peor
+    }
+
+    /// Las ramas de una figura: cada hilo del `Parallel` de arriba por
+    /// separado, o la figura entera si no lo hay.
+    fn ramas(f: &PhaseDef) -> Vec<&[Step]> {
+        match f.steps.as_slice() {
+            [Step::Parallel(r)] => r.iter().map(Vec::as_slice).collect(),
+            pasos => vec![pasos],
+        }
+    }
+
+    /// Lo que tiene que quedar libre, como poco, en cada tanda: lo que cita
+    /// la cabecera del charleston para sus calles mas estrechas.
+    const LUZ_MINIMA: f32 = 35.0;
+
+    #[test]
+    fn cada_cortina_del_flamenco_deja_un_hueco() {
+        // El rasgueo de antes eran abanicos que se solapaban: a la distancia
+        // de la jugadora cerraban la sala de pared a pared con menos de diez
+        // de luz entre bala y bala, y no habia por donde pasar.
+        let def = &BossDef::default_bosses()[4];
+        for f in &def.phases {
+            for (i, rama) in ramas(f).into_iter().enumerate() {
+                let luz = luz_de_la_rama(rama, def.pos, 1200);
+                assert!(
+                    luz >= LUZ_MINIMA,
+                    "{}, rama {i}: deja {luz:.0} de luz",
+                    f.name
+                );
+            }
+        }
+    }
+
+    /// La luz de cada rama de cada figura del flamenco.
+    ///
+    /// `cargo test -p vals-core luces -- --nocapture --ignored`
+    #[test]
+    #[ignore]
+    fn luces() {
+        let def = &BossDef::default_bosses()[4];
+        for f in &def.phases {
+            let luces: Vec<i32> = ramas(f)
+                .into_iter()
+                .map(|r| luz_de_la_rama(r, def.pos, 1200) as i32)
+                .collect();
+            println!("  {:<14} {luces:?}", f.name);
+        }
+    }
+
     /// Imprime las balas por segundo de cada fase de cada jefe.
     ///
     /// `cargo test -p vals-core densidades -- --nocapture --ignored`

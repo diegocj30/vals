@@ -195,7 +195,7 @@ clavijero y volantes de lunares. Se tensa al ir perdiendo vida, y al caer se le
 saltan las cuerdas una a una.
 
 **La musica:** *Asturias (Leyenda)* de Albeniz (1892). El compas es de doce,
-con los acentos en el 3, el 6, el 8, el 10 y el 12: 20 ticks por tiempo y 240
+con los acentos en el 3, el 6, el 8, el 10 y el 12: 24 ticks por tiempo y 288
 por compas.
 
 | | |

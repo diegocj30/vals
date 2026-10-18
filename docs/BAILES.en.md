@@ -200,7 +200,7 @@ headstock and polka-dot ruffles. It tenses as it loses health, and when it
 falls its strings snap one by one.
 
 **The music:** Albeniz's *Asturias (Leyenda)* (1892). The compas has twelve
-beats, accented on 3, 6, 8, 10 and 12: 20 ticks per beat and 240 per bar.
+beats, accented on 3, 6, 8, 10 and 12: 24 ticks per beat and 288 per bar.
 
 | | |
 |---|---|

@@ -489,7 +489,7 @@ fn cancan(fase: usize, t: f32, vida: f32) -> Pose {
 
 /// **El Flamenco**: erguida, y se quiebra en los acentos.
 ///
-/// El compas es de doce, a 20 ticks por tiempo como sus balas
+/// El compas es de doce, al mismo tiempo que sus balas
 /// (`TIEMPO_FLAMENCO`), con los acentos en el 3, el 6, el 8, el 10 y el 12.
 /// Entre acento y acento braceo lento, las munecas dando vueltas; en el acento
 /// la cadera se quiebra de golpe a un lado, uno cada vez, y el pie de ese lado
@@ -502,7 +502,7 @@ fn flamenco(fase: usize, t: f32, vida: f32) -> Pose {
     let actual = (t / tiempo).floor().max(0.0) as u32;
     let (lado, desde) = (0..12)
         .filter_map(|k| actual.checked_sub(k))
-        .find_map(|b| quiebro(b * TIEMPO_FLAMENCO).map(|l| (l, t - (b as f32) * tiempo)))
+        .find_map(|b| quiebro(b * TIEMPO_FLAMENCO).map(|l| (l.signum(), t - (b as f32) * tiempo)))
         .unwrap_or((1.0, tiempo * 3.0));
     let golpe = (1.0 - desde / 12.0).max(0.0);
 

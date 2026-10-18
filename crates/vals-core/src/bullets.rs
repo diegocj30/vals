@@ -68,23 +68,28 @@ pub const FLAG_PARRYABLE: u8 = 1 << 0;
 /// Ya se rozo, para no cobrar el graze dos veces por la misma bala.
 pub const FLAG_GRAZED: u8 = 1 << 1;
 
-/// Ticks por tiempo del compas flamenco: 180 negras. Doce tiempos son un
-/// compas de 240 ticks, cuatro segundos.
-pub const TIEMPO_FLAMENCO: u32 = 20;
+/// Ticks por tiempo del compas flamenco: 150 negras, como el cancan. Doce
+/// tiempos son un compas de 288 ticks, cuatro segundos y ocho decimas.
+pub const TIEMPO_FLAMENCO: u32 = 24;
 
 /// Los acentos del compas de doce, contados desde el 1: el 3, el 6, el 8, el
 /// 10 y el 12. Es el compas de la solea y de la buleria.
 pub const ACENTOS_FLAMENCO: [u32; 5] = [3, 6, 8, 10, 12];
 
-/// Si a una bala con `edad` ticks le cae ahora un acento, hacia que lado se
-/// quiebra: `1.0` o `-1.0`, uno cada vez.
+/// Si a una bala con `edad` ticks le cae ahora un acento, cuanto de su
+/// quiebro se tuerce y hacia que lado: `0.5` en el primero, y luego `-1.0` y
+/// `1.0`, uno cada vez.
 ///
 /// El compas es **el de la bala**, no el de la sala: el uno es el tick en que
 /// sale. El patron dispara en el uno y los quiebros caen en los acentos; si
 /// dispara en otro tiempo, la bala lleva su compas desplazado, y eso tambien
 /// es flamenco. Alterna el lado para que la bala vaya en zigzag alrededor de
 /// su rumbo en vez de dar la vuelta: un quiebro es un requiebro de cadera, no
-/// un giro.
+/// un giro. Y el primero es de medio quiebro para que el zigzag quede
+/// **centrado**: el rumbo va de `+q/2` a `-q/2` y vuelta, y la bala sigue de
+/// media hacia donde se tiro. Con el quiebro entero desde el primero iba de
+/// su rumbo a `+q` y vuelta, siempre torcida hacia el mismo lado, y una
+/// cortina entera se corria de lado justo antes de llegarte.
 pub fn quiebro(edad: u32) -> Option<f32> {
     if edad == 0 || !edad.is_multiple_of(TIEMPO_FLAMENCO) {
         return None;
@@ -93,7 +98,11 @@ pub fn quiebro(edad: u32) -> Option<f32> {
     let (compas, tiempo) = (tiempos / 12, tiempos % 12 + 1);
     let k = ACENTOS_FLAMENCO.iter().position(|&a| a == tiempo)? as u32;
     let n = compas * ACENTOS_FLAMENCO.len() as u32 + k;
-    Some(if n.is_multiple_of(2) { 1.0 } else { -1.0 })
+    Some(match n {
+        0 => 0.5,
+        _ if n.is_multiple_of(2) => 1.0,
+        _ => -1.0,
+    })
 }
 
 /// Parametros para crear una bala.
@@ -596,22 +605,22 @@ mod tests {
 
     #[test]
     fn el_quiebro_cae_en_los_acentos_del_compas_de_doce() {
-        // Los acentos en ticks de vida: el 3 empieza a los dos tiempos.
-        let acentos: Vec<u32> = (0..=480).filter(|e| quiebro(*e).is_some()).collect();
-        assert_eq!(
-            acentos,
-            vec![40, 100, 140, 180, 220, 280, 340, 380, 420, 460]
-        );
+        // Los acentos en tiempos de vida: el 3 empieza a los dos tiempos.
+        let t = TIEMPO_FLAMENCO;
+        let acentos: Vec<u32> = (0..=24 * t).filter(|e| quiebro(*e).is_some()).collect();
+        let tiempos = [2, 5, 7, 9, 11, 14, 17, 19, 21, 23];
+        assert_eq!(acentos, tiempos.map(|n| n * t));
         // Y cada uno al lado contrario que el anterior, tambien al pasar de
-        // compas.
+        // compas: medio el primero y entero los demas.
         let lados: Vec<f32> = acentos.iter().filter_map(|e| quiebro(*e)).collect();
-        for par in lados.windows(2) {
+        assert_eq!(lados[..3], [0.5, -1.0, 1.0]);
+        for par in lados[1..].windows(2) {
             assert_eq!(par[0], -par[1], "{lados:?}");
         }
     }
 
     #[test]
-    fn el_quiebro_tuerce_de_golpe_y_en_zigzag() {
+    fn el_quiebro_tuerce_de_golpe_y_en_zigzag_alrededor_de_su_rumbo() {
         let mut b = Bullets::with_capacity(4);
         b.spawn(Spawn {
             pos: centro(),
@@ -621,7 +630,8 @@ mod tests {
         });
         let rumbo = |b: &Bullets| b.iter_live().next().unwrap().vel.to_angle();
         let recto = rumbo(&b);
-        for _ in 0..39 {
+        let t = TIEMPO_FLAMENCO;
+        for _ in 0..2 * t - 1 {
             b.update(DT);
         }
         assert!(
@@ -630,16 +640,20 @@ mod tests {
         );
         b.update(DT);
         assert!(
-            (rumbo(&b) - recto - 0.5).abs() < 1e-3,
-            "en el acento se quiebra"
+            (rumbo(&b) - recto - 0.25).abs() < 1e-3,
+            "en el primer acento se quiebra medio"
         );
-        for _ in 0..60 {
+        for _ in 0..3 * t {
             b.update(DT);
         }
         assert!(
-            (rumbo(&b) - recto).abs() < 1e-3,
-            "y en el siguiente vuelve a su rumbo"
+            (rumbo(&b) - recto + 0.25).abs() < 1e-3,
+            "y en el siguiente entero, al otro lado de su rumbo"
         );
+        for _ in 0..2 * t {
+            b.update(DT);
+        }
+        assert!((rumbo(&b) - recto - 0.25).abs() < 1e-3, "y vuelta");
         let v = b.iter_live().next().unwrap().vel.length();
         assert!((v - 100.0).abs() < 0.01, "quebrarse no cambia la rapidez");
     }

@@ -4,35 +4,47 @@
 // SU VERBO ES EL QUIEBRO. El vals gira (`Turn`), el tango frena y vuelve
 // (`accel` negativa), el charleston curva (`spin`) y el cancan se desvanece
 // (`ttl` corto); este usa `quiebro`, y TODAS sus figuras lo llevan. Una bala
-// con quiebro va recta y en cada acento del compas se tuerce de golpe ese
-// angulo, una vez a un lado y la siguiente al otro: va en zigzag alrededor de
-// su rumbo. No es un arco, que eso es del charleston, ni un giro de la mira,
-// que eso es del vals: la bala ya ha salido y cambia de idea en el aire.
+// con quiebro va recta y en cada acento del compas se tuerce de golpe: medio
+// angulo en el primero y el angulo entero en los demas, una vez a un lado y
+// la siguiente al otro. Asi va en zigzag CENTRADO en su rumbo, de +q/2 a -q/2
+// y vuelta, y de media sigue hacia donde se tiro. No es un arco, que eso es
+// del charleston, ni un giro de la mira, que eso es del vals: la bala ya ha
+// salido y cambia de idea en el aire.
 //
 // EL COMPAS ES DE DOCE, y es lo que lo separa de todo lo demas. Doce tiempos
 // con los acentos en el 3, el 6, el 8, el 10 y el 12, el de la solea y la
-// buleria. Va a 180 negras: 20 ticks por tiempo y 240 por compas, cuatro
-// segundos (`TIEMPO_FLAMENCO` en bullets.rs). El compas de cada bala empieza
-// cuando sale, asi que lo que se dispara en el uno se quiebra en los acentos:
-// a los 40, 100, 140, 180 y 220 ticks de vida. Todas las esperas de este
-// fichero salen de esa reja.
+// buleria. Va a 150 negras, como el cancan: 24 ticks por tiempo y 288 por
+// compas, cuatro segundos y ocho decimas (`TIEMPO_FLAMENCO` en bullets.rs).
+// El compas de cada bala empieza cuando sale, asi que lo que se dispara en el
+// uno se quiebra en los acentos: a los 48, 120, 168, 216 y 264 ticks de vida.
+// Todas las esperas de este fichero salen de esa reja.
 //
-// LO APUNTADO NO SE QUIEBRA. Es el cante: va derecho a ti, y es lo que impide
-// quedarse quieta en un hueco del zigzag. Una bala apuntada que se quebrase no
-// apuntaria a nada.
+// LO APUNTADO NO SE QUIEBRA. Es el cante: va derecho a ti, cada dos tiempos,
+// y es lo que impide quedarse quieta en un hueco del zigzag. Una bala apuntada
+// que se quebrase no apuntaria a nada.
+//
+// SIEMPRE HAY HUECO. La primera version cerraba la sala: los abanicos del
+// rasgueo se solapaban unos con otros y, a la distancia a la que se juega,
+// dejaban menos de diez de luz entre bala y bala de pared a pared; el quiebro
+// ademas torcia toda la cortina hacia el mismo lado justo antes de llegar, y
+// el remate apuntaba tres agujas cada tiempo. Ahora cada cuerda de un
+// rasgueo es un punado de balas juntas y entre cuerda y cuerda queda una
+// calle de 50 o mas (`cada_cortina_del_flamenco_deja_un_hueco` en boss.rs lo
+// vigila), y el bot de `examples/esquivar.rs`, que esquiva de verdad, se lleva
+// en cada figura como mucho los golpes que en la peor del tango.
 //
 // Las figuras son las de un baile por bulerias, en su orden:
 //
-//   1. La llamada       56 b/s  vida 450  el aviso: el compas entero, limpio.
-//   2. El rasgueo       80 b/s  vida 550  la mano barriendo las cuerdas.
-//   3. El zapateado     98 b/s  vida 650  tacon, planta y punta.
-//   4. El remate       149 b/s  vida 800  todo junto, y se cierra.
+//   1. La llamada       37 b/s  vida 450  el aviso: el compas entero, limpio.
+//   2. El rasgueo       50 b/s  vida 550  la mano barriendo las cuerdas.
+//   3. El zapateado     59 b/s  vida 650  tacon, planta y punta.
+//   4. El remate        71 b/s  vida 800  todo junto, y se cierra.
 //
 // Es el unico baile de nivel `Final`: se abre cuando estan ganados los otros
-// cuatro, el tango el ultimo de ellos. La vida suma 2450, la que mas. Y no
-// es el que mas dispara: el remate echa lo que el fleckerl del vals, muy por
-// debajo de su techo de 245. Lo que lo hace el mas duro es el quiebro, que
-// obliga a leer cada bala dos veces, y no el numero.
+// cuatro, el tango el ultimo de ellos. La vida suma 2450, la que mas. Y es de
+// los que menos dispara: el remate echa la mitad que el fleckerl del vals,
+// muy por debajo de su techo de 245. Lo que lo hace el mas duro es el
+// quiebro, que obliga a leer cada bala dos veces, y no el numero.
 //
 // Guia rapida de pasos:
 //   Wait(n)               espera n ticks (60 ticks = 1 segundo)
@@ -68,45 +80,45 @@
         Parallel([
           [
             Forever([
-              MoveTo(pos: (260.0, 150.0), dur: 120, ease: InOut),
-              MoveTo(pos: (380.0, 150.0), dur: 120, ease: InOut),
+              MoveTo(pos: (260.0, 150.0), dur: 144, ease: InOut),
+              MoveTo(pos: (380.0, 150.0), dur: 144, ease: InOut),
             ]),
           ],
           [
             // Los cinco acentos del compas, cada uno un abanico de medias
             // que se quiebra en los acentos de su propio compas.
             Forever([
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 11, arc: 1.7, aim: Fixed(1.45), speed: 140.0,
+                count: 9, arc: 1.7, aim: Fixed(1.45), speed: 140.0,
                 rings: 2, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(60),
+              Wait(72),
               Fire((
-                count: 11, arc: 1.7, aim: Fixed(1.69), speed: 140.0,
+                count: 9, arc: 1.7, aim: Fixed(1.69), speed: 140.0,
                 rings: 2, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 11, arc: 1.7, aim: Fixed(1.45), speed: 140.0,
+                count: 9, arc: 1.7, aim: Fixed(1.45), speed: 140.0,
                 rings: 2, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 11, arc: 1.7, aim: Fixed(1.69), speed: 140.0,
+                count: 9, arc: 1.7, aim: Fixed(1.69), speed: 140.0,
                 rings: 2, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 11, arc: 1.7, aim: Fixed(1.45), speed: 140.0,
+                count: 9, arc: 1.7, aim: Fixed(1.45), speed: 140.0,
                 rings: 2, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(20),
+              Wait(24),
             ]),
           ],
           [
@@ -114,53 +126,53 @@
             // medio paso girado cada vez para que no se apilen.
             Forever([
               Fire((
-                count: 14, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
+                count: 10, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(20),
+              Wait(24),
               Fire((
-                count: 14, arc: 6.2831855, aim: Fixed(0.2244), speed: 110.0,
+                count: 10, arc: 6.2831855, aim: Fixed(0.3142), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 14, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
+                count: 10, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(20),
+              Wait(24),
               Fire((
-                count: 14, arc: 6.2831855, aim: Fixed(0.2244), speed: 110.0,
+                count: 10, arc: 6.2831855, aim: Fixed(0.3142), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 14, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
+                count: 10, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 14, arc: 6.2831855, aim: Fixed(0.2244), speed: 110.0,
+                count: 10, arc: 6.2831855, aim: Fixed(0.3142), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 14, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
+                count: 10, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
             ]),
           ],
           [
             // El cante: a ti, sin quiebro, para que no haya donde quedarse quieta.
             Forever([
-              Wait(40),
+              Wait(48),
               Fire((
                 count: 3, arc: 0.2, aim: AtPlayer, speed: 260.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
@@ -171,7 +183,7 @@
           [
             // Los claveles, uno por compas. Se parrian.
             Forever([
-              Wait(240),
+              Wait(288),
               Fire((
                 count: 3, arc: 1.0, aim: AtPlayer, speed: 200.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
@@ -193,285 +205,287 @@
         Parallel([
           [
             Forever([
-              MoveTo(pos: (230.0, 160.0), dur: 240, ease: InOut),
-              MoveTo(pos: (410.0, 160.0), dur: 240, ease: InOut),
+              MoveTo(pos: (230.0, 160.0), dur: 288, ease: InOut),
+              MoveTo(pos: (410.0, 160.0), dur: 288, ease: InOut),
             ]),
           ],
           [
-            // Un rasgueo en cada acento: seis abanicos de seis cuerdas, uno
-            // cada tres ticks, barriendo de un lado al otro. Abajo y arriba,
-            // como la mano que rasguea.
+            // Un rasgueo en cada acento: seis cuerdas, una cada tres ticks,
+            // barriendo de un lado al otro. Abajo y arriba, como la mano que
+            // rasguea. Cada cuerda son cuatro balas juntas y entre una y la
+            // siguiente queda una calle: los abanicos no se tocan.
             Forever([
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(2.2), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(2.2), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.948), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.948), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.696), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.696), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.444), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.444), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.192), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.192), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(0.94), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(0.94), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(45),
+              Wait(57),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(0.94), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(0.94), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.192), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.192), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.444), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.444), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.696), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.696), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.948), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.948), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(2.2), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(2.2), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(25),
+              Wait(33),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(2.2), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(2.2), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.948), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.948), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.696), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.696), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.444), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.444), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.192), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.192), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(0.94), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(0.94), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(25),
+              Wait(33),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(0.94), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(0.94), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.192), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.192), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.444), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.444), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.696), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.696), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.948), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.948), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(2.2), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(2.2), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(25),
+              Wait(33),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(2.2), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(2.2), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.948), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.948), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.696), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.696), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.444), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.444), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(1.192), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(1.192), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 6, arc: 0.3, aim: Fixed(0.94), speed: 170.0,
+                count: 4, arc: 0.12, aim: Fixed(0.94), speed: 170.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.45, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(5),
+              Wait(9),
             ]),
           ],
           [
-            // Y en el uno, el rasgueo grande, con las cuatro cuerdas graves.
+            // Y en el uno, el rasgueo grande, con las cuerdas graves: medias,
+            // y con la calle mas ancha.
             Forever([
               Fire((
-                count: 8, arc: 0.42, aim: Fixed(2.54), speed: 150.0,
+                count: 4, arc: 0.15, aim: Fixed(2.54), speed: 150.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 8, arc: 0.42, aim: Fixed(2.152), speed: 150.0,
+                count: 4, arc: 0.15, aim: Fixed(2.152), speed: 150.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 8, arc: 0.42, aim: Fixed(1.764), speed: 150.0,
+                count: 4, arc: 0.15, aim: Fixed(1.764), speed: 150.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 8, arc: 0.42, aim: Fixed(1.376), speed: 150.0,
+                count: 4, arc: 0.15, aim: Fixed(1.376), speed: 150.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 8, arc: 0.42, aim: Fixed(0.988), speed: 150.0,
+                count: 4, arc: 0.15, aim: Fixed(0.988), speed: 150.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 8, arc: 0.42, aim: Fixed(0.6), speed: 150.0,
+                count: 4, arc: 0.15, aim: Fixed(0.6), speed: 150.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.45, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(225),
+              Wait(273),
             ]),
           ],
           [
             // El corro de los tiempos sin acento, menos el uno.
             Forever([
-              Wait(20),
+              Wait(24),
               Fire((
                 count: 12, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
                 count: 12, arc: 6.2831855, aim: Fixed(0.2618), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(20),
+              Wait(24),
               Fire((
                 count: 12, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
                 count: 12, arc: 6.2831855, aim: Fixed(0.2618), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
                 count: 12, arc: 6.2831855, aim: Fixed(0.0), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
                 count: 12, arc: 6.2831855, aim: Fixed(0.2618), speed: 110.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.35, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
             ]),
           ],
           [
             // El cante: a ti, sin quiebro, para que no haya donde quedarse quieta.
             Forever([
-              Wait(40),
+              Wait(48),
               Fire((
                 count: 3, arc: 0.2, aim: AtPlayer, speed: 260.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
@@ -482,7 +496,7 @@
           [
             // Los claveles, uno por compas. Se parrian.
             Forever([
-              Wait(240),
+              Wait(288),
               Fire((
                 count: 3, arc: 1.0, aim: AtPlayer, speed: 200.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
@@ -505,16 +519,16 @@
           [
             // Cambia de sitio en cada acento, de un golpe.
             Forever([
-              Wait(40),
-              MoveTo(pos: (230.0, 160.0), dur: 20, ease: Out),
-              Wait(40),
-              MoveTo(pos: (410.0, 160.0), dur: 20, ease: Out),
-              Wait(20),
-              MoveTo(pos: (320.0, 130.0), dur: 20, ease: Out),
-              Wait(20),
-              MoveTo(pos: (240.0, 170.0), dur: 20, ease: Out),
-              Wait(20),
-              MoveTo(pos: (400.0, 170.0), dur: 20, ease: Out),
+              Wait(48),
+              MoveTo(pos: (230.0, 160.0), dur: 24, ease: Out),
+              Wait(48),
+              MoveTo(pos: (410.0, 160.0), dur: 24, ease: Out),
+              Wait(24),
+              MoveTo(pos: (320.0, 130.0), dur: 24, ease: Out),
+              Wait(24),
+              MoveTo(pos: (240.0, 170.0), dur: 24, ease: Out),
+              Wait(24),
+              MoveTo(pos: (400.0, 170.0), dur: 24, ease: Out),
             ]),
           ],
           [
@@ -524,70 +538,70 @@
             Forever([
               Fire((
                 count: 9, arc: 1.4, aim: Fixed(1.5708), speed: 170.0,
-                rings: 2, speed_step: 35.0, ring_offset: 0.0,
+                rings: 1, speed_step: 35.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.7, ttl: 30.0, kind: 3, flags: 0,
               )),
-              Wait(10),
+              Wait(12),
               Fire((
                 count: 5, arc: 0.8, aim: Fixed(1.25), speed: 210.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(10),
+              Wait(12),
               Fire((
                 count: 9, arc: 1.4, aim: Fixed(1.5708), speed: 170.0,
-                rings: 2, speed_step: 35.0, ring_offset: 0.0,
+                rings: 1, speed_step: 35.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.7, ttl: 30.0, kind: 3, flags: 0,
               )),
-              Wait(10),
+              Wait(12),
               Fire((
                 count: 5, arc: 0.8, aim: Fixed(1.89), speed: 210.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(10),
+              Wait(12),
             ]),
           ],
           [
             // Y en los acentos, el golpe de planta: un corro de medias.
             Forever([
-              Wait(40),
+              Wait(48),
               Fire((
                 count: 20, arc: 6.2831855, aim: Fixed(0.0), speed: 130.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(60),
+              Wait(72),
               Fire((
                 count: 20, arc: 6.2831855, aim: Fixed(0.157), speed: 130.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
                 count: 20, arc: 6.2831855, aim: Fixed(0.0), speed: 130.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
                 count: 20, arc: 6.2831855, aim: Fixed(0.157), speed: 130.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
                 count: 20, arc: 6.2831855, aim: Fixed(0.0), speed: 130.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(20),
+              Wait(24),
             ]),
           ],
           [
             // El cante: a ti, sin quiebro, para que no haya donde quedarse quieta.
             Forever([
-              Wait(40),
+              Wait(48),
               Fire((
                 count: 3, arc: 0.2, aim: AtPlayer, speed: 260.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
@@ -598,7 +612,7 @@
           [
             // Los claveles, uno por compas. Se parrian.
             Forever([
-              Wait(240),
+              Wait(288),
               Fire((
                 count: 3, arc: 1.0, aim: AtPlayer, speed: 200.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
@@ -619,265 +633,266 @@
         Parallel([
           [
             Forever([
-              MoveTo(pos: (260.0, 150.0), dur: 120, ease: InOut),
-              MoveTo(pos: (380.0, 150.0), dur: 120, ease: InOut),
+              MoveTo(pos: (260.0, 150.0), dur: 144, ease: InOut),
+              MoveTo(pos: (380.0, 150.0), dur: 144, ease: InOut),
             ]),
           ],
           [
-            // El rasgueo de la segunda figura, con una cuerda mas.
+            // El rasgueo de la segunda figura, con las cuerdas mas finas, de
+            // tres balas: aqui se junta con todo lo demas.
             Forever([
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(2.2), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(2.2), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.948), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.948), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.696), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.696), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.444), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.444), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.192), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.192), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(0.94), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(0.94), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(45),
+              Wait(57),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(0.94), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(0.94), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.192), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.192), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.444), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.444), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.696), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.696), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.948), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.948), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(2.2), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(2.2), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(25),
+              Wait(33),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(2.2), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(2.2), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.948), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.948), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.696), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.696), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.444), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.444), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.192), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.192), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(0.94), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(0.94), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(25),
+              Wait(33),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(0.94), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(0.94), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.192), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.192), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.444), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.444), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.696), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.696), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.948), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.948), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(2.2), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(2.2), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(25),
+              Wait(33),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(2.2), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(2.2), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.948), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.948), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.696), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.696), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.444), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.444), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(1.192), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(1.192), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
               Wait(3),
               Fire((
-                count: 7, arc: 0.36, aim: Fixed(0.94), speed: 180.0,
+                count: 3, arc: 0.08, aim: Fixed(0.94), speed: 180.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(5),
+              Wait(9),
             ]),
           ],
           [
-            // El taconeo de la tercera, por debajo.
+            // El taconeo de la tercera, por debajo, con una aguja menos.
             Forever([
               Fire((
                 count: 7, arc: 1.3, aim: Fixed(1.5708), speed: 175.0,
-                rings: 2, speed_step: 35.0, ring_offset: 0.0,
+                rings: 1, speed_step: 35.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.7, ttl: 30.0, kind: 3, flags: 0,
               )),
-              Wait(10),
+              Wait(12),
               Fire((
                 count: 6, arc: 0.9, aim: Fixed(1.25), speed: 215.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: 0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(10),
+              Wait(12),
               Fire((
                 count: 7, arc: 1.3, aim: Fixed(1.5708), speed: 175.0,
-                rings: 2, speed_step: 35.0, ring_offset: 0.0,
+                rings: 1, speed_step: 35.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.7, ttl: 30.0, kind: 3, flags: 0,
               )),
-              Wait(10),
+              Wait(12),
               Fire((
                 count: 6, arc: 0.9, aim: Fixed(1.89), speed: 215.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.5, ttl: 30.0, kind: 0, flags: 0,
               )),
-              Wait(10),
+              Wait(12),
             ]),
           ],
           [
             // Y el golpe de planta en cada acento, quebrado al reves.
             Forever([
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 24, arc: 6.2831855, aim: Fixed(0.0), speed: 140.0,
+                count: 16, arc: 6.2831855, aim: Fixed(0.0), speed: 140.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(60),
+              Wait(72),
               Fire((
-                count: 24, arc: 6.2831855, aim: Fixed(0.1309), speed: 140.0,
+                count: 16, arc: 6.2831855, aim: Fixed(0.1963), speed: 140.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 24, arc: 6.2831855, aim: Fixed(0.0), speed: 140.0,
+                count: 16, arc: 6.2831855, aim: Fixed(0.0), speed: 140.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 24, arc: 6.2831855, aim: Fixed(0.1309), speed: 140.0,
+                count: 16, arc: 6.2831855, aim: Fixed(0.1963), speed: 140.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(40),
+              Wait(48),
               Fire((
-                count: 24, arc: 6.2831855, aim: Fixed(0.0), speed: 140.0,
+                count: 16, arc: 6.2831855, aim: Fixed(0.0), speed: 140.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
                 accel: 0.0, spin: 0.0, quiebro: -0.6, ttl: 30.0, kind: 1, flags: 0,
               )),
-              Wait(20),
+              Wait(24),
             ]),
           ],
           [
             // El cante: a ti, sin quiebro, para que no haya donde quedarse quieta.
             Forever([
-              Wait(20),
+              Wait(48),
               Fire((
                 count: 3, arc: 0.18, aim: AtPlayer, speed: 280.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
@@ -888,7 +903,7 @@
           [
             // Los claveles, uno por compas. Se parrian.
             Forever([
-              Wait(240),
+              Wait(288),
               Fire((
                 count: 4, arc: 1.2, aim: AtPlayer, speed: 200.0,
                 rings: 1, speed_step: 30.0, ring_offset: 0.0,
