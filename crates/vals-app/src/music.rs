@@ -253,8 +253,12 @@ enum Acompanamiento {
     /// La guitarra de Asturias: entre nota y nota del canto, el pedal, y nada
     /// mas. Semicorcheas alternando: canto, pedal, canto, pedal.
     Toque,
-    /// Lo mismo en *fff*: el pedal en octavas y el acorde rasgueado al uno.
+    /// Lo mismo en *fff*: el pedal en octavas, un bajo al uno y el acorde
+    /// rasgueado en cada tiempo.
     Rasgueo,
+    /// El pedal en octavas y un golpe seco de acorde en el dos y el tres, que
+    /// son los tacones.
+    Taconeo,
     /// La caja de musica, con una pua grave por compas, y encima lo que
     /// hayan devuelto los bailes ganados (los bits de `Tema::Sala`).
     Sala(u8),
@@ -890,12 +894,13 @@ fn partitura(t: Tema) -> Partitura {
             &ASTURIAS_B_ACORDES,
         ),
         // La llamada otra vez, con el pedal en octavas como en el crescendo
-        // de la partitura, y mas deprisa: ya no llama, taconea.
+        // de la partitura, una octava arriba y mas deprisa, con los tacones en
+        // el dos y el tres: ya no llama, taconea.
         Tema::Zapateado => guitarra(
             "Asturias, zapateado",
-            168.0,
-            Acompanamiento::Rasgueo,
-            7,
+            184.0,
+            Acompanamiento::Taconeo,
+            19, // mi4
             &ASTURIAS_A,
             &ASTURIAS_A_ACORDES,
         ),
@@ -1078,7 +1083,7 @@ pub fn tema(t: Tema) -> Vec<Voz> {
     };
     let guitarra = matches!(
         p.acompanamiento,
-        Acompanamiento::Toque | Acompanamiento::Rasgueo
+        Acompanamiento::Toque | Acompanamiento::Rasgueo | Acompanamiento::Taconeo
     );
     if sala.is_some_and(|b| b & TANGO != 0) {
         bandoneon(&mut v, &p, u);
@@ -1112,8 +1117,13 @@ pub fn tema(t: Tema) -> Vec<Voz> {
             let cuando = (unidad as f32 + atraso) * u;
             match sala {
                 // El canto va acentuado por encima del pedal, que es lo que
-                // hace que se oiga una melodia y no un redoble.
-                None if guitarra => pulsar(&mut v, f, dur * 0.92, 0.54, 5.0, cuando),
+                // hace que se oiga una melodia y no un redoble, y doblado a la
+                // octava: solo, en el registro de la guitarra, se perdia
+                // debajo del pedal y en un altavoz pequeno no se oia.
+                None if guitarra => {
+                    pulsar(&mut v, f, dur * 0.92, 0.45, 3.0, cuando);
+                    pulsar(&mut v, f * 2.0, dur * 0.7, 0.16, 4.0, cuando);
+                }
                 None => v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.22, decay).tras(cuando)),
                 // La caja de musica: el mismo seno, y su octava apagandose
                 // enseguida, que es la pua.
@@ -1231,9 +1241,9 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
             // Sin grave: el bajo lo pone el canto en la primera del compas.
             // El pedal va bajito y se apaga enseguida, que es como suena una
             // cuerda punteada.
-            Acompanamiento::Toque | Acompanamiento::Rasgueo => {
+            Acompanamiento::Toque | Acompanamiento::Rasgueo | Acompanamiento::Taconeo => {
                 let u = t / UNIDADES_POR_TIEMPO as f32;
-                let fuerte = p.acompanamiento == Acompanamiento::Rasgueo;
+                let fuerte = p.acompanamiento != Acompanamiento::Toque;
                 let ped = p.tonica + pedal(a);
                 for k in (0..unidades_por_compas(p)).filter(|k| !k.is_multiple_of(2)) {
                     let cuando = t0 + k as f32 * u;
@@ -1243,13 +1253,32 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
                         pulsar(v, frecuencia(ped + 12), u * 0.9, 0.06, 4.0, cuando);
                     }
                 }
-                // Y el acorde al uno, cuerda a cuerda con unos milisegundos
-                // entre una y otra: un rasgueado no cae de golpe como el
-                // acorde de un piano, se arrastra.
-                if fuerte {
-                    for (i, f) in triada().enumerate() {
-                        pulsar(v, f, t * 0.8, 0.14, 2.0, t0 + i as f32 * 0.012);
+                match p.acompanamiento {
+                    // El acorde en cada tiempo, mas fuerte en el uno, y cuerda
+                    // a cuerda con unos milisegundos entre una y otra: un
+                    // rasgueado no cae de golpe como el acorde de un piano, se
+                    // arrastra. Y un bajo al uno, que es el fff de la partitura.
+                    Acompanamiento::Rasgueo => {
+                        v.push(Voz::nota(Wave::Sine, grave, t * 1.5, 0.20, 2.0).tras(t0));
+                        for paso in 0..p.tiempos {
+                            let cuando = t0 + paso as f32 * t;
+                            let vol = if paso == 0 { 0.09 } else { 0.06 };
+                            for (i, f) in triada().enumerate() {
+                                pulsar(v, f, t * 0.7, vol, 2.0, cuando + i as f32 * 0.012);
+                            }
+                        }
                     }
+                    // Golpes cortos en el dos y el tres, todas las cuerdas a la
+                    // vez: no se arrastra, taconea.
+                    Acompanamiento::Taconeo => {
+                        for paso in 1..p.tiempos {
+                            let cuando = t0 + paso as f32 * t;
+                            for f in triada() {
+                                pulsar(v, f, t * 0.22, 0.10, 6.0, cuando);
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
             // La caja sola no marca el compas: una pua grave al uno y nada
@@ -1417,7 +1446,7 @@ mod tests {
         for b in todos() {
             if matches!(
                 partitura(b).acompanamiento,
-                Acompanamiento::Toque | Acompanamiento::Rasgueo
+                Acompanamiento::Toque | Acompanamiento::Rasgueo | Acompanamiento::Taconeo
             ) {
                 continue;
             }
