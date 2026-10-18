@@ -127,6 +127,79 @@ Consecuencias directas, y por esto se mide antes de tocar nada:
   Dos `draw_circle` por bala con las primitivas de macroquad es justo la
   version lenta, y era el plan desde el principio: esto es el "antes".
 
+## Tirones: frames sueltos, no fps bajos
+
+En la maquina de referencia el juego iba perfecto, y en otras salia "algun
+tironcin". No era la media sino frames sueltos, asi que no los veia ni el p50
+ni la escena de stress.
+
+**Como se buscan.** Con `--pruebas`, cada frame de mas de 20 ms sale por la
+salida de error con su escena, lo que paso en el y en que se fue el tiempo
+(`stats::Tirones`):
+
+```
+[tiron]  23.3 ms  menu     pasos 1  sim 0.01  musica 0.00  dibujo 13.47  resto 0.04  fuera 9.80  |
+```
+
+Tras la barra van los sucesos del frame: cambio de escena o de musica,
+figura, super, jefe abajo, aparicion de un enemigo del paseo... `fuera` es
+`next_frame`: las corrutinas, el envio a la GPU y la espera del
+vsync. Para medir sin tener que jugar, un arnes temporal (no se commitea)
+recorrio en release los cinco paseos de punta a punta y los cinco bailes con
+todas sus figuras, supers cada 500 ticks y la caida del jefe, cronometrando la
+CPU de simulacion y de dibujo de cada frame. La web se midio con el mismo
+build en el navegador del escritorio, en la misma maquina.
+
+### Lo que habia, de mayor a menor
+
+| Fecha | Commit | Que | Escena | Antes | Despues |
+|---|---|---|---|---|---|
+| 2026-10-18 | tirones | Sintetizar la sala nueva al volver a la pista tras ganar un baile | pista | **92 / 98 / 109 / 118 / 157 ms** en un frame (ganando el 1.º, 2.º... 5.º baile); en web la sintesis sola, 138 / 194 / 282 / 358 ms (1.º, 2.º, 4.º y 5.º) | **21 / 18 / 18 / 17 / 17 ms**, con el telon cerrado; en web, 139 trozos de 3 ms como mucho |
+| 2026-10-18 | tirones | El rotulo del super entra con zoom: un tamano de letra por frame | combate, paseo | **9 frames seguidos** de 6,2 a 8,5 ms de dibujo (lo normal, 1,2) | 1 frame de 8-9 ms; con la letra precalentada, ninguno por encima de 3,5 |
+| 2026-10-18 | tirones | Letra nueva en mitad del baile: la cartela y el HUD de la figura nueva | combate | 1 frame de **8,5 a 12,7 ms** de dibujo en cada cambio de figura | ninguno por encima de 3,5 ms |
+
+**La sala.** `Tema::Sala` lleva los instrumentos de los bailes ganados, asi
+que cambia al ganar uno, y se sintetizaba entera en una corrutina... que no
+tiene ningun `await` antes de sintetizar, asi que corria entera en el frame en
+que se llegaba a la pista: 134 ms de sintesis con los cinco bailes, mas 15-20
+de decodificacion. En web la sintesis va de 2 a 2,7 veces mas lenta. Ahora
+`audio::Mezcla` la hace a trozos de 2 ms por frame desde que se gana el baile,
+mientras caen el jefe y su tarjeta (`CAIDA` + 1,6 s como poco), y sale
+**muestra a muestra lo mismo** que de una vez (hay test). Lo que queda, la
+decodificacion de macroquad en nativo, cae en el frame de entrar a la pista,
+con el telon cerrado; en web la hace el navegador aparte.
+
+**La letra.** macroquad rasteriza los glifos de cada tamano entero la primera
+vez que salen, y cada vez que rasteriza alguno sube el atlas **entero** a la
+GPU. En nativo eso cuesta de 5 a 7 ms por texto nuevo, casi todo espera del
+driver; en web, de 0 a 2 ms de CPU. El rotulo del super pasaba por unos 60 tamanos
+en su zoom de entrada. Ahora se rasteriza a su tamano de reposo y se estira
+(`fuentes::centrado_escalado`), y la letra que solo sale en mitad del baile
+—el rotulo, la cartela y el HUD de cada figura— se rasteriza al entrar, con
+el telon cerrado (`precalentar`).
+
+### Medido y descartado
+
+Nada de esto se toca: medido, no da tirones.
+
+| Sospechoso | Medida | Por que no |
+|---|---|---|
+| Dibujo de los paseos | CPU p50 0,8-1,4 ms, p99 1,5-2,0 ms; Triana, la mas cara | Estable de punta a punta, sin picos propios |
+| Dibujo de los bailes | CPU p50 0,8-1,7 ms, p99 1,3-2,3 ms | Igual |
+| Paso fijo y su recuperacion | Simulacion p99 ≤ 0,02 ms por tick; el tope de 5 pasos son ≤ 0,1 ms | Tras un frame lento no hay espiral: recuperar cuesta nada |
+| Reservas de memoria por frame (`foto`, los `collect` del dibujo, el HUD) | No se ven en el p99 | Microsegundos; no hay fila que lo justifique |
+| `Guardado::guardar` | p50 0,38 ms, el peor de 50 8,6 ms | Solo nativo (en web es `localStorage`) y en transiciones |
+| Recarga en caliente | 0,33 ms cada 20 frames | Solo nativo; en web no hace nada |
+
+Con los doce hilos de la CPU ocupados, la sintesis de una vez de la sala con
+los cinco bailes sube de 134 a 192 ms; a trozos el coste por frame lo sigue
+poniendo el presupuesto.
+
+**Queda**: un frame de unos 8 ms al salir la tarjeta del final de un baile o
+de un paseo (texto nuevo, cuando el juego ya ha acabado), el primer frame de
+cada escena (con el telon cerrado) y los 0,8 s de sintetizar todo al arrancar
+(en nativo), que son pantalla de carga y no tiron.
+
 ## Tamano del build web
 
 | Fecha | Commit | Tamano | Nota |
