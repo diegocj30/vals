@@ -1121,8 +1121,8 @@ pub fn tema(t: Tema) -> Vec<Voz> {
                 // octava: solo, en el registro de la guitarra, se perdia
                 // debajo del pedal y en un altavoz pequeno no se oia.
                 None if guitarra => {
-                    pulsar(&mut v, f, dur * 0.92, 0.45, 3.0, cuando);
-                    pulsar(&mut v, f * 2.0, dur * 0.7, 0.16, 4.0, cuando);
+                    pulsar(&mut v, f, dur * 0.92, 0.56, 3.0, cuando);
+                    pulsar(&mut v, f * 2.0, dur * 0.7, 0.20, 4.0, cuando);
                 }
                 None => v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.22, decay).tras(cuando)),
                 // La caja de musica: el mismo seno, y su octava apagandose
@@ -1247,7 +1247,7 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
                 let ped = p.tonica + pedal(a);
                 for k in (0..unidades_por_compas(p)).filter(|k| !k.is_multiple_of(2)) {
                     let cuando = t0 + k as f32 * u;
-                    pulsar(v, frecuencia(ped), u * 0.9, 0.10, 4.0, cuando);
+                    pulsar(v, frecuencia(ped), u * 0.9, 0.12, 4.0, cuando);
                     // En *fff*, en octavas.
                     if fuerte {
                         pulsar(v, frecuencia(ped + 12), u * 0.9, 0.06, 4.0, cuando);
