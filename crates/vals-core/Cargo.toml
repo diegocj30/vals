@@ -20,3 +20,9 @@ criterion = { version = "0.8.2", default-features = false, features = ["cargo_be
 [[bench]]
 name = "sim"
 harness = false
+
+# Para que `cargo test` vea el test del bot que esquiva, aunque ignorado: es
+# lento y se lanza a mano, en release.
+[[example]]
+name = "esquivar"
+test = true
