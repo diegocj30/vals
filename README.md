@@ -33,8 +33,8 @@ Teclado, mando o pantalla táctil, sin instalar nada. También compila en nativo
 > coristas de un cartel. Dicen que allí nadie sabe bailar lo suyo, y cada uno se
 > lleva su música a su ciudad: **Viena, Buenos Aires, Chicago, París y Sevilla**.
 >
-> La bailarina del lazo escarlata sale tras ellos, calle a calle, y a cada uno
-> lo reta en su propio baile. Si le gana, vuelve al salón.
+> **Escarlata**, la bailarina del lazo rojo, sale tras ellos, calle a calle, y
+> a cada uno lo reta en su propio baile. Si le gana, vuelve al salón.
 
 Se cuenta en un prólogo de cinco láminas, que se vuelve a ver desde el menú con
 `X` (cuadrado). Al ganar los cinco bailes llega el final.

@@ -37,9 +37,9 @@ Keyboard, gamepad or touchscreen, nothing to install. It also builds natively fo
 > its music away to its own city: **Vienna, Buenos Aires, Chicago, Paris and
 > Seville**.
 >
-> The dancer with the scarlet bow sets off after them, street by street, and
-> challenges each one at its own dance. Beat it, and it comes back to the
-> ballroom.
+> **Scarlet**, the dancer with the red bow, sets off after them, street by
+> street, and challenges each one at its own dance. Beat it, and it comes back
+> to the ballroom.
 
 It is told in a five-plate prologue that can be replayed from the menu with
 `X` (Square). Win all five dances and the ending follows.

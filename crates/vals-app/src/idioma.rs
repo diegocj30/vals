@@ -538,8 +538,8 @@ textos! {
     Lamina1: "EL GRAN SALÓN", "THE GRAND BALLROOM";
     Lamina1A: "Corre el año 1900. Esta noche hay gran baile en el salón,",
         "The year is 1900. Tonight is the night of the grand ball,";
-    Lamina1B: "y ella va a bailar por primera vez.",
-        "and she is about to dance for the very first time.";
+    Lamina1B: "y Escarlata va a bailar por primera vez.",
+        "and Scarlet is about to dance for the very first time.";
     Lamina2: "A MEDIANOCHE", "AT THE STROKE OF MIDNIGHT";
     Lamina2A: "Al dar las doce, el salón cobra vida:",
         "As the clock strikes twelve, the ballroom comes alive:";
@@ -551,8 +551,8 @@ textos! {
     Lamina3B: "Viena, Buenos Aires, Chicago, París y Sevilla. El salón se queda en silencio.",
         "Vienna, Buenos Aires, Chicago, Paris and Seville. The ballroom falls silent.";
     Lamina4: "EL RETO", "THE CHALLENGE";
-    Lamina4A: "Ella sale tras ellos, de ciudad en ciudad.",
-        "She sets off after them, from city to city.";
+    Lamina4A: "Escarlata sale tras ellos, de ciudad en ciudad.",
+        "Scarlet sets off after them, from city to city.";
     Lamina4B: "Si les gana bailando lo suyo, volverán al salón.",
         "If she beats them at their own dance, they will come back to the ballroom.";
     Lamina5: "PROGRAMA DE LA NOCHE", "TONIGHT'S PROGRAMME";
@@ -584,8 +584,8 @@ textos! {
     // Igual que el prologo: una idea por lamina, dicha tal cual.
     ElFinal: "el final", "the ending";
     Final1: "DE VUELTA EN EL SALÓN", "BACK AT THE BALLROOM";
-    Final1A: "Les ha ganado a los cinco, a cada uno en su baile.",
-        "She has beaten all five, each one at its own dance.";
+    Final1A: "Escarlata les ha ganado a los cinco, a cada uno en su baile.",
+        "Scarlet has beaten all five, each one at its own dance.";
     Final1B: "Cumplen su palabra y vuelven con ella al gran salón.",
         "They keep their word and return with her to the grand ballroom.";
     Final2: "LA MÚSICA VUELVE", "THE MUSIC RETURNS";
