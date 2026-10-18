@@ -761,17 +761,7 @@ fn icono(a: Articulo, c: Vec2, r: f32, t: f32) {
             let c = q(0.0, 0.1);
             let lat = 1.0 + 0.06 * (t * 6.0).sin();
             let rr = r * 0.36 * lat;
-            for (color, extra) in [(TINTA, g), (ORO, 0.0)] {
-                for dx in [-1.0, 1.0] {
-                    draw_circle(c.x + dx * rr * 0.75, c.y - rr * 0.3, rr + extra, color);
-                }
-                draw_triangle(
-                    c + vec2(-rr * 1.72 - extra, -rr * 0.05),
-                    c + vec2(rr * 1.72 + extra, -rr * 0.05),
-                    c + vec2(0.0, rr * 1.8 + extra),
-                    color,
-                );
-            }
+            corazon(c, rr, g, 1.0, ORO);
             draw_circle(c.x, c.y + rr * 0.2, rr * 0.28, CARMIN);
             linea(q(0.0, -0.4), q(0.0, -0.9), g * 0.4, ORO);
         }
@@ -820,6 +810,30 @@ fn icono(a: Articulo, c: Vec2, r: f32, t: f32) {
                 draw_line(a.x, a.y, b.x, b.y, g * 0.5, PAPEL);
             }
         }
+    }
+}
+
+/// Un corazon con su canto de tinta: dos lobulos y la punta. `r` es el radio de
+/// cada lobulo y `canto` el grosor de la tinta.
+///
+/// `lleno` va de 1 (de `color` entero) a 0 (solo el contorno, hueco de tinta):
+/// el del relicario va lleno, y las vidas del HUD se vacian al perderse.
+pub(crate) fn corazon(c: Vec2, r: f32, canto: f32, lleno: f32, color: Color) {
+    let silueta = |extra: f32, color: Color| {
+        for dx in [-1.0, 1.0] {
+            draw_circle(c.x + dx * r * 0.75, c.y - r * 0.3, r + extra, color);
+        }
+        draw_triangle(
+            c + vec2(-r * 1.72 - extra, -r * 0.05),
+            c + vec2(r * 1.72 + extra, -r * 0.05),
+            c + vec2(0.0, r * 1.8 + extra),
+            color,
+        );
+    };
+    silueta(canto, TINTA);
+    silueta(0.0, color);
+    if lleno < 1.0 {
+        silueta(-canto * 1.2, fade(TINTA, 1.0 - lleno.max(0.0)));
     }
 }
 

@@ -315,6 +315,7 @@ async fn run_game() {
     let mut chispas = Particulas::new();
     let mut zumo = Zumo::new();
     let mut ovacion = ovacion::Ovacion::new();
+    let mut corazones = draw::Corazones::default();
     let mut cartela: Option<Cartela> = None;
     // Donde murio la jugadora y cuando: de ahi sube su fantasma. Hay que
     // guardarlo antes del paso, porque `die` la devuelve a la salida en el
@@ -872,6 +873,11 @@ async fn run_game() {
                     world.step(input);
                     if world.events.super_fired {
                         ovacion.disparar(world.baile, foto, false);
+                    } else if world.events.phase_changed {
+                        // Las balas que barrio el cambio estallan en vez de
+                        // desaparecer: es lo que hace que el cambio se vea.
+                        let barridas = world.limpiadas.iter().map(|p| vec2(p.x, p.y));
+                        ovacion.figura(world.baile, barridas.collect());
                     }
                     if bailando {
                         intento.apuntar(&mut progreso.marcas, &world.events, world.boss.phase);
@@ -1072,7 +1078,7 @@ async fn run_game() {
                 alpha,
             );
             draw::particulas(&chispas, &camara);
-            calle::encima(p, &layout, &n);
+            calle::encima(p, &layout, &mut corazones, &n);
             if let Some(t) = intento.tarjeta.as_ref() {
                 libro::tarjeta_de_paseo(t, nombre(&p.def.nombre), &lamina, &n);
             }
@@ -1085,9 +1091,22 @@ async fn run_game() {
                 Escena::Combate => jefes::caida(caida.unwrap_or(0.0)),
                 _ => 1.0,
             };
-            draw::frame(mostrado, alpha, &layout, bullets_gpu.as_mut(), cayendo, &n);
+            draw::frame(
+                mostrado,
+                alpha,
+                &layout,
+                bullets_gpu.as_mut(),
+                cayendo,
+                &mut corazones,
+                &n,
+            );
             if escena == Escena::Combate {
-                let yo = world.player.render_pos(alpha);
+                // La del cambio de figura sale del jefe; la del super, de ella.
+                let yo = if ovacion.es_de_figura() {
+                    world.boss.render_pos(alpha)
+                } else {
+                    world.player.render_pos(alpha)
+                };
                 let tam = vec2(vals_core::ARENA_W, vals_core::ARENA_H);
                 ovacion.dibujar(&layout, tam, layout.to_screen(yo.x, yo.y), alpha);
             }
@@ -1252,6 +1271,7 @@ async fn run_replay(path: String) {
     let mut siguiente_huella = 0usize;
     let mut divergencia: Option<u64> = None;
     let mut bullets_gpu = nuevo_renderer();
+    let mut corazones = draw::Corazones::default();
 
     loop {
         let frame_dt = get_frame_time().min(MAX_FRAME_DT);
@@ -1299,7 +1319,15 @@ async fn run_replay(path: String) {
         let t1 = get_time();
         let layout = draw::Layout::compute();
         let n = Nombres::de(Dispositivo::Teclado, false, &Controles::default());
-        draw::frame(&world, alpha, &layout, bullets_gpu.as_mut(), 1.0, &n);
+        draw::frame(
+            &world,
+            alpha,
+            &layout,
+            bullets_gpu.as_mut(),
+            1.0,
+            &mut corazones,
+            &n,
+        );
         draw::debug_overlay(&world, &stats, steps, 0, &n);
         draw::replay_badge(cursor, replay.inputs.len(), divergencia);
         stats.push_render((get_time() - t1) as f32);

@@ -174,13 +174,18 @@ fn fondo_de_viena(p: &Paseo, l: &Layout, capa: &dyn Fn(f32) -> Layout, cam: f32,
 /// Lo que va encima de la calle y dentro de la lamina: el papel de alrededor,
 /// las cartas, el camino a la puerta y el KO. Va aparte de `dibujar` para que
 /// las chispas queden entre la calle y el papel, como en el combate.
-pub fn encima(p: &Paseo, l: &Layout, n: &Nombres) {
+pub fn encima(p: &Paseo, l: &Layout, corazones: &mut draw::Corazones, n: &Nombres) {
     draw::paspartu_de(l, vec2(VISTA_W, VISTA_H));
     let o = l.to_screen(0.0, 0.0);
     let w = l.len(VISTA_W);
     draw::cartas(
         l.to_screen(0.0, VISTA_H),
-        p.vidas,
+        l,
+        corazones,
+        (
+            p.vidas,
+            vals_core::paseo::VIDAS + p.equipo.amuleto.vidas_extra(),
+        ),
         p.terminado(),
         &p.jugadora,
         &n.super_,

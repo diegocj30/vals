@@ -22,6 +22,10 @@
 //! En el paseo sale la version ligera: sin apagon ni foco —la calle es de
 //! dia y se anda, no se baila— y sin fantasmas, con la onda, los petalos y un
 //! rotulo mas pequeno.
+//!
+//! Y el cambio de figura lleva la suya, muda: sin apagon, sin rotulo y sin
+//! fogonazo —el destello es el del jefe, en la tinta de su baile—. Sale del
+//! jefe y se lleva las balas que barrio el cambio (`World::limpiadas`).
 
 use std::f32::consts::TAU;
 
@@ -65,6 +69,8 @@ pub struct Ovacion {
     /// Donde estaban las balas justo antes del super, en unidades de arena.
     fantasmas: Vec<Vec2>,
     ligera: bool,
+    /// La del cambio de figura: sin rotulo ni fogonazo.
+    muda: bool,
 }
 
 impl Ovacion {
@@ -74,6 +80,7 @@ impl Ovacion {
             baile: 0,
             fantasmas: Vec::new(),
             ligera: false,
+            muda: false,
         }
     }
 
@@ -85,7 +92,19 @@ impl Ovacion {
             baile,
             fantasmas,
             ligera,
+            muda: false,
         };
+    }
+
+    /// La del cambio de figura, con las balas que barrio.
+    pub fn figura(&mut self, baile: usize, fantasmas: Vec<Vec2>) {
+        self.disparar(baile, fantasmas, true);
+        self.muda = true;
+    }
+
+    /// Si es la del cambio de figura, que sale del jefe y no de ella.
+    pub fn es_de_figura(&self) -> bool {
+        self.tick.is_some() && self.muda
     }
 
     /// Un tick, al paso de la simulacion.
@@ -96,7 +115,7 @@ impl Ovacion {
     }
 
     /// Dibuja la ovacion sobre una lamina de `tam` unidades, con ella en el
-    /// punto de pantalla `jugadora`.
+    /// punto de pantalla `jugadora` (el jefe, en la del cambio de figura).
     pub fn dibujar(&self, l: &Layout, tam: Vec2, jugadora: Vec2, alpha: f32) {
         let Some(tick) = self.tick else {
             return;
@@ -124,8 +143,13 @@ impl Ovacion {
             if t < ONDA {
                 lazos(l, jugadora, r, t);
             }
-            self.rotulo(o, w, h, jugadora, t);
+            if !self.muda {
+                self.rotulo(o, w, h, jugadora, t);
+            }
         });
+        if self.muda {
+            return;
+        }
 
         // El fogonazo va encima de todo lo suyo: es la pelicula quemada.
         let f = fogonazo(t) * if self.ligera { 0.35 } else { 0.55 };
@@ -346,6 +370,9 @@ mod tests {
         assert_eq!(apagon(fin), 0.0);
         assert_eq!(onda(fin), 1.0, "quedan fantasmas sin borrar");
         assert_eq!(fogonazo(FOGONAZO), 0.0);
+        // Y la del cambio de figura acaba de barrer antes de que el jefe
+        // vuelva a disparar.
+        assert!(ONDA < vals_core::boss::RESPIRO_TICKS as f32);
     }
 
     #[test]

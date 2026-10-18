@@ -10,7 +10,8 @@
 //! - **La de entrada para el mundo.** Se lee antes de empezar, no mientras te
 //!   disparan: una cartela que hay que leer esquivando no se lee.
 //! - **La de figura no lo para.** Salta al cambiar de fase, en mitad del
-//!   combate, y es corta. Ahi parar seria quitarle el ritmo a lo que va bien.
+//!   combate, mientras el jefe toma aire (`RESPIRO_TICKS`). Ahi parar seria
+//!   quitarle el ritmo a lo que va bien.
 //!
 //! Y un fundido entre escenas, que es lo que separa un corte de un cambio.
 
@@ -19,6 +20,7 @@ use macroquad::prelude::*;
 use crate::draw::Layout;
 use crate::fuentes::{self, Cara};
 use crate::idioma::{Texto, tx};
+use crate::jefes::tramo;
 
 // Todo esto va en **segundos de reloj**, no en ticks. Es presentacion: tiene
 // que durar lo mismo a 60 que a 144 Hz, y sobre todo tiene que seguir corriendo
@@ -28,8 +30,12 @@ use crate::idioma::{Texto, tx};
 /// Lo que dura la cartela de entrada: lo justo para leer tres lineas sin que
 /// apetezca saltarsela.
 const ENTRADA: f32 = 2.5;
-/// Y la de figura, que solo tiene una linea.
-const FIGURA: f32 = 1.35;
+/// Y la de figura, que solo tiene una linea. Mas que el respiro del jefe: el
+/// velo se va con el respiro y el letrero se queda un poco mas.
+const FIGURA: f32 = 1.8;
+/// Cuando se va el velo de la de figura, en segundos desde que sale: con las
+/// primeras balas de la figura nueva, que tienen que verse limpias.
+const VELO_FIGURA: (f32, f32) = (0.55, 0.95);
 /// Y el grito de salida, que tiene que ser un golpe y no un letrero.
 const GRITO: f32 = 0.9;
 /// Aparicion y desaparicion.
@@ -86,6 +92,8 @@ pub struct Cartela {
     total: f32,
     /// Si para el mundo mientras se lee.
     para: bool,
+    /// Si es la de cambio de figura, que se dibuja aparte.
+    cambio: bool,
 }
 
 impl Cartela {
@@ -100,6 +108,7 @@ impl Cartela {
             restante: ENTRADA,
             total: ENTRADA,
             para: true,
+            cambio: false,
         }
     }
 
@@ -118,6 +127,7 @@ impl Cartela {
             restante: FIGURA,
             total: FIGURA,
             para: false,
+            cambio: true,
         }
     }
 
@@ -156,6 +166,7 @@ impl Cartela {
             restante: GRITO,
             total: GRITO,
             para: false,
+            cambio: false,
         }
     }
 
@@ -205,6 +216,9 @@ impl Cartela {
         if a <= 0.0 {
             return;
         }
+        if self.cambio {
+            return self.dibujar_cambio(l, tam, a);
+        }
         let o = l.to_screen(0.0, 0.0);
         let (w, h) = (l.len(tam.x), l.len(tam.y));
         let cx = o.x + w * 0.5;
@@ -218,8 +232,7 @@ impl Cartela {
         let apertura = ((self.total - self.restante) / ENTRA).min(1.0);
         let mut y = o.y + h * (if self.para { 0.32 } else { 0.24 });
 
-        // La orla. Solo la de entrada la lleva: la de figura salta en mitad del
-        // combate y tiene que estorbar lo menos posible.
+        // La orla. Solo la de entrada; la de figura lleva la suya, aparte.
         if self.para {
             let (mw, mh) = (w * 0.36 * apertura, h * 0.115);
             let cy = y + mh * 0.45;
@@ -277,6 +290,70 @@ impl Cartela {
                 fade(SUBRAYA, a * 0.85),
             );
         }
+    }
+
+    /// La de cambio de figura: un velo suave, la orla de la de entrada y todo a
+    /// la escala de la lamina. La de antes iba en pixeles y sin nada detras, y
+    /// en mitad de las balas no se leia: el cambio de figura pasaba sin verse.
+    ///
+    /// El velo se va con el respiro del jefe; lo que queda es el letrero.
+    fn dibujar_cambio(&self, l: &Layout, tam: Vec2, a: f32) {
+        let o = l.to_screen(0.0, 0.0);
+        let (w, h) = (l.len(tam.x), l.len(tam.y));
+        let cx = o.x + w * 0.5;
+        let cy = o.y + h * 0.36;
+        let puesta = self.total - self.restante;
+        let velo = a * (1.0 - tramo(puesta, VELO_FIGURA.0, VELO_FIGURA.1));
+        let apertura = (puesta / ENTRA).min(1.0);
+
+        let tam_figura = l.len(38.0);
+        let ancho = fuentes::medir(&self.figura, tam_figura, Cara::Titulo).width;
+        let (mw, mh) = (
+            (w * 0.36).max(ancho * 0.5 + l.len(26.0)) * apertura,
+            l.len(50.0),
+        );
+        draw_rectangle(o.x, o.y, w, h, fade(VELO, velo * 0.3));
+        draw_rectangle(
+            cx - mw,
+            cy - mh,
+            mw * 2.0,
+            mh * 2.0,
+            fade(VELO, velo * 0.55),
+        );
+        for (d, grosor, alfa) in [(0.0, 2.5, 0.95), (l.len(7.0), 1.0, 0.5)] {
+            draw_rectangle_lines(
+                cx - mw - d,
+                cy - mh - d,
+                (mw + d) * 2.0,
+                (mh + d) * 2.0,
+                grosor,
+                fade(SUBRAYA, a * alfa),
+            );
+        }
+
+        let y = cy - l.len(18.0);
+        if !self.orden.is_empty() {
+            let letra = l.len(15.0);
+            fuentes::centrado(&self.orden, cx, y, letra, Cara::Cuerpo, fade(TENUE, a));
+        }
+        let media = mw * 0.6;
+        let raya = y + l.len(9.0);
+        draw_line(
+            cx - media,
+            raya,
+            cx + media,
+            raya,
+            1.5,
+            fade(SUBRAYA, a * 0.9),
+        );
+        fuentes::centrado(
+            &self.figura,
+            cx,
+            cy + l.len(30.0),
+            tam_figura,
+            Cara::Titulo,
+            fade(TEXTO, a),
+        );
     }
 }
 

@@ -3,6 +3,7 @@
 //! miniquad puro o wgpu sin tocar `vals-core`.
 
 use macroquad::prelude::*;
+use vals_core::boss::RESPIRO_TICKS;
 use vals_core::bullets::{Bullets, FLAG_PARRYABLE};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
@@ -15,6 +16,7 @@ use crate::glifos::{self, Boton, Trozo, txg};
 use crate::idioma::{Texto, nombre, tx, txf};
 use crate::jefes;
 use crate::libro;
+use crate::modista;
 use crate::music::Tema;
 use crate::paleta;
 use crate::particulas::Particulas;
@@ -224,6 +226,7 @@ pub fn frame(
     layout: &Layout,
     bullets_gpu: Option<&mut BulletRenderer>,
     caida: f32,
+    corazones: &mut Corazones,
     n: &Nombres,
 ) {
     papel();
@@ -249,9 +252,38 @@ pub fn frame(
     draw_player(world, alpha, layout);
     paspartu(layout);
     paneles(world, alpha, layout);
-    draw_hp_bar(world, layout);
-    draw_cartas(world, layout, &n.super_);
+    draw_hp_bar(world, alpha, layout);
+    draw_cartas(world, layout, corazones, &n.super_);
     draw_hud(world, layout);
+    fogonazo_de_figura(world, alpha);
+}
+
+/// Ticks desde el ultimo cambio de figura, mientras dura el respiro del jefe.
+/// Sale de la simulacion, asi que se ve igual en un replay y se para con el
+/// hitstop.
+fn tras_el_cambio(world: &World, alpha: f32) -> Option<f32> {
+    let b = &world.boss;
+    (b.respiro > 0 && !b.defeated).then(|| (RESPIRO_TICKS - b.respiro) as f32 + alpha)
+}
+
+/// El destello del cambio de figura: la pantalla entera en la tinta del
+/// baile, apagandose en un tercio de segundo. Flojo a proposito: tiene que
+/// verse que algo cambia, no deslumbrar.
+fn fogonazo_de_figura(world: &World, alpha: f32) {
+    let Some(t) = tras_el_cambio(world, alpha) else {
+        return;
+    };
+    let k = 1.0 - jefes::tramo(t, 0.0, 18.0);
+    if k > 0.0 {
+        let tinta = paleta::del_baile(world.baile).0;
+        draw_rectangle(
+            0.0,
+            0.0,
+            screen_width(),
+            screen_height(),
+            fade(tinta, 0.3 * k * k),
+        );
+    }
 }
 
 /// El proscenio: el borde del escenario, con candilejas.
@@ -748,8 +780,12 @@ pub(crate) fn barra_de_vida(x: f32, y: f32, w: f32, alto: f32, frac: f32) {
     draw_rectangle(x, y, w * frac.clamp(0.0, 1.0), alto, HP_BAR);
 }
 
-/// Barra de vida de la fase, con una marca por fase superada.
-fn draw_hp_bar(world: &World, l: &Layout) {
+/// Barra de vida de la fase y, debajo, lo que queda del baile entero con una
+/// marca por figura, como la barra del KO.
+///
+/// Tras un cambio de figura la barra no salta a llena: se rellena durante el
+/// respiro del jefe, que es lo que dice que la figura nueva empieza de cero.
+fn draw_hp_bar(world: &World, alpha: f32, l: &Layout) {
     let b = &world.boss;
     if b.defeated {
         return;
@@ -759,17 +795,17 @@ fn draw_hp_bar(world: &World, l: &Layout) {
     let alto = 6.0;
     let y = o.y + 8.0;
 
-    barra_de_vida(o.x, y, w, alto, b.hp_ratio());
+    let llenado = tras_el_cambio(world, alpha).map_or(1.0, |t| {
+        jefes::suave(jefes::tramo(t, 4.0, RESPIRO_TICKS as f32))
+    });
+    barra_de_vida(o.x, y, w, alto, b.hp_ratio() * llenado);
 
-    // Un punto por fase: lleno el que se esta jugando, hueco el que queda.
-    for i in 0..b.phase_count() {
-        let cx = o.x + 8.0 + i as f32 * 12.0;
-        let cy = y + alto + 10.0;
-        if i <= b.phase {
-            draw_circle(cx, cy, 3.0, HP_BAR);
-        } else {
-            draw_circle_lines(cx, cy, 3.0, 1.0, HP_BAR_BG);
-        }
+    let (y, alto) = (y + alto + 3.0, 4.0);
+    barra_de_vida(o.x, y, w, alto, 1.0 - recorrido(world));
+    let figuras = b.phase_count().max(1);
+    for i in 1..figuras {
+        let x = o.x + w * i as f32 / figuras as f32;
+        draw_line(x, y, x, y + alto, 1.5, fade(TEXT_DIM, 0.9));
     }
 }
 
@@ -1456,47 +1492,103 @@ fn hueso(a: Vec2, b: Vec2, r0: f32, r1: f32, arqueo: f32, l: &Layout, color: Col
     }
 }
 
-/// Las cartas del HUD: la de vida y las del super, como en Cuphead.
+/// Las vidas del HUD: las que se tenian y cuando se perdio la ultima. Es lo
+/// unico que hace falta para que el corazon que se pierde lata, se encoja y se
+/// vacie en vez de apagarse de un fotograma a otro.
+#[derive(Default)]
+pub struct Corazones {
+    vidas: u32,
+    /// Las vidas que habia antes del ultimo golpe.
+    desde: u32,
+    golpe: f64,
+}
+
+/// Lo que tarda en vaciarse un corazon perdido, en segundos.
+const VACIARSE: f32 = 0.4;
+
+impl Corazones {
+    /// Apunta las vidas de este frame. Si bajan arranca el vaciado; si suben,
+    /// que es reintentar, se ponen sin mas.
+    fn mirar(&mut self, vidas: u32) {
+        if vidas < self.vidas {
+            self.desde = self.vidas;
+            self.golpe = get_time();
+        }
+        self.vidas = vidas;
+    }
+
+    /// El tamano y lo lleno que esta el corazon `i`.
+    fn corazon(&self, i: u32, acabado: bool) -> (f32, f32) {
+        let t = (get_time() - self.golpe) as f32 / VACIARSE;
+        if i < self.vidas {
+            // Con la ultima late: es el unico momento en que hay que mirarla.
+            if self.vidas == 1 && !acabado {
+                let f = (get_time() * 1.3).fract() as f32;
+                let latido =
+                    (1.0 - f * 7.0).max(0.0) + 0.6 * (1.0 - (f - 0.2).abs() * 9.0).max(0.0);
+                return (1.0 + 0.22 * latido, 1.0);
+            }
+            return (1.0, 1.0);
+        }
+        if i >= self.desde || t >= 1.0 {
+            return (1.0, 0.0);
+        }
+        // Se hincha, se encoge de mas y vuelve a su tamano, ya hueco.
+        let escala = 1.0 + 0.35 * jefes::suave(jefes::tramo(t, 0.0, 0.15))
+            - 0.6 * jefes::suave(jefes::tramo(t, 0.15, 0.6))
+            + 0.25 * jefes::suave(jefes::tramo(t, 0.6, 1.0));
+        (escala, 1.0 - jefes::tramo(t, 0.3, 1.0))
+    }
+}
+
+/// Las vidas y las cartas del super, como en Cuphead.
 ///
-/// Tres puntos y una barra son un HUD de programador. Una carta con "HP 3"
-/// impresa se lee igual de rapido y dice de que epoca es el juego. Cuando queda
-/// una vida la carta se pone roja y parpadea, que es lo que hace la de Cuphead,
-/// y por lo mismo: es el unico momento en que hay que mirarla.
-fn draw_cartas(world: &World, l: &Layout, super_: &[Trozo]) {
+/// Un corazon por vida que se puede tener, rojo los que quedan y huecos los
+/// perdidos: se cuentan de un vistazo y dicen cuantas habia, que la carta con
+/// "HP 3" no decia.
+fn draw_cartas(world: &World, l: &Layout, corazones: &mut Corazones, super_: &[Trozo]) {
+    let vidas = (world.lives, world.vidas_de_salida());
     let o = l.to_screen(0.0, ARENA_H);
-    cartas(o, world.lives, world.is_over(), &world.player, super_);
+    cartas(
+        o,
+        l,
+        corazones,
+        vidas,
+        world.is_over(),
+        &world.player,
+        super_,
+    );
 }
 
 /// Las cartas en la esquina `o` (abajo a la izquierda de la lamina). Aparte de
 /// `draw_cartas` para que el paseo lleve las mismas: la vida se lee igual en la
-/// calle que en el salon. `super_` es el boton del super, que se ensena
-/// cuando esta lleno.
+/// calle que en el salon. `vidas` son las que quedan y las que se pueden tener;
+/// `super_` es el boton del super, que se ensena cuando esta lleno.
 pub(crate) fn cartas(
     o: Vec2,
-    vidas: u32,
+    l: &Layout,
+    corazones: &mut Corazones,
+    (vidas, tope): (u32, u32),
     acabado: bool,
     jugadora: &player::Player,
     super_: &[Trozo],
 ) {
-    let (x0, y) = (o.x + 12.0, o.y - 42.0);
-
-    let critico = vidas <= 1 && !acabado;
-    let parpadea = critico && (get_time() * 3.0).fract() < 0.5;
-    carta(
-        x0,
-        y,
-        54.0,
-        30.0,
-        if parpadea { DEFEAT } else { paleta::PAPEL },
-    );
-    fuentes::centrado(
-        &format!("HP {vidas}"),
-        x0 + 27.0,
-        y + 22.0,
-        19.0,
-        Cara::Titulo,
-        TINTA,
-    );
+    corazones.mirar(vidas);
+    let tope = tope.max(vidas);
+    // A la escala de la lamina, pero sin pasarse: en el movil en vertical la
+    // lamina es tan pequena que no se leeria, y la calle en una pantalla
+    // grande la tiene tan grande que el HUD gritaria.
+    let k = l.scale().clamp(0.75, 1.4);
+    let len = |v: f32| v * k;
+    let (x0, y) = (o.x + len(22.0), o.y - len(24.0));
+    let paso = len(26.0);
+    let r = len(6.5);
+    let canto = (r * 0.28).max(1.5);
+    for i in 0..tope {
+        let (escala, lleno) = corazones.corazon(i, acabado);
+        let c = vec2(x0 + i as f32 * paso, y - r * 0.25);
+        modista::corazon(c, r * escala, canto, lleno, protagonista::LAZO);
+    }
 
     // El super en cinco cartas que se llenan de abajo arriba. Una barra
     // continua dice lo mismo, pero cinco cartas dicen ademas cuanto falta de
@@ -1504,22 +1596,33 @@ pub(crate) fn cartas(
     let m = jugadora.meter_ratio();
     let lleno = jugadora.meter_full();
     let relleno = if lleno { METER_FULL } else { METER };
-    let (cw, ch) = (17.0, 26.0);
+    let (cw, ch, hueco) = (len(13.5), len(21.0), len(4.0));
+    let margen = len(1.6);
+    let x1 = x0 + (tope.max(1) - 1) as f32 * paso + len(28.0);
+    let cy = y - ch * 0.5;
     for i in 0..5 {
-        let x = x0 + 64.0 + i as f32 * (cw + 5.0);
-        let (cy, k) = (y + 2.0, (m * 5.0 - i as f32).clamp(0.0, 1.0));
+        let x = x1 + i as f32 * (cw + hueco);
+        let k = (m * 5.0 - i as f32).clamp(0.0, 1.0);
         carta(x, cy, cw, ch, paleta::PAPEL);
         if k > 0.0 {
-            let alto = (ch - 4.0) * k;
-            draw_rectangle(x + 2.0, cy + ch - 2.0 - alto, cw - 4.0, alto, relleno);
+            let alto = (ch - margen * 2.0) * k;
+            draw_rectangle(
+                x + margen,
+                cy + ch - margen - alto,
+                cw - margen * 2.0,
+                alto,
+                relleno,
+            );
         }
     }
 
     // La etiqueta se queda: en las primeras partidas de verdad nadie supo para
     // que servia la barra hasta que dijo "SUPER".
-    let x_super = x0 + 64.0 + 5.0 * (cw + 5.0) + 4.0;
+    let x_super = x1 + 5.0 * (cw + hueco) + len(3.0);
+    let base = cy + ch * 0.75;
+    let letra = len(12.0);
     con_sombra(
-        |dx, c| fuentes::texto("SUPER", x_super + dx, y + 21.0 + dx, 15.0, Cara::Cuerpo, c),
+        |dx, c| fuentes::texto("SUPER", x_super + dx, base + dx, letra, Cara::Cuerpo, c),
         if lleno { METER_FULL } else { TEXT },
     );
     if lleno {
@@ -1527,11 +1630,12 @@ pub(crate) fn cartas(
         // decia ESPACIO siempre, con el mando en la mano y con el super
         // cambiado de tecla.
         let t = (get_time() as f32 * 6.0).sin() * 0.5 + 0.5;
+        let ancho = fuentes::medir("SUPER", letra, Cara::Cuerpo).width;
         glifos::texto(
             super_,
-            x_super + 48.0,
-            y + 21.0,
-            18.0,
+            x_super + ancho + len(8.0),
+            base,
+            len(14.5),
             fade(METER_FULL, 0.55 + 0.45 * t),
         );
     }
