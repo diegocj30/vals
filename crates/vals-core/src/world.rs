@@ -143,6 +143,10 @@ pub struct World {
     /// Lo que ha pasado en el ultimo tick. Lo lee la capa de presentacion para
     /// saber que sonido tocar. No entra en el hash: es informacion derivada.
     pub events: Events,
+    /// Donde estaban las balas que ha barrido un cambio de figura en el
+    /// ultimo tick, para que la presentacion las haga estallar. Como `events`:
+    /// se vacia en cada tick y no entra en el hash.
+    pub limpiadas: Vec<Vec2>,
     /// Los jefes de la partida, en orden.
     boss_defs: Vec<BossDef>,
     /// Input del tick anterior. Hace falta para detectar flancos (el dash
@@ -174,6 +178,7 @@ impl World {
             equipo: Equipo::default(),
             dificultad: Dificultad::Normal,
             events: Events::default(),
+            limpiadas: Vec::new(),
             boss_defs: defs,
             prev_input: InputFrame::NONE,
             boss_enabled: true,
@@ -260,7 +265,7 @@ impl World {
     }
 
     /// Las vidas con las que se empieza: tres, y una mas con el relicario.
-    fn vidas_de_salida(&self) -> u32 {
+    pub fn vidas_de_salida(&self) -> u32 {
         STARTING_LIVES + self.equipo.amuleto.vidas_extra()
     }
 
@@ -393,6 +398,7 @@ impl World {
     /// nada del entorno: mismo estado + mismo input = mismo resultado, siempre.
     pub fn step(&mut self, input: InputFrame) {
         self.events = Events::default();
+        self.limpiadas.clear();
         self.player.update(
             input,
             self.prev_input,
@@ -520,6 +526,10 @@ impl World {
             // Cambio de fase o caida: en ambos casos se limpia la pantalla.
             // Heredar la pared de balas de la fase anterior seria una muerte
             // imposible de evitar justo en el momento de celebrar.
+            if !self.boss.defeated {
+                self.limpiadas
+                    .extend(self.bullets.iter_live().map(|b| b.pos));
+            }
             self.bullets.clear();
             if self.boss.defeated {
                 self.advance_boss();
@@ -640,6 +650,30 @@ mod tests {
         for _ in 0..n {
             w.step(input);
         }
+    }
+
+    #[test]
+    fn el_cambio_de_figura_apunta_las_balas_que_barre() {
+        let mut w = World::new(7);
+        // Se le deja disparar y se le pone a un golpe de cambiar de figura.
+        correr(&mut w, NADA, 90);
+        w.player.iframes = u32::MAX / 2;
+        let habia = w.bullets.live_count();
+        assert!(habia > 0, "el jefe no ha disparado");
+        w.boss.hp = 1;
+        let disparo = pulsar(InputFrame::SHOOT);
+        for _ in 0..240 {
+            let antes = w.bullets.live_count();
+            w.step(disparo);
+            if w.events.phase_changed {
+                assert!(!w.limpiadas.is_empty() && w.limpiadas.len() <= antes + 64);
+                assert_eq!(w.bullets.live_count(), 0);
+                w.step(NADA);
+                assert!(w.limpiadas.is_empty(), "no se vacia en el tick siguiente");
+                return;
+            }
+        }
+        panic!("no ha cambiado de figura");
     }
 
     /// Genera una secuencia de inputs plausible y reproducible.

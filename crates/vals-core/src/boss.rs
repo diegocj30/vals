@@ -111,6 +111,11 @@ impl Nivel {
 /// Ticks que el jefe parpadea al recibir dano.
 const HIT_FLASH_TICKS: u32 = 4;
 
+/// Ticks que la figura nueva espera antes de disparar. Sin este respiro el
+/// cambio de figura no se veia: la pantalla se vaciaba y en el mismo tick
+/// salia la primera rafaga de la siguiente.
+pub const RESPIRO_TICKS: u32 = 45;
+
 /// Una fase, tal y como se escribe en el RON.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PhaseDef {
@@ -234,6 +239,9 @@ pub struct Boss {
     /// Ticks de parpadeo por impacto. Sin esto disparar no da ninguna
     /// sensacion de estar haciendo algo.
     pub hit_flash: u32,
+    /// Ticks que le quedan del respiro tras cambiar de figura (ver
+    /// [`RESPIRO_TICKS`]). Mientras dura, el patron no corre.
+    pub respiro: u32,
     phases: Vec<CompiledPhase>,
     runner: PatternRunner,
     start_pos: Vec2,
@@ -270,6 +278,7 @@ impl Boss {
             phase: 0,
             defeated: phases.is_empty(),
             hit_flash: 0,
+            respiro: 0,
             phases,
             runner,
             start_pos: def.pos,
@@ -312,6 +321,10 @@ impl Boss {
         if self.defeated {
             return;
         }
+        if self.respiro > 0 {
+            self.respiro -= 1;
+            return;
+        }
 
         let mut ctx = RunCtx {
             bullets,
@@ -344,6 +357,7 @@ impl Boss {
             self.pos = self.start_pos;
             self.prev_pos = self.start_pos;
             self.runner = PatternRunner::new(self.phases[self.phase].pattern.clone());
+            self.respiro = RESPIRO_TICKS;
         } else {
             self.hp = 0;
             self.defeated = true;
@@ -359,6 +373,11 @@ impl Boss {
         h.write_u64(u64::from(self.defeated));
         h.write_u64(self.runner.ticks());
         h.write_u64(self.runner.live_threads() as u64);
+        // Solo si hay respiro: asi la huella de la primera figura es la de
+        // antes de que existiera.
+        if self.respiro > 0 {
+            h.write_u64(u64::from(self.respiro));
+        }
     }
 }
 
@@ -751,6 +770,22 @@ mod tests {
         assert_eq!(boss.phase, 1);
         assert_eq!(boss.hp, 20, "la fase nueva trae su propia vida");
         assert!(!boss.defeated);
+    }
+
+    #[test]
+    fn la_figura_nueva_respira_antes_de_disparar() {
+        let mut boss = Boss::from_def(&def_de_prueba());
+        boss.damage(10);
+        let mut b = Bullets::with_capacity(1024);
+        for _ in 0..RESPIRO_TICKS {
+            boss.update(&mut b, Vec2::new(320.0, 600.0));
+        }
+        assert_eq!(b.live_count(), 0, "dispara durante el respiro");
+        assert_eq!(boss.respiro, 0);
+        for _ in 0..30 {
+            boss.update(&mut b, Vec2::new(320.0, 600.0));
+        }
+        assert!(b.live_count() > 0, "y despues no vuelve a disparar");
     }
 
     #[test]
