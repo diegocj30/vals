@@ -62,6 +62,20 @@ const PALABRAS: [Texto; vals_core::boss::BAILES] = [
     Texto::SuperFlamenco,
 ];
 
+/// La letra del rotulo en reposo, en el combate y en el paseo (la ligera).
+const LETRA: f32 = 64.0;
+const LETRA_LIGERA: f32 = 44.0;
+
+/// Rasteriza de antemano la palabra del rotulo de un baile, a sus dos
+/// tamanos. Lo mismo que `cartela::precalentar`, por lo mismo: sin esto, el
+/// primer super de cada baile se llevaba un frame de 9 ms.
+pub fn precalentar(baile: usize) {
+    let texto = tx(PALABRAS[baile.min(PALABRAS.len() - 1)]);
+    for letra in [LETRA, LETRA_LIGERA] {
+        fuentes::medir(texto, letra, Cara::Titulo);
+    }
+}
+
 pub struct Ovacion {
     /// Ticks desde que salio el super, o `None` si no hay ninguno en marcha.
     tick: Option<u32>,
@@ -190,7 +204,11 @@ impl Ovacion {
             return;
         }
         let texto = tx(PALABRAS[self.baile.min(PALABRAS.len() - 1)]);
-        let tam = if self.ligera { 44.0 } else { 64.0 } * escala;
+        // La letra se rasteriza siempre a su tamano de reposo y se estira:
+        // con un tamano por frame, cada frame del zoom rasterizaba la palabra
+        // entera otra vez (ver `fuentes::texto_escalado`).
+        let letra = if self.ligera { LETRA_LIGERA } else { LETRA };
+        let tam = letra * escala;
         let cx = o.x + w * 0.5;
         // En la mitad donde no esta ella, que no la tape nunca, y sin llegar
         // al jefe, que es de donde salen las balas nuevas.
@@ -202,7 +220,8 @@ impl Ovacion {
             };
         let (tinta, _) = paleta::del_baile(self.baile);
 
-        let medio = fuentes::medir(texto, tam, Cara::Titulo).width * 0.5 + tam * 0.6;
+        let medio =
+            fuentes::medir_escalado(texto, letra, escala, Cara::Titulo).width * 0.5 + tam * 0.6;
         let alto = tam * 0.55;
         let sesgo = tam * 0.3;
         // La banda: un paralelogramo, tinta dentro y el rojo del lazo de canto.
@@ -222,15 +241,24 @@ impl Ovacion {
         // encima, que es como sale una plancha mal casada en un cartel.
         let base = cy + tam * 0.32;
         let corrido = (tam * 0.05).max(2.0);
-        fuentes::centrado(
+        fuentes::centrado_escalado(
             texto,
             cx + corrido,
             base + corrido,
-            tam,
+            letra,
+            escala,
             Cara::Titulo,
             fade(tinta, alfa),
         );
-        fuentes::centrado(texto, cx, base, tam, Cara::Titulo, fade(PAPEL, alfa));
+        fuentes::centrado_escalado(
+            texto,
+            cx,
+            base,
+            letra,
+            escala,
+            Cara::Titulo,
+            fade(PAPEL, alfa),
+        );
     }
 }
 

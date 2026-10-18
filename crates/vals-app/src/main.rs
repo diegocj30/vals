@@ -622,6 +622,7 @@ async fn run_game() {
                     let def = &paseos[k];
                     escena = Escena::Paseo;
                     paseo = Some((k, nuevo_paseo(def, &progreso)));
+                    ovacion::precalentar(jefe);
                     intento = progreso.marcas.empezar(&def.nombre);
                     cartela = Some(
                         Cartela::prologo(
@@ -1267,6 +1268,14 @@ fn empezar_baile(jefe: usize, progreso: &Guardado) -> (World, Recorder, Option<C
         nombre(Tema::de(world.baile, 0).titulo()),
     )
     .con_lema(prologo::lema_del_baile(world.baile));
+    // La letra de lo que saldra en mitad del baile, ahora que el telon esta
+    // cerrado (ver `cartela::precalentar`).
+    let figuras = (0..)
+        .map(|i| world.boss.figura(i))
+        .take_while(|f| !f.is_empty());
+    cartela::precalentar(&draw::Layout::compute(), figuras.map(nombre));
+    ovacion::precalentar(world.baile);
+    draw::precalentar_hud(&world);
     (world, recorder, Some(cartela))
 }
 

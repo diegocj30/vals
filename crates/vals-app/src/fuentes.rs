@@ -84,6 +84,18 @@ fn con<R>(cara: Cara, f: impl FnOnce(Option<&Font>) -> R) -> R {
 
 /// Dibuja texto. Sustituye a `draw_text`.
 pub fn texto(s: &str, x: f32, y: f32, tam: f32, cara: Cara, color: Color) {
+    texto_escalado(s, x, y, tam, 1.0, cara, color);
+}
+
+/// Dibuja texto rasterizado a `tam` y estirado a `tam * escala`.
+///
+/// Es para el texto que cambia de tamano mientras se ve. macroquad rasteriza
+/// los glifos de cada tamano entero la primera vez que salen, y cada vez que
+/// rasteriza alguno vuelve a subir el atlas **entero** a la GPU: unos 5 ms por
+/// frame en la maquina de referencia, y mas en web. El rotulo del super entraba
+/// con zoom y eran nueve frames seguidos asi (ver `docs/PERF.md`). Escalado no
+/// rasteriza nada nuevo.
+fn texto_escalado(s: &str, x: f32, y: f32, tam: f32, escala: f32, cara: Cara, color: Color) {
     con(cara, |fuente| {
         draw_text_ex(
             s,
@@ -92,6 +104,7 @@ pub fn texto(s: &str, x: f32, y: f32, tam: f32, cara: Cara, color: Color) {
             TextParams {
                 font: fuente,
                 font_size: tam as u16,
+                font_scale: escala,
                 color,
                 ..Default::default()
             },
@@ -101,13 +114,31 @@ pub fn texto(s: &str, x: f32, y: f32, tam: f32, cara: Cara, color: Color) {
 
 /// Mide texto. Sustituye a `measure_text`.
 pub fn medir(s: &str, tam: f32, cara: Cara) -> TextDimensions {
-    con(cara, |fuente| measure_text(s, fuente, tam as u16, 1.0))
+    medir_escalado(s, tam, 1.0, cara)
+}
+
+/// Mide texto rasterizado a `tam` y estirado a `tam * escala`.
+pub fn medir_escalado(s: &str, tam: f32, escala: f32, cara: Cara) -> TextDimensions {
+    con(cara, |fuente| measure_text(s, fuente, tam as u16, escala))
 }
 
 /// Dibuja texto centrado en `cx`. Es lo que hace media interfaz del juego.
 pub fn centrado(s: &str, cx: f32, y: f32, tam: f32, cara: Cara, color: Color) {
-    let m = medir(s, tam, cara);
-    texto(s, cx - m.width * 0.5, y, tam, cara, color);
+    centrado_escalado(s, cx, y, tam, 1.0, cara, color);
+}
+
+/// Centrado, y estirado como en `texto_escalado`.
+pub fn centrado_escalado(
+    s: &str,
+    cx: f32,
+    y: f32,
+    tam: f32,
+    escala: f32,
+    cara: Cara,
+    color: Color,
+) {
+    let m = medir_escalado(s, tam, escala, cara);
+    texto_escalado(s, cx - m.width * 0.5, y, tam, escala, cara, color);
 }
 
 /// Dibuja texto pegado a la derecha de `dx`.

@@ -77,6 +77,26 @@ pub(crate) fn ordinal(numero: usize) -> String {
     ORDINALES.get(numero).map_or("", |t| tx(*t)).to_owned()
 }
 
+/// La letra de la cartela de cambio de figura, en unidades de la lamina: el
+/// nombre de la figura y su ordinal.
+const LETRA_FIGURA: f32 = 38.0;
+const LETRA_ORDEN: f32 = 15.0;
+
+/// Rasteriza de antemano la letra de las cartelas de cambio de figura de un
+/// baile, con sus nombres ya traducidos.
+///
+/// La primera vez que sale un texto, macroquad rasteriza sus glifos y sube el
+/// atlas entero a la GPU. En mitad del combate eso era un frame de 9 a 13 ms
+/// en cada cambio de figura (ver `docs/PERF.md`). Al entrar al baile el telon
+/// esta cerrado y no se nota: se mide aqui lo que se dibujara luego, y medir
+/// rasteriza lo mismo que dibujar.
+pub fn precalentar<'a>(l: &Layout, figuras: impl Iterator<Item = &'a str>) {
+    for (i, figura) in figuras.enumerate() {
+        fuentes::medir(figura, l.len(LETRA_FIGURA), Cara::Titulo);
+        fuentes::medir(&ordinal(i), l.len(LETRA_ORDEN), Cara::Cuerpo);
+    }
+}
+
 /// Una cartela en pantalla.
 pub struct Cartela {
     baile: String,
@@ -306,7 +326,7 @@ impl Cartela {
         let velo = a * (1.0 - tramo(puesta, VELO_FIGURA.0, VELO_FIGURA.1));
         let apertura = (puesta / ENTRA).min(1.0);
 
-        let tam_figura = l.len(38.0);
+        let tam_figura = l.len(LETRA_FIGURA);
         let ancho = fuentes::medir(&self.figura, tam_figura, Cara::Titulo).width;
         let (mw, mh) = (
             (w * 0.36).max(ancho * 0.5 + l.len(26.0)) * apertura,
@@ -333,7 +353,7 @@ impl Cartela {
 
         let y = cy - l.len(18.0);
         if !self.orden.is_empty() {
-            let letra = l.len(15.0);
+            let letra = l.len(LETRA_ORDEN);
             fuentes::centrado(&self.orden, cx, y, letra, Cara::Cuerpo, fade(TENUE, a));
         }
         let media = mw * 0.6;

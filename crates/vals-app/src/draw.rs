@@ -322,19 +322,42 @@ fn draw_ground(l: &Layout, t: f32) {
     }
 }
 
+/// La letra del HUD: el baile con su figura, y debajo lo que suena.
+const LETRA_HUD: f32 = 19.0;
+const LETRA_HUD_PIEZA: f32 = 14.0;
+
+/// Lo que dice el HUD en la figura `fase`: el baile, la figura y cual de
+/// cuantas es, y lo que suena.
+fn rotulos_del_hud(world: &World, fase: usize) -> (String, &'static str) {
+    let b = &world.boss;
+    let etiqueta = format!(
+        "{}  -  {}  ({}/{})",
+        nombre(&b.name),
+        nombre(b.figura(fase)),
+        fase + 1,
+        b.phase_count()
+    );
+    (etiqueta, nombre(Tema::de(world.baile, fase).titulo()))
+}
+
+/// Rasteriza de antemano el HUD de todas las figuras del baile, por lo mismo
+/// que `cartela::precalentar`: el de la figura nueva era la mitad del frame
+/// de 9 a 13 ms de cada cambio de figura.
+pub fn precalentar_hud(world: &World) {
+    for fase in 0..world.boss.phase_count() {
+        let (etiqueta, pieza) = rotulos_del_hud(world, fase);
+        fuentes::medir(&etiqueta, LETRA_HUD, Cara::Titulo);
+        fuentes::medir(pieza, LETRA_HUD_PIEZA, Cara::Cuerpo);
+    }
+}
+
 /// Nombre del jefe, cual de cuantos es, y las vidas que quedan.
 fn draw_hud(world: &World, l: &Layout) {
     let o = l.to_screen(0.0, 0.0);
     let w = l.len(ARENA_W);
 
     if !world.boss.defeated {
-        let etiqueta = format!(
-            "{}  -  {}  ({}/{})",
-            nombre(&world.boss.name),
-            nombre(world.boss.phase_name()),
-            world.boss.phase + 1,
-            world.boss.phase_count()
-        );
+        let (etiqueta, baile) = rotulos_del_hud(world, world.boss.phase);
         // Con sombra de tinta: encima ya no hay una pared lisa sino un
         // decorado, y el sol dorado del club se comia el texto crema.
         con_sombra(
@@ -343,7 +366,7 @@ fn draw_hud(world: &World, l: &Layout) {
                     &etiqueta,
                     o.x + w - 8.0 + dx,
                     o.y + 34.0 + dx,
-                    19.0,
+                    LETRA_HUD,
                     Cara::Titulo,
                     c,
                 )
@@ -353,14 +376,13 @@ fn draw_hud(world: &World, l: &Layout) {
 
         // Y debajo, que vals suena. "Cada jefe es un baile" se entiende mejor
         // si el baile tiene nombre y autor.
-        let baile = nombre(Tema::de(world.baile, world.boss.phase).titulo());
         con_sombra(
             |dx, c| {
                 fuentes::derecha(
                     baile,
                     o.x + w - 8.0 + dx,
                     o.y + 52.0 + dx,
-                    14.0,
+                    LETRA_HUD_PIEZA,
                     Cara::Cuerpo,
                     c,
                 )
