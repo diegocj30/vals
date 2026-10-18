@@ -17,6 +17,7 @@ use macroquad::audio::{
     PlaySoundParams, Sound, load_sound_from_bytes, play_sound, set_sound_volume, stop_sound,
 };
 use macroquad::experimental::coroutines::{Coroutine, start_coroutine};
+use macroquad::miniquad;
 use macroquad::time::get_frame_time;
 use vals_core::Events;
 
@@ -385,8 +386,8 @@ pub struct Audio {
     /// Que sala hay en su hueco, el primero: los bailes ganados con que se
     /// sintetizo. Hay treinta y dos y solo se guarda una.
     sala: u8,
-    /// La sala que se esta sintetizando porque ha cambiado lo ganado.
-    sala_nueva: Option<(u8, Coroutine<Option<Sound>>)>,
+    /// La sala que se prepara porque ha cambiado lo ganado.
+    sala_nueva: Option<(u8, Preparando)>,
     /// Cual esta sonando ahora.
     sonando: Option<usize>,
     pub muted: bool,
@@ -488,28 +489,61 @@ impl Audio {
         self.poner(b.indice());
     }
 
-    /// La sala que toca con lo ganado. Si no es la que hay, se sintetiza
-    /// aparte, sin parar el juego, y entra en cuanto esta: al volver de ganar
-    /// un baile, la pista suena con lo que ese baile ha devuelto.
-    fn cambiar_sala(&mut self, bailes: u8) {
-        if let Some((nueva, hilo)) = self.sala_nueva.take() {
-            if !hilo.is_done() {
-                self.sala_nueva = Some((nueva, hilo));
-                return;
-            }
-            if self.sonando == Some(0) {
-                self.parar_musica();
-                self.sonando = None;
-            }
-            self.musica[0] = hilo.retrieve().flatten();
-            self.sala = nueva;
+    /// Se llama cada frame con los bailes ganados, se este donde se este: si
+    /// la sala que toca no es la que hay, se sintetiza otro trozo.
+    ///
+    /// Es lo que quita el tiron de volver a la pista. La sala nueva se
+    /// empieza en cuanto se gana el baile y se hace a trozos de
+    /// `PRESUPUESTO_SALA` mientras caen el jefe y su tarjeta, asi que al
+    /// volver a la pista ya esta. De una vez, con los cinco bailes ganados,
+    /// eran 134 ms en un solo frame (ver `docs/PERF.md`).
+    pub fn preparar_sala(&mut self, bailes: u8) {
+        self.pedir_sala(bailes);
+        if let Some((_, Preparando::Mezcla(m))) = self.sala_nueva.as_mut() {
+            m.avanzar(miniquad::date::now() + PRESUPUESTO_SALA);
         }
-        if bailes != self.sala {
+    }
+
+    /// Empieza la sala de `bailes` si no es la que hay ni la que se prepara.
+    fn pedir_sala(&mut self, bailes: u8) {
+        let pedida = self.sala_nueva.as_ref().map_or(self.sala, |(b, _)| *b);
+        if bailes == pedida {
+            return;
+        }
+        self.sala_nueva = (bailes != self.sala).then(|| {
             let t = Tema::Sala(bailes);
-            let hilo =
-                start_coroutine(async move { load_sound_from_bytes(&wav_tema(t)).await.ok() });
-            self.sala_nueva = Some((bailes, hilo));
-        }
+            let mezcla = Mezcla::new(music::tema(t), music::duracion(t), SAMPLE_RATE_MUSICA);
+            (bailes, Preparando::Mezcla(mezcla))
+        });
+    }
+
+    /// La sala que toca con lo ganado, al llegar a ella. Si la nueva ya esta
+    /// sintetizada se carga, y si ya esta cargada entra: al volver de ganar un
+    /// baile, la pista suena con lo que ese baile ha devuelto.
+    ///
+    /// La carga va aqui y no al acabar la mezcla a proposito: en nativo
+    /// `load_sound_from_bytes` decodifica en el acto (unos 15 ms), y aqui cae
+    /// en el frame de entrar, con el telon cerrado. En web la decodifica el
+    /// navegador aparte.
+    fn cambiar_sala(&mut self, bailes: u8) {
+        self.pedir_sala(bailes);
+        self.sala_nueva = match self.sala_nueva.take() {
+            Some((b, Preparando::Mezcla(m))) if m.acabada() => {
+                let bytes = wav_a(&m.muestras(), SAMPLE_RATE_MUSICA);
+                let hilo = start_coroutine(async move { load_sound_from_bytes(&bytes).await.ok() });
+                Some((b, Preparando::Carga(hilo)))
+            }
+            Some((b, Preparando::Carga(hilo))) if hilo.is_done() => {
+                if self.sonando == Some(0) {
+                    self.parar_musica();
+                    self.sonando = None;
+                }
+                self.musica[0] = hilo.retrieve().flatten();
+                self.sala = b;
+                None
+            }
+            sigue => sigue,
+        };
     }
 
     fn poner(&mut self, idx: usize) {
@@ -778,25 +812,91 @@ fn render_a(voces: &[Voz], rate: u32) -> Vec<i16> {
 /// La musica lo necesita: el bucle tiene que durar los compases justos. Si se
 /// dejara terminar en la ultima nota, el bucle daria un salto cada vuelta.
 fn render_len_a(voces: &[Voz], segundos: f32, rate: u32) -> Vec<i16> {
-    let n = (segundos.max(0.001) * rate as f32) as usize;
-    let mut acc = vec![0.0f32; n];
+    let mut m = Mezcla::new(voces.to_vec(), segundos, rate);
+    m.avanzar(f64::INFINITY);
+    m.muestras()
+}
 
-    for v in voces {
-        let inicio = (v.delay * rate as f32) as usize;
-        let largo = ((v.dur * rate as f32) as usize).max(1);
-        let mut fase = 0.0f32;
-        // Ruido con un generador propio: nada de aleatoriedad del sistema, para
-        // que el mismo sonido salga igual en cada arranque.
-        let mut rnd: u32 = 0x5641_4C53;
+/// Lo que se le deja sintetizar a la sala nueva en cada frame, en segundos.
+/// Con los cinco bailes ganados son 134 ms de trabajo: unos 70 frames, medio
+/// segundo a 144 Hz, y la caida del jefe con su tarjeta dura bastante mas.
+/// En web el reloj va a milisegundos, asi que alli cada trozo es de 1 a 3 ms.
+const PRESUPUESTO_SALA: f64 = 0.002;
 
-        for i in 0..largo {
-            let idx = inicio + i;
-            if idx >= n {
-                break;
+/// Cada cuantas muestras se mira el reloj.
+const MUESTRAS_ENTRE_RELOJ: usize = 2048;
+
+/// Semilla del ruido de cada voz. Ruido con un generador propio: nada de
+/// aleatoriedad del sistema, para que el mismo sonido salga igual en cada
+/// arranque.
+const SEMILLA_RUIDO: u32 = 0x5641_4C53;
+
+/// Una mezcla que se puede hacer a trozos.
+///
+/// Cada trozo sigue donde lo dejo el anterior —la voz, la muestra, la fase y
+/// el ruido—, asi que a trozos sale **exactamente** lo mismo que de una vez:
+/// las mismas sumas en el mismo orden. Hay un test que lo compara.
+struct Mezcla {
+    voces: Vec<Voz>,
+    acc: Vec<f32>,
+    rate: u32,
+    /// Por donde va: la voz, su muestra, y la fase y el ruido de esa voz.
+    voz: usize,
+    muestra: usize,
+    fase: f32,
+    rnd: u32,
+}
+
+impl Mezcla {
+    fn new(voces: Vec<Voz>, segundos: f32, rate: u32) -> Self {
+        let n = (segundos.max(0.001) * rate as f32) as usize;
+        Self {
+            voces,
+            acc: vec![0.0f32; n],
+            rate,
+            voz: 0,
+            muestra: 0,
+            fase: 0.0,
+            rnd: SEMILLA_RUIDO,
+        }
+    }
+
+    fn acabada(&self) -> bool {
+        self.voz >= self.voces.len()
+    }
+
+    /// Sintetiza hasta acabar o hasta `limite`, en el reloj de
+    /// `miniquad::date::now`, que no pide ventana y vale en los tests.
+    fn avanzar(&mut self, limite: f64) {
+        let n = self.acc.len();
+        let rate = self.rate as f32;
+        while let Some(v) = self.voces.get(self.voz).copied() {
+            let inicio = (v.delay * rate) as usize;
+            let largo = ((v.dur * rate) as usize).max(1);
+            // Lo que se sale del buffer no se oye.
+            let fin = largo.min(n.saturating_sub(inicio));
+            while self.muestra < fin {
+                if limite.is_finite() && miniquad::date::now() >= limite {
+                    return;
+                }
+                let hasta = (self.muestra + MUESTRAS_ENTRE_RELOJ).min(fin);
+                self.voz_hasta(v, inicio, largo, hasta);
             }
+            self.voz += 1;
+            self.muestra = 0;
+            self.fase = 0.0;
+            self.rnd = SEMILLA_RUIDO;
+        }
+    }
+
+    /// La voz `v`, desde donde se quedo hasta la muestra `hasta`.
+    fn voz_hasta(&mut self, v: Voz, inicio: usize, largo: usize, hasta: usize) {
+        let rate = self.rate as f32;
+        let (mut fase, mut rnd) = (self.fase, self.rnd);
+        for i in self.muestra..hasta {
             let t = i as f32 / largo as f32;
             let f = v.f0 + (v.f1 - v.f0) * t;
-            fase += f / rate as f32;
+            fase += f / rate;
             if fase >= 1.0 {
                 fase -= 1.0;
             }
@@ -821,13 +921,26 @@ fn render_len_a(voces: &[Voz], segundos: f32, rate: u32) -> Vec<i16> {
             // exponencial: es lo que hace que suene a golpe y no a pitido.
             let ataque = (t * 60.0).min(1.0);
             let env = ataque * (1.0 - t).powf(v.decay);
-            acc[idx] += onda * env * v.vol;
+            self.acc[inicio + i] += onda * env * v.vol;
         }
+        (self.fase, self.rnd, self.muestra) = (fase, rnd, hasta);
     }
 
-    acc.iter()
-        .map(|s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
-        .collect()
+    /// Las muestras de 16 bits. Con la mezcla a medias, lo que lleve.
+    fn muestras(&self) -> Vec<i16> {
+        self.acc
+            .iter()
+            .map(|s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+            .collect()
+    }
+}
+
+/// La sala nueva, mientras se prepara.
+enum Preparando {
+    /// Sintetizandose a trozos, uno por frame.
+    Mezcla(Mezcla),
+    /// Ya sintetizada, cargandose.
+    Carga(Coroutine<Option<Sound>>),
 }
 
 /// Empaqueta muestras mono de 16 bits en un WAV.
@@ -1024,6 +1137,24 @@ mod tests {
         for t in TEMAS {
             assert_eq!(wav_sfx(Sfx::Ficha, t), wav_sfx(Sfx::Ficha, t), "{t:?}");
         }
+    }
+
+    #[test]
+    fn la_sala_a_trozos_sale_igual_que_de_una_vez() {
+        // Es lo que deja sintetizarla mientras se juega: si los trozos
+        // cambiasen una sola muestra, la sala sonaria distinta segun lo
+        // rapido que vaya la maquina.
+        let t = Tema::Sala(31);
+        let (voces, largo) = (music::tema(t), music::duracion(t));
+        let de_una = render_len_a(&voces, largo, SAMPLE_RATE_MUSICA);
+        let mut m = Mezcla::new(voces, largo, SAMPLE_RATE_MUSICA);
+        let mut trozos = 0;
+        while !m.acabada() {
+            m.avanzar(miniquad::date::now() + 0.000_2);
+            trozos += 1;
+        }
+        assert!(trozos > 10, "no se ha hecho a trozos: {trozos}");
+        assert_eq!(m.muestras(), de_una);
     }
 
     #[test]

@@ -953,7 +953,10 @@ async fn run_game() {
                 tirones.suceso(que);
             }
         }
+        // La sala de lo ganado se va sintetizando a trozos desde que se gana
+        // el baile, para que al volver a la pista ya este (ver `audio`).
         let t = get_time();
+        audio.preparar_sala(ganados(&pista));
         // La musica se busca por (jefe, figura). La pista tiene la suya
         // propia: dejar sonando el vals en el mapa decia que el vals era el
         // juego, y el vals es UN jefe del juego.
