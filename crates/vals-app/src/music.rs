@@ -250,8 +250,8 @@ enum Acompanamiento {
     /// marcato en donde caen los golpes y no se parece en nada al oirlo,
     /// porque el bajo se mueve en vez de repetirse.
     Stride,
-    /// La guitarra de Asturias: grave al uno y, entre nota y nota del pulgar,
-    /// la cuerda de si al aire dos veces. Va en semicorcheas de tres en tres.
+    /// La guitarra de Asturias: entre nota y nota del pulgar, la cuerda de si
+    /// al aire dos veces, y nada mas. Va en semicorcheas de tres en tres.
     Toque,
     /// El acorde en cada tiempo, cuerda a cuerda. El bajo no lo pone el
     /// acompanamiento: aqui lo lleva la melodia.
@@ -588,67 +588,65 @@ const GALOP_B_ACORDES: [Acorde; 8] = [
 /// cabeza es la version de guitarra en mi, y es la que se transcribe: una
 /// guitarra en Sevilla. Albeniz murio en 1909.
 ///
-/// En mi: los tonos son semitonos sobre el mi. Va en 3/4, pero por dentro en
-/// grupos de tres semicorcheas: una del pulgar, que es esta tabla, y dos de la
-/// cuerda de si al aire, que las pone el acompanamiento. Por eso aqui cada
-/// nota vale tres unidades y caben cuatro por compas.
+/// En mi menor, con la tonica en el mi3 de la cuerda de re: los tonos son
+/// semitonos sobre ese mi. Va en 3/4, pero por dentro en grupos de tres
+/// semicorcheas: una del pulgar, que es esta tabla, y dos de la cuerda de si
+/// al aire, que las pone el acompanamiento. Por eso aqui cada nota vale tres
+/// unidades y caben cuatro por compas.
 ///
 /// Lo que se reconoce a la primera es el si que no para y, por debajo, el
-/// pulgar bordando: si, la sostenido, si, sol. Los dos primeros compases el
-/// pulgar toca el mismo si que la cuerda al aire, y suena a campana.
+/// pulgar bordando: si, la sostenido, si, sol; si, la sostenido, si, fa
+/// sostenido; si, do, si, la. Los dos primeros compases el pulgar toca el
+/// mismo si que la cuerda al aire (la de sol, en el cuarto traste), y suena a
+/// campana. La frase se dice dos veces y la segunda baja hasta el mi.
 #[rustfmt::skip]
-const ASTURIAS_A: [Nota; 64] = [
+const ASTURIAS_A: [Nota; 48] = [
     n(7, 3), n(7, 3), n(7, 3), n(7, 3),                 // 1  si, al unisono
     n(7, 3), n(7, 3), n(7, 3), n(7, 3),                 // 2
     n(7, 3), n(6, 3), n(7, 3), n(3, 3),                 // 3  si la# si sol
-    n(7, 3), n(6, 3), n(7, 3), n(3, 3),                 // 4
-    n(7, 3), n(6, 3), n(7, 3), n(3, 3),                 // 5
-    n(7, 3), n(6, 3), n(7, 3), n(2, 3),                 // 6  ... y fa#
-    n(7, 3), n(8, 3), n(7, 3), n(5, 3),                 // 7  si do si la
-    n(7, 3), n(5, 3), n(3, 3), n(2, 3),                 // 8
-    n(7, 3), n(6, 3), n(7, 3), n(3, 3),                 // 9
-    n(7, 3), n(6, 3), n(7, 3), n(3, 3),                 // 10
-    n(7, 3), n(8, 3), n(7, 3), n(5, 3),                 // 11
-    n(8, 3), n(7, 3), n(5, 3), n(3, 3),                 // 12
-    n(5, 3), n(3, 3), n(2, 3), n(0, 3),                 // 13
-    n(1, 3), n(0, 3), n(-1, 3), n(0, 3),                // 14 fa mi re# mi
-    n(1, 3), n(0, 3), n(1, 3), n(0, 3),                 // 15 el fa frigio
-    n(0, 3), n(0, 3), n(0, 3), n(0, 3),                 // 16
+    n(7, 3), n(6, 3), n(7, 3), n(2, 3),                 // 4  si la# si fa#
+    n(7, 3), n(8, 3), n(7, 3), n(5, 3),                 // 5  si do si la
+    n(7, 3), n(5, 3), n(3, 3), n(2, 3),                 // 6  si la sol fa#
+    n(7, 3), n(6, 3), n(7, 3), n(3, 3),                 // 7  otra vez
+    n(7, 3), n(6, 3), n(7, 3), n(2, 3),                 // 8
+    n(7, 3), n(8, 3), n(7, 3), n(5, 3),                 // 9
+    n(7, 3), n(5, 3), n(3, 3), n(2, 3),                 // 10
+    n(3, 3), n(2, 3), n(0, 3), n(-1, 3),                // 11 sol fa# mi re#
+    n(0, 3), n(0, 3), n(0, 3), n(0, 3),                 // 12 mi, y vuelta al si
 ];
 
 #[rustfmt::skip]
-const ASTURIAS_A_ACORDES: [Acorde; 16] = [
-    men(0), men(0), men(0), men(0),
-    men(0), may(7), men(5), may(7),
-    men(0), men(0), men(5), may(8),
-    men(5), may(1), may(1), men(0),
+const ASTURIAS_A_ACORDES: [Acorde; 12] = [
+    men(0), men(0), men(0), may(7),
+    men(5), may(7), men(0), may(7),
+    men(5), may(7), may(7), men(0),
 ];
 
 /// La parte fuerte: la melodia baja al bajo y encima se rasguea el acorde que
 /// la sigue. Mi, fa, sol, fa, mi, que es el modo frigio en cinco notas, y
 /// luego la cadencia andaluza: la menor, sol, fa, mi mayor.
 ///
-/// Dos octavas por debajo de la tonica: el bajo de una guitarra, que aqui
-/// ademas canta.
+/// Una octava por debajo de la tonica, en el mi2 de la sexta cuerda: el bajo
+/// de una guitarra, que aqui ademas canta.
 #[rustfmt::skip]
 const ASTURIAS_B: [Nota; 32] = [
-    n(-24, 8), n(-23, 4),                               // 1  mi menor
-    n(-23, 8), n(-21, 4),                               // 2  fa
-    n(-21, 8), n(-23, 4),                               // 3  sol
-    n(-23, 8), n(-24, 4),                               // 4  fa
-    n(-24, 8), n(-23, 4),                               // 5  mi menor
-    n(-23, 8), n(-21, 4),                               // 6  fa
-    n(-21, 4), n(-19, 4), n(-21, 4),                    // 7  sol
-    n(-23, 12),                                         // 8  fa
+    n(-12, 8), n(-11, 4),                               // 1  mi menor
+    n(-11, 8), n(-9, 4),                                // 2  fa
+    n(-9, 8), n(-11, 4),                                // 3  sol
+    n(-11, 8), n(-12, 4),                               // 4  fa
+    n(-12, 8), n(-11, 4),                               // 5  mi menor
+    n(-11, 8), n(-9, 4),                                // 6  fa
+    n(-9, 4), n(-7, 4), n(-9, 4),                       // 7  sol
+    n(-11, 12),                                         // 8  fa
     // --- MITAD: la cadencia andaluza, que es lo que toca el remate.
-    n(-19, 8), n(-21, 4),                               // 9  la menor
-    n(-21, 8), n(-23, 4),                               // 10 sol
-    n(-23, 12),                                         // 11 fa
-    n(-24, 12),                                         // 12 mi mayor
-    n(-19, 4), n(-17, 4), n(-16, 4),                    // 13 la menor
-    n(-17, 4), n(-19, 4), n(-21, 4),                    // 14 sol
-    n(-23, 4), n(-21, 4), n(-23, 4),                    // 15 fa
-    n(-24, 12),                                         // 16 mi mayor
+    n(-7, 8), n(-9, 4),                                 // 9  la menor
+    n(-9, 8), n(-11, 4),                                // 10 sol
+    n(-11, 12),                                         // 11 fa
+    n(-12, 12),                                         // 12 mi mayor
+    n(-7, 4), n(-5, 4), n(-4, 4),                       // 13 la menor
+    n(-5, 4), n(-7, 4), n(-9, 4),                       // 14 sol
+    n(-11, 4), n(-9, 4), n(-11, 4),                     // 15 fa
+    n(-12, 12),                                         // 16 mi mayor
 ];
 
 /// Donde empieza la cadencia andaluza del rasgueo.
@@ -874,13 +872,15 @@ fn partitura(t: Tema) -> Partitura {
             &RAG_A_ACORDES,
         ),
 
-        // A 180, veinte ticks por tiempo: el compas del quiebro y el del paseo
-        // de Triana (`tiempo: 20`), que suena con ella.
+        // A 150, veinticuatro ticks por tiempo: el compas del quiebro y el
+        // del paseo de Triana (`tiempo: 24`), que suena con ella. Es tambien
+        // el aire al que se toca de verdad, negra a 140 o 150; mas deprisa
+        // el pulgar deja de cantar y se oye solo el si.
         Tema::Llamada => guitarra(
             "Asturias (Leyenda) - Isaac Albeniz, 1892",
-            180.0,
+            150.0,
             Acompanamiento::Toque,
-            19, // mi
+            7, // mi3, el de la guitarra
             &ASTURIAS_A,
             &ASTURIAS_A_ACORDES,
         ),
@@ -888,7 +888,7 @@ fn partitura(t: Tema) -> Partitura {
             "Asturias, rasgueado",
             132.0,
             Acompanamiento::Rasgueo,
-            19,
+            7,
             &ASTURIAS_B,
             &ASTURIAS_B_ACORDES,
         ),
@@ -896,9 +896,9 @@ fn partitura(t: Tema) -> Partitura {
         // velocidad ya no llama, taconea.
         Tema::Zapateado => guitarra(
             "Asturias, zapateado",
-            184.0,
+            168.0,
             Acompanamiento::Toque,
-            19,
+            7,
             &ASTURIAS_A,
             &ASTURIAS_A_ACORDES,
         ),
@@ -907,9 +907,9 @@ fn partitura(t: Tema) -> Partitura {
         // que es como acaba casi todo el flamenco: en mi mayor.
         Tema::Remate => guitarra(
             "Asturias, remate",
-            168.0,
+            160.0,
             Acompanamiento::Rasgueo,
-            21, // fa#
+            9, // fa#
             &ASTURIAS_B[ASTURIAS_B_MITAD..],
             &ASTURIAS_B_ACORDES[8..],
         ),
@@ -1103,6 +1103,11 @@ pub fn tema(t: Tema) -> Vec<Voz> {
             let f = frecuencia(p.tonica + tono);
             let cuando = (unidad as f32 + atraso) * u;
             match sala {
+                // En la llamada el pulgar va acentuado por encima del si, que
+                // es lo que hace que se oiga una melodia y no un redoble.
+                None if p.acompanamiento == Acompanamiento::Toque => {
+                    pulsar(&mut v, f, dur * 0.92, 0.54, 5.0, cuando)
+                }
                 None if guitarra => pulsar(&mut v, f, dur * 0.92, 0.22, decay, cuando),
                 None => v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.22, decay).tras(cuando)),
                 // La caja de musica: el mismo seno, y su octava apagandose
@@ -1217,13 +1222,15 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
             // misma cuerda al aire, cambie lo que cambie el acorde. Es la
             // dominante repetida por debajo de todo, y se reconoce antes que
             // el pulgar.
+            //
+            // Sin grave: el principio de Asturias es la guitarra sola, y un
+            // bajo largo por compas lo emborronaba. El si va bajito y se
+            // apaga enseguida, que es como suena una cuerda punteada.
             Acompanamiento::Toque => {
                 let u = t / UNIDADES_POR_TIEMPO as f32;
-                let largo = p.tiempos as f32 * t;
-                v.push(Voz::nota(Wave::Sine, grave, largo * 0.9, 0.30, 1.6).tras(t0));
                 let si = frecuencia(p.tonica + 7);
                 for k in (0..unidades_por_compas(p)).filter(|k| !k.is_multiple_of(3)) {
-                    pulsar(v, si, u * 0.9, 0.08, 3.0, t0 + k as f32 * u);
+                    pulsar(v, si, u * 0.9, 0.08, 4.0, t0 + k as f32 * u);
                 }
             }
             // El acorde en cada tiempo, mas fuerte en el uno, y cuerda a
@@ -1278,13 +1285,16 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
                     }
                 }
                 // El flamenco: la guitarra arpegiando el acorde hacia arriba,
-                // una cuerda a contratiempo de cada tiempo. Senos solos y
-                // bajito: es la guitarra que se oye desde la otra punta del
-                // patio, no la del tablao.
+                // las tres cuerdas en cada tiempo, en tresillo, como el pulgar
+                // y los dos dedos de Asturias. Punteada y al volumen del
+                // pah-pah del vals: se tiene que notar que ha vuelto, pero
+                // desde la otra punta del patio, no desde el tablao.
                 if bailes & FLAMENCO != 0 {
-                    for (paso, f) in triada().take(p.tiempos).enumerate() {
-                        let cuando = t0 + (paso as f32 + 0.5) * t;
-                        v.push(Voz::nota(Wave::Sine, f, t * 0.45, 0.05, 3.0).tras(cuando));
+                    for paso in 0..p.tiempos {
+                        for (i, f) in triada().take(3).enumerate() {
+                            let cuando = t0 + (paso as f32 + i as f32 / 3.0) * t;
+                            pulsar(v, f, t * (1.0 - i as f32 / 3.0) * 0.95, 0.09, 2.5, cuando);
+                        }
                     }
                 }
             }
@@ -1393,7 +1403,14 @@ mod tests {
         // El bajo vive por debajo de 150 Hz y la melodia por encima de 200.
         // Es lo que deja sitio en medio para los acordes.
         //
+        // Menos en la llamada y el zapateado: ahi no hay bajo ni acordes, y
+        // el pulgar de Asturias baja por la cuerda de re hasta el mi3, que es
+        // justo ese hueco. Subirlo una octava para salvarlo era lo que la
+        // hacia irreconocible.
         for b in todos() {
+            if partitura(b).acompanamiento == Acompanamiento::Toque {
+                continue;
+            }
             for voz in tema(b) {
                 let f = voz.frecuencia();
                 assert!(
@@ -1702,11 +1719,21 @@ mod tests {
     #[test]
     fn asturias_empieza_por_donde_tiene_que_empezar() {
         // Dos compases de si al unisono con la cuerda al aire, y el pulgar
-        // bordando: si, la#, si, sol. Todo en notas de tres semicorcheas.
+        // bordando: si la# si sol, si la# si fa#, si do si la, si la sol fa#.
+        // Todo en notas de tres semicorcheas.
         assert!(ASTURIAS_A[..8].iter().all(|n| n.tono == 7));
-        let tonos: Vec<i32> = ASTURIAS_A[8..12].iter().map(|n| n.tono).collect();
-        assert_eq!(tonos, vec![7, 6, 7, 3]);
+        let tonos: Vec<i32> = ASTURIAS_A[8..24].iter().map(|n| n.tono).collect();
+        assert_eq!(tonos, vec![7, 6, 7, 3, 7, 6, 7, 2, 7, 8, 7, 5, 7, 5, 3, 2]);
         assert!(ASTURIAS_A.iter().all(|n| n.unidades == 3));
+        // Y en el registro de la guitarra: el si del pedal es el si3 de la
+        // segunda cuerda, 247 Hz, no el de una octava mas arriba.
+        let p = partitura(Tema::Llamada);
+        assert!((frecuencia(p.tonica + 7) - 246.9).abs() < 0.5);
+        // Sin grave: la guitarra sola.
+        assert!(tema(Tema::Llamada).iter().all(|v| v.frecuencia() > 150.0));
+        // A negra 150, veinticuatro ticks por tiempo, que es el compas del
+        // paseo de Triana.
+        assert_eq!(compas(Tema::Llamada).0, 24.0);
     }
 
     #[test]
