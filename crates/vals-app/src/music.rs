@@ -383,22 +383,34 @@ const OLAS_ACORDES: [Acorde; 16] = [
 
 /// **La Cumparsita**, Matos Rodriguez (1916), primera parte.
 ///
-/// En la menor: los tonos son semitonos sobre el la. Aqui un compas son
-/// dieciseis unidades, no doce, porque un tango va en 4/4.
+/// No hay facsimil de la primera edicion (Breyer Hermanos, 1917) que se pueda
+/// usar: lo que hay en IMSLP son arreglos modernos. La tabla sale de la
+/// transcripcion publica en ABC de John Chambers (trillian.mit.edu), y el
+/// arranque esta comprobado con el incipit que cita la Wikipedia, que es el
+/// de la partitura: sol menor, 2/4, re-do-la-fa# en corcheas picadas, en ese
+/// mismo registro.
 ///
-/// Es el arranque de tango mas reconocible que existe, y la figura que lo hace
-/// reconocible son los cuatro golpes secos del primer compas: mi, re, si, sol
-/// sostenido. Ni un adorno.
+/// Aqui va un tono arriba, en la menor, y no por gusto: en sol, el final de
+/// la segunda parte baja a 185 Hz, que es donde vive el acompanamiento. Los
+/// tonos son semitonos sobre el la4. El 2/4 del original va con las figuras
+/// al doble —un compas suyo es uno de cuatro tiempos de aqui, con la corchea
+/// en negra—, que es como lo escribe la transcripcion y lo mismo al oido.
+///
+/// La figura que lo hace reconocible son los cuatro golpes secos del primer
+/// compas: mi, re, si, sol sostenido, **picados**, cada uno con su silencio
+/// detras. Y los dos mi repetidos que les sirven de anacrusa.
 #[rustfmt::skip]
-const CUMPARSITA_A: [Nota; 46] = [
-    n(-5, 4), n(5, 4), n(2, 4), n(-1, 4),                                   // 1
+const CUMPARSITA_A: [Nota; 64] = [
+    n(-5, 2), z(2), n(5, 2), z(2), n(2, 2), z(2), n(-1, 2), z(2),           // 1  mi re si sol#
     z(2), n(-5, 2), n(-4, 2), n(-5, 2), n(-6, 4), n(-5, 2), n(-5, 1), n(-5, 1), // 2
-    n(-5, 4), n(7, 4), n(3, 4), n(0, 4),                                    // 3
+    n(-5, 2), z(2), n(7, 2), z(2), n(3, 2), z(2), n(0, 2), z(2),            // 3  mi mi' do la
     z(2), n(-5, 2), n(-4, 2), n(-5, 2), n(-6, 4), n(-5, 2), n(-5, 1), n(-5, 1), // 4
-    n(-5, 4), n(5, 4), n(2, 4), n(-1, 4),                                   // 5
+    n(-5, 2), z(2), n(5, 2), z(2), n(2, 2), z(2), n(-1, 2), z(2),           // 5
     z(2), n(-5, 2), n(-4, 2), n(-5, 2), n(-6, 4), n(-5, 2), n(-5, 1), n(-5, 1), // 6
-    n(-5, 4), n(7, 4), n(3, 4), n(0, 4),                                    // 7
-    z(2), n(-5, 2), n(-4, 2), n(-5, 2), n(-6, 4), n(-5, 4),                 // 8
+    n(-5, 2), z(2), n(7, 2), z(2), n(3, 2), z(2), n(0, 2), z(2),            // 7
+    // En la partitura el 8 acaba en negra y sigue la segunda parte; aqui el
+    // tema vuelve al 1, y vuelve con su anacrusa, como en los compases pares.
+    z(2), n(-5, 2), n(-4, 2), n(-5, 2), n(-6, 4), n(-5, 2), n(-5, 1), n(-5, 1), // 8
 ];
 
 #[rustfmt::skip]
@@ -407,17 +419,23 @@ const CUMPARSITA_A_ACORDES: [Acorde; 8] = [
     sep(7), sep(7), men(0), men(0),
 ];
 
-/// Su segunda parte: la melodia baja y baja hasta el suelo.
+/// La segunda mitad de la primera parte: la melodia baja y baja hasta el
+/// suelo, por cromatismos (mi, re, re bemol, do; re, re bemol, do, si).
+///
+/// El si de esa bajada es natural: es la quinta del mi7 que suena debajo. La
+/// tabla vieja lo tenia bemol, un tritono contra el acorde, y empezaba el 9 en
+/// el re de arriba en vez de en el de abajo. Y el final sube a la octava: la
+/// grave, sol# y la agudos.
 #[rustfmt::skip]
 const CUMPARSITA_B: [Nota; 40] = [
-    n(5, 4), n(0, 4), n(-1, 4), n(0, 4),                                    // 9
+    n(-7, 4), n(0, 4), n(-1, 4), n(0, 4),                                   // 9  re la sol# la
     z(2), n(-5, 2), n(-4, 2), n(-5, 2), n(-4, 4), n(-1, 4),                 // 10
-    n(-5, 6), n(-7, 1), n(-8, 1), n(-9, 8),                                 // 11
+    n(-5, 6), n(-7, 1), n(-8, 1), n(-9, 8),                                 // 11 mi re reb do
     z(2), n(-6, 2), n(-5, 2), n(-7, 2), n(-5, 4), n(-4, 4),                 // 12
-    n(-7, 6), n(-8, 1), n(-9, 1), n(-11, 8),                                // 13
-    z(2), n(-7, 2), n(-9, 2), n(-11, 2), n(-12, 4), n(-13, 4),              // 14
-    n(-12, 6), n(-4, 2), n(-5, 2), n(-7, 2), n(-9, 2), n(-11, 2),           // 15
-    n(-12, 6), n(-13, 2), n(-12, 2), z(6),                                  // 16
+    n(-7, 6), n(-8, 1), n(-9, 1), n(-10, 8),                                // 13 re reb do si
+    z(2), n(-7, 2), n(-9, 2), n(-10, 2), n(-12, 4), n(-13, 4),              // 14
+    n(-12, 6), n(-4, 2), n(-5, 2), n(-7, 2), n(-9, 2), n(-10, 2),           // 15
+    n(-12, 6), n(-1, 2), n(0, 2), z(6),                                     // 16
 ];
 
 #[rustfmt::skip]
@@ -1148,6 +1166,12 @@ pub fn tema(t: Tema) -> Vec<Voz> {
                     pulsar(&mut v, f, dur * 0.92, 0.56, 3.0, cuando);
                     pulsar(&mut v, f * 2.0, dur * 0.7, 0.20, 4.0, cuando);
                 }
+                // El tango, mas fuerte: con la melodia picada, la mitad de
+                // cada golpe es silencio, y a 0,22 se quedaba por debajo de
+                // los demas bailes.
+                None if p.acompanamiento == Acompanamiento::Marcato => {
+                    v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.34, decay).tras(cuando));
+                }
                 None => v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.22, decay).tras(cuando)),
                 // La caja de musica: el mismo seno, y su octava apagandose
                 // enseguida, que es la pua.
@@ -1230,12 +1254,12 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
             Acompanamiento::Marcato => {
                 for paso in (0..p.tiempos).step_by(2) {
                     let cuando = t0 + paso as f32 * t;
-                    v.push(Voz::nota(Wave::Sine, grave, t * 0.45, 0.34, 3.0).tras(cuando));
+                    v.push(Voz::nota(Wave::Sine, grave, t * 0.45, 0.38, 3.0).tras(cuando));
                 }
                 for paso in (1..p.tiempos).step_by(2) {
                     let cuando = t0 + paso as f32 * t;
                     for f in triada() {
-                        v.push(Voz::nota(Wave::Square, f, t * 0.22, 0.06, 4.5).tras(cuando));
+                        v.push(Voz::nota(Wave::Square, f, t * 0.22, 0.09, 4.5).tras(cuando));
                     }
                 }
             }
@@ -1717,10 +1741,20 @@ mod tests {
     #[test]
     fn la_cumparsita_empieza_por_donde_tiene_que_empezar() {
         // Los cuatro golpes secos del primer compas: mi, re, si, sol#. Es la
-        // figura por la que se reconoce el tango mas conocido que hay.
-        let tonos: Vec<i32> = CUMPARSITA_A[..4].iter().map(|n| n.tono).collect();
+        // figura por la que se reconoce el tango mas conocido que hay, y va
+        // picada: cada nota dura la mitad y la otra mitad es silencio.
+        let golpes = &CUMPARSITA_A[..8];
+        let tonos: Vec<i32> = golpes.iter().step_by(2).map(|n| n.tono).collect();
         assert_eq!(tonos, vec![-5, 5, 2, -1]);
-        assert!(CUMPARSITA_A[..4].iter().all(|n| n.unidades == 4));
+        assert!(golpes.iter().all(|n| n.unidades == 2));
+        assert!(golpes.iter().skip(1).step_by(2).all(|n| n.tono == SILENCIO));
+        // Y el compas de antes, que es el ultimo del bucle, acaba en los dos
+        // mi repetidos que llevan a ellos.
+        let fin: Vec<(i32, u32)> = CUMPARSITA_A[CUMPARSITA_A.len() - 3..]
+            .iter()
+            .map(|n| (n.tono, n.unidades))
+            .collect();
+        assert_eq!(fin, vec![(-5, 2), (-5, 1), (-5, 1)]);
     }
 
     #[test]
