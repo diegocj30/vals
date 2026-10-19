@@ -211,10 +211,13 @@ enum Triada {
     Menor,
     /// De dominante: mayor con la septima menor. Es la que tira hacia casa.
     Septima,
+    /// Septima disminuida: terceras menores apiladas. La del Maple Leaf, que
+    /// se apoya en la tonica sin ser ella.
+    Disminuida,
 }
 
 /// Un acorde por compas. La raiz va en semitonos sobre la tonica.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct Acorde {
     raiz: i32,
     triada: Triada,
@@ -238,6 +241,12 @@ const fn sep(raiz: i32) -> Acorde {
         triada: Triada::Septima,
     }
 }
+const fn dis(raiz: i32) -> Acorde {
+    Acorde {
+        raiz,
+        triada: Triada::Disminuida,
+    }
+}
 
 /// Como se toca el acorde debajo de la melodia.
 ///
@@ -249,11 +258,11 @@ enum Acompanamiento {
     /// Grave en los tiempos fuertes y golpe seco en los debiles. Esto es un
     /// tango: no mece, marca.
     Marcato,
-    /// Bajo que **anda**, alternando fundamental y quinta en los tiempos
-    /// fuertes, y acorde en los debiles. Es el stride del ragtime: se parece al
-    /// marcato en donde caen los golpes y no se parece en nada al oirlo,
-    /// porque el bajo se mueve en vez de repetirse.
-    Stride,
+    /// Bajo que **anda** en los tiempos fuertes y acorde en los debiles. Es el
+    /// stride del ragtime: se parece al marcato en donde caen los golpes y no
+    /// se parece en nada al oirlo, porque el bajo se mueve en vez de
+    /// repetirse. Lleva la mano izquierda de la partitura, compas a compas.
+    Stride(&'static [Izquierda]),
     /// La guitarra de Asturias: entre nota y nota del canto, el pedal, y nada
     /// mas. Semicorcheas alternando: canto, pedal, canto, pedal.
     Toque,
@@ -281,6 +290,7 @@ impl Acorde {
             Triada::Mayor => &[0, 4, 7],
             Triada::Menor => &[0, 3, 7],
             Triada::Septima => &[0, 4, 7, 10],
+            Triada::Disminuida => &[0, 3, 6, 9],
         }
     }
 }
@@ -527,58 +537,133 @@ const SALA_BANDONEON: [Nota; 16] = [
 
 /// **Maple Leaf Rag**, Scott Joplin (1899), primera parte.
 ///
-/// En fa mayor: los tonos son semitonos sobre el fa. Compas de 4/4, dieciseis
-/// unidades por compas, igual que el tango.
+/// Leida de la primera edicion (Sedalia, John Stark & Son, 1899; IMSLP
+/// #270188) y cotejada nota a nota con la transcripcion de Mutopia, que esta
+/// hecha sobre esa misma edicion. Joplin murio en 1917. La version anterior
+/// estaba escrita de memoria, en fa, y se habia inventado media pieza: la
+/// escalera del compas 7 era un arpegio corrido, sin silencios ni saltos de
+/// octava; el compas 11 caia una octava; la segunda mitad no bajaba la octava
+/// cuando toca, y la segunda parte no se parecia a nada.
 ///
-/// Es ragtime y no swing —el swing llega veinte anos despues—, pero es la raiz
-/// del jazz, es de dominio publico sin discusion (Joplin murio en 1917) y se
-/// reconoce a la primera. Lo que lo convierte en jazz al sonar es que sus
-/// corcheas van **swingadas**, que es cosa del sintetizador y no de la tabla.
+/// En la bemol mayor: los tonos son semitonos sobre el la bemol 3, y la pieza
+/// suena a la altura escrita. Se toca la voz de arriba: las octavas de la
+/// derecha se quedan en su nota alta.
+///
+/// **Un compas de aqui es un compas de 2/4 de Joplin.** Lo escribe en
+/// semicorcheas, y cada semicorchea suya son dos unidades: el tiempo del juego
+/// es su corchea. La sincopa que se reconoce es la del primer compas:
+/// semicorchea, corchea, semicorchea, con la octava de mi bemol cayendo entre
+/// tiempo y tiempo. Y es la clave 3-3-2 del jefe: tres, tres y dos
+/// semicorcheas de Joplin son tres, tres y dos corcheas del juego.
+///
+/// Joplin las escribe rectas y pide marcha. Aqui va a la mitad, con **las
+/// semicorcheas swingadas** —la de a contratiempo llega tarde—, que a este
+/// paso son las corcheas de swing de un charleston a 100: las notas y las
+/// sincopas son las de la partitura, el aire es el del baile. Y es el aire que
+/// necesita el jefe, que tira las agujas y las manos en la corchea swingada,
+/// en el tick 24 de cada tiempo de 36.
+///
+/// En el compas 7 la escalera arranca en el la bemol 2, que es terreno del
+/// bajo: aqui empieza en su tercera nota, y el grave del uno lo pone la
+/// izquierda.
 #[rustfmt::skip]
 const RAG_A: [Nota; 97] = [
-    z(2), n(0, 2), n(7, 2), n(0, 2), n(4, 2), n(7, 4), n(0, 2),              // 1
-    n(7, 2), n(-1, 2), n(2, 2), n(7, 10),                                   // 2
-    z(2), n(0, 2), n(7, 2), n(0, 2), n(4, 2), n(7, 4), n(0, 2),              // 3
-    n(7, 2), n(-1, 2), n(2, 2), n(7, 10),                                   // 4
-    z(2), n(0, 2), n(3, 2), n(8, 2), z(2), n(7, 4), n(7, 2),                 // 5
-    z(2), n(0, 2), n(3, 2), n(8, 2), z(2), n(7, 6),                          // 6
-    n(0, 2), n(3, 2), n(7, 2), n(12, 2), n(3, 2), n(7, 2), n(12, 2), n(15, 2), // 7
-    n(7, 2), n(12, 2), n(15, 2), n(19, 2), n(12, 2), n(15, 2), n(19, 2), n(24, 2), // 8
-    n(12, 4), n(12, 4), n(12, 4), n(12, 2), n(12, 2),                        // 9
-    n(12, 2), n(7, 2), n(9, 2), n(4, 2), n(7, 2), n(9, 6),                   // 10
-    n(0, 2), n(2, 2), n(3, 2), n(0, 2), n(2, 2), n(4, 4), n(0, 2),           // 11
-    n(4, 2), n(0, 2), n(2, 4), n(0, 4), z(4),                                // 12
-    n(12, 4), n(12, 4), n(12, 4), n(12, 2), n(12, 2),                        // 13
-    n(12, 2), n(7, 2), n(9, 2), n(4, 2), n(7, 2), n(9, 6),                   // 14
-    n(0, 2), n(2, 2), n(3, 2), n(0, 2), n(2, 2), n(4, 4), n(0, 2),           // 15
-    n(4, 2), n(0, 2), n(2, 4), n(0, 4), z(4),                                // 16
+    z(2), n(12, 2), n(19, 2), n(12, 2), n(16, 2), n(19, 4), n(11, 2),       // 1  lab mib lab do mib sol
+    n(19, 2), n(11, 2), n(14, 2), n(19, 10),                               // 2  y el mib ligado
+    z(2), n(12, 2), n(19, 2), n(12, 2), n(16, 2), n(19, 4), n(11, 2),       // 3
+    n(19, 2), n(11, 2), n(14, 2), n(19, 6), z(2), n(19, 2),                 // 4
+    z(2), n(12, 2), n(15, 2), n(20, 2), z(2), n(19, 2), z(2), n(19, 2),     // 5  dob fab, y mib a contratiempo
+    z(2), n(12, 2), n(15, 2), n(20, 2), z(2), n(19, 2), z(4),               // 6
+    z(6), n(0, 2), z(2), n(0, 2), n(3, 2), n(12, 2),                        // 7  la escalera: lab dob lab
+    z(2), n(12, 2), n(15, 2), n(24, 2), z(2), n(24, 2), n(27, 2), n(36, 2), // 8  hasta el lab 6
+    n(36, 4), n(36, 4), n(36, 4), n(36, 2), n(36, 4),                       // 9  (la ultima, ligada al 10)
+    n(31, 2), n(33, 2), n(28, 2), n(31, 2), n(33, 4), n(24, 4),             // 10 (la ultima, ligada al 11)
+    n(26, 2), n(27, 2), n(24, 2), n(26, 2), n(28, 4), n(24, 2),             // 11
+    n(28, 2), n(24, 2), n(26, 4), n(24, 4), z(2), n(24, 6),                 // 12 (la ultima, ligada al 13)
+    n(24, 4), n(24, 4), n(24, 2), n(24, 4),                                 // 13 el 9, una octava abajo
+    n(19, 2), n(21, 2), n(16, 2), n(19, 2), n(21, 4), n(12, 4),             // 14
+    n(14, 2), n(15, 2), n(12, 2), n(14, 2), n(16, 4), n(12, 2),             // 15
+    n(16, 2), n(12, 2), n(14, 4), n(12, 4), z(4),                           // 16 primera casilla
 ];
 
+/// El acorde de cada compas: el que contesta en el segundo tiempo.
 #[rustfmt::skip]
 const RAG_A_ACORDES: [Acorde; 16] = [
-    may(0), sep(7), may(0), sep(7),
-    may(8), may(8), may(0), may(0),
-    may(8), may(0), may(8), sep(7),
-    may(8), may(0), may(8), sep(7),
+    may(0), sep(7), may(0), sep(7),     // 1-4   lab, mib7
+    may(8), may(8), men(0), men(0),     // 5-8   fab, y la escalera
+    dis(3), may(0), may(8), sep(7),     // 9-12  si disminuido, lab
+    dis(3), may(0), may(8), sep(7),     // 13-16
 ];
 
-/// Su segunda parte, la que sube al agudo.
+/// Un compas de la mano izquierda del rag.
+///
+/// Joplin cambia de acorde a mitad de compas mas de una vez, y un acorde por
+/// compas no da para eso: aqui van los dos graves, el del uno y el del tres
+/// (semitonos sobre la tonica), y el acorde que contesta en el cuarto tiempo.
+/// El del segundo es el del compas.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Izquierda {
+    graves: [i32; 2],
+    luego: Acorde,
+}
+
+const fn iz(uno: i32, tres: i32, luego: Acorde) -> Izquierda {
+    Izquierda {
+        graves: [uno, tres],
+        luego,
+    }
+}
+
+/// La izquierda de la primera parte. Los graves son los de la partitura; donde
+/// en el tres hay acorde, el grave que viene detras se adelanta (el la natural
+/// de los compases 1 y 3, que sube cromatico al si bemol), y donde la
+/// izquierda solo toca acordes, del 9 en adelante, es la nota de abajo.
 #[rustfmt::skip]
-const RAG_B: [Nota; 57] = [
-    z(2), n(11, 2), n(19, 2), n(11, 2), n(14, 2), n(18, 4), n(11, 2),        // 1
-    n(17, 2), n(11, 2), n(14, 2), n(16, 2), n(16, 2), n(7, 2), n(14, 2), n(7, 2), // 2
-    z(2), n(4, 2), n(12, 2), n(4, 2), n(7, 2), n(9, 4), n(7, 2),             // 3
-    n(12, 2), n(4, 2), n(7, 2), n(9, 2), n(9, 2), n(4, 2), n(9, 4),          // 4
-    z(2), n(7, 2), n(11, 2), n(2, 2), n(5, 2), n(9, 4), n(7, 2),             // 5
-    n(11, 2), n(2, 2), n(5, 2), n(9, 2), n(9, 2), n(5, 2), n(9, 4),          // 6
-    z(2), n(4, 2), n(12, 2), n(4, 2), n(7, 2), n(9, 4), n(7, 2),             // 7
-    n(12, 2), n(4, 2), n(7, 2), n(9, 2), n(9, 2), n(4, 2), n(9, 4),          // 8
+const RAG_A_IZQUIERDA: [Izquierda; 16] = [
+    iz(0, 1, may(0)), iz(2, 7, sep(7)), iz(0, 1, may(0)), iz(2, 7, sep(7)),
+    iz(8, 7, sep(7)), iz(8, 7, sep(7)), iz(0, 0, men(0)), iz(0, 0, men(0)),
+    iz(6, 6, dis(3)), iz(7, 7, may(0)), iz(8, 7, may(0)), iz(7, 0, may(0)),
+    iz(6, 6, dis(3)), iz(7, 7, may(0)), iz(8, 7, may(0)), iz(7, 7, sep(7)),
+];
+
+/// La segunda parte, *f staccato*, de la misma edicion: la sincopa del
+/// principio una octava mas arriba y sobre la dominante, y una bajada
+/// cromatica (lab, sol, solb, fa) que lleva a casa por fa y si bemol menor.
+#[rustfmt::skip]
+const RAG_B: [Nota; 102] = [
+    z(2), n(23, 2), n(31, 2), n(23, 2), n(26, 2), n(30, 4), n(23, 2),       // 1  sol mib sol sib re sol
+    n(29, 2), n(23, 2), n(26, 2), n(28, 4), n(19, 2), n(26, 2), n(19, 2),   // 2
+    z(2), n(16, 2), n(24, 2), n(16, 2), n(19, 2), n(21, 4), n(16, 2),       // 3
+    n(24, 2), n(16, 2), n(19, 2), n(21, 4), n(16, 2), n(21, 4),             // 4
+    z(2), n(19, 2), n(23, 2), n(14, 2), n(17, 2), n(21, 4), n(19, 2),       // 5
+    n(23, 2), n(14, 2), n(17, 2), n(21, 4), n(17, 2), n(21, 4),             // 6
+    z(2), n(16, 2), n(24, 2), n(16, 2), n(19, 2), n(21, 4), n(16, 2),       // 7
+    n(24, 2), n(16, 2), n(19, 2), n(21, 4), n(16, 2), n(21, 4),             // 8
+    z(2), n(23, 2), n(31, 2), n(23, 2), n(26, 2), n(30, 4), n(23, 2),       // 9
+    n(29, 2), n(23, 2), n(26, 2), n(28, 4), n(19, 2), n(26, 2), n(19, 2),   // 10
+    z(2), n(16, 2), n(24, 2), n(16, 2), n(19, 2), n(21, 4), n(16, 2),       // 11
+    n(24, 4), n(24, 4), n(23, 4), n(22, 4),                                 // 12 lab sol solb
+    z(2), n(9, 2), n(13, 2), n(16, 2), n(21, 2), n(16, 2), n(13, 2), n(9, 2), // 13 fa mayor
+    z(2), n(9, 2), n(14, 2), n(17, 2), n(21, 4), n(17, 4),                  // 14 sib menor
+    n(16, 4), z(2), n(16, 2), z(2), n(14, 4), n(7, 2),                      // 15
+    n(12, 4), n(19, 4), n(19, 4), n(19, 4),                                 // 16 primera casilla
 ];
 
 #[rustfmt::skip]
-const RAG_B_ACORDES: [Acorde; 8] = [
-    sep(7), sep(7), may(0), may(0),
-    sep(7), sep(7), may(0), may(0),
+const RAG_B_ACORDES: [Acorde; 16] = [
+    sep(7), sep(7), may(0), may(0),     // 1-4   mib7, lab
+    sep(7), sep(7), may(0), may(0),     // 5-8
+    sep(7), sep(7), may(0), may(0),     // 9-12
+    may(9), men(2), sep(2), may(0),     // 13-16 fa, sib menor, sib7, lab
+];
+
+/// Aqui la izquierda ya es stride de libro: grave, acorde, grave, acorde.
+#[rustfmt::skip]
+const RAG_B_IZQUIERDA: [Izquierda; 16] = [
+    iz(2, 7, sep(7)), iz(2, 7, sep(7)), iz(0, 7, may(0)), iz(0, 0, may(0)),
+    iz(2, 7, sep(7)), iz(2, 2, sep(7)), iz(4, 7, may(0)), iz(0, 0, may(0)),
+    iz(2, 7, sep(7)), iz(2, 7, sep(7)), iz(0, 7, may(0)), iz(0, 11, sep(10)),
+    iz(9, 1, may(9)), iz(2, 9, men(2)), iz(2, 7, sep(7)), iz(0, 1, may(0)),
 ];
 
 /// **El galop infernal** de Offenbach, de "Orfeo en los infiernos" (1858). Lo
@@ -778,11 +863,11 @@ fn partitura(t: Tema) -> Partitura {
         swing: false,
     };
     // El charleston: cuatro tiempos, stride, y corcheas que llegan tarde.
-    let rag = |titulo, bpm, tonica, melodia, acordes| Partitura {
+    let rag = |titulo, bpm, tonica, melodia, acordes, izquierda| Partitura {
         titulo,
         bpm,
         tiempos: 4,
-        acompanamiento: Acompanamiento::Stride,
+        acompanamiento: Acompanamiento::Stride(izquierda),
         tonica,
         melodia,
         acordes,
@@ -881,19 +966,22 @@ fn partitura(t: Tema) -> Partitura {
             &CUMPARSITA_A_ACORDES,
         ),
 
+        // A 100, 36 ticks por tiempo: el compas al que baila el gramofono.
         Tema::CharlestonA => rag(
             "Maple Leaf Rag - Scott Joplin, 1899",
             100.0,
-            20, // fa
+            11, // la bemol 3
             &RAG_A,
             &RAG_A_ACORDES,
+            &RAG_A_IZQUIERDA,
         ),
         Tema::CharlestonB => rag(
             "Maple Leaf Rag, segunda parte",
             92.0,
-            20,
+            11,
             &RAG_B,
             &RAG_B_ACORDES,
+            &RAG_B_IZQUIERDA,
         ),
         // Y otra vez la primera, un tono arriba y corriendo. Los tres bailes
         // cierran igual, y no es pereza: volver al tema del principio para
@@ -942,9 +1030,10 @@ fn partitura(t: Tema) -> Partitura {
         Tema::CharlestonFin => rag(
             "Maple Leaf Rag, al galope",
             128.0,
-            22,
+            13, // si bemol: un tono arriba
             &RAG_A,
             &RAG_A_ACORDES,
+            &RAG_A_IZQUIERDA,
         ),
 
         // A 150, veinticuatro ticks por tiempo: el compas del quiebro y el
@@ -1205,6 +1294,11 @@ pub fn tema(t: Tema) -> Vec<Voz> {
                 None if p.acompanamiento == Acompanamiento::Marcato => {
                     v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.34, decay).tras(cuando));
                 }
+                // El rag va en semicorcheas sueltas, sin notas largas que
+                // llenen: al volumen del vals se quedaba por debajo del resto.
+                None if matches!(p.acompanamiento, Acompanamiento::Stride(_)) => {
+                    v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.29, decay).tras(cuando));
+                }
                 None => v.push(Voz::nota(Wave::Sine, f, dur * 0.92, 0.22, decay).tras(cuando)),
                 // La caja de musica: el mismo seno, y su octava apagandose
                 // enseguida, que es la pua.
@@ -1296,21 +1390,20 @@ fn acompanar(v: &mut Vec<Voz>, p: &Partitura, t: f32) {
                     }
                 }
             }
-            // El bajo anda: fundamental en el uno, quinta en el tres, y el
-            // acorde contestando en los tiempos debiles. Cae donde el marcato
-            // del tango, pero no suena igual, porque un bajo que se mueve no
-            // es lo mismo que uno que se repite.
-            Acompanamiento::Stride => {
-                for paso in (0..p.tiempos).step_by(2) {
-                    let cuando = t0 + paso as f32 * t;
-                    let nota_baja = if paso == 0 { raiz } else { raiz + 7 };
-                    let f = frecuencia(bajo(nota_baja));
-                    v.push(Voz::nota(Wave::Sine, f, t * 0.6, 0.30, 2.2).tras(cuando));
-                }
-                for paso in (1..p.tiempos).step_by(2) {
-                    let cuando = t0 + paso as f32 * t;
-                    for f in triada() {
-                        v.push(Voz::nota(Wave::Square, f, t * 0.4, 0.05, 2.6).tras(cuando));
+            // El bajo anda: el grave de la partitura en el uno y en el tres, y
+            // el acorde contestando en los tiempos debiles. Cae donde el
+            // marcato del tango, pero no suena igual, porque un bajo que se
+            // mueve no es lo mismo que uno que se repite.
+            Acompanamiento::Stride(izquierda) => {
+                let iz = izquierda[compas];
+                for (mitad, contesta) in [a, iz.luego].into_iter().enumerate() {
+                    let cuando = t0 + 2.0 * mitad as f32 * t;
+                    let f = frecuencia(bajo(p.tonica + iz.graves[mitad]));
+                    v.push(Voz::nota(Wave::Sine, f, t * 0.8, 0.30, 2.2).tras(cuando));
+                    let raiz = registro(p.tonica + contesta.raiz);
+                    for iv in contesta.intervalos() {
+                        let f = frecuencia(raiz + iv);
+                        v.push(Voz::nota(Wave::Square, f, t * 0.5, 0.06, 2.6).tras(cuando + t));
                     }
                 }
             }
@@ -1616,7 +1709,7 @@ mod tests {
         // se repite, y esa es toda la diferencia al oido.
         for t in [Tema::CharlestonA, Tema::CharlestonB, Tema::CharlestonFin] {
             let p = partitura(t);
-            assert!(p.acompanamiento == Acompanamiento::Stride);
+            assert!(matches!(p.acompanamiento, Acompanamiento::Stride(_)));
             assert_eq!(graves_por_compas(t), {
                 let mut v = Vec::new();
                 for _ in 0..p.acordes.len() {
@@ -1812,6 +1905,20 @@ mod tests {
         assert_eq!(tonos, vec![0, 2, 5, 4, 2, 7, 7]);
         let largos: Vec<u32> = GALOP_A[..7].iter().map(|n| n.unidades).collect();
         assert_eq!(largos, vec![8, 2, 2, 2, 2, 4, 4]);
+    }
+
+    #[test]
+    fn el_maple_leaf_empieza_por_donde_tiene_que_empezar() {
+        // La sincopa del primer compas: silencio, la bemol, la octava de mi
+        // bemol, la bemol, do, y el mi bemol en corchea entre tiempo y tiempo
+        // antes del sol. Semicorchea, corchea, semicorchea.
+        let tonos: Vec<i32> = RAG_A[..7].iter().map(|n| n.tono).collect();
+        assert_eq!(tonos, vec![SILENCIO, 12, 19, 12, 16, 19, 11]);
+        let largos: Vec<u32> = RAG_A[..7].iter().map(|n| n.unidades).collect();
+        assert_eq!(largos, vec![2, 2, 2, 2, 2, 4, 2]);
+        // Y la izquierda tiene un compas por cada acorde.
+        assert_eq!(RAG_A_IZQUIERDA.len(), RAG_A_ACORDES.len());
+        assert_eq!(RAG_B_IZQUIERDA.len(), RAG_B_ACORDES.len());
     }
 
     #[test]

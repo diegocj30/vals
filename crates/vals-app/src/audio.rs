@@ -194,7 +194,7 @@ fn celesta(semitonos: i32, dur: f32, vol: f32, decay: f32, cuando: f32) -> [Voz;
 /// La tonica del tema, en la octava que empieza en `desde` (semitonos sobre
 /// La2). Asi cada efecto vive en un registro fijo sea cual sea el tono: si
 /// solo se transportara, la ficha del tango (la, arriba del todo) chillaria y
-/// la del charleston (fa) se perderia en la melodia.
+/// la del charleston (la bemol) se perderia en la melodia.
 fn tonica_desde(t: Tema, desde: i32) -> i32 {
     desde + (music::triada_tonica(t)[0] - desde).rem_euclid(12)
 }
