@@ -85,8 +85,16 @@ const PAR: [(&str, u64); 5] = [
 /// Para un baile que no esta en la tabla: el del medio.
 const PAR_DESCONOCIDO: u64 = 90;
 
-/// El par de un baile, en ticks.
+/// El nombre de toda la noche, los cinco bailes seguidos. Es la clave de sus
+/// marcas en el guardado, como el nombre de un baile.
+pub const NOCHE: &str = "Toda la noche";
+
+/// El par de un baile, en ticks. El de toda la noche es la suma de los
+/// cinco: se puntua como un baile muy largo.
 pub fn par(baile: &str) -> u64 {
+    if baile == NOCHE {
+        return PAR.iter().map(|(n, _)| par(n)).sum();
+    }
     let s = PAR
         .iter()
         .find(|(n, _)| *n == baile)
@@ -213,6 +221,13 @@ mod tests {
         });
         k.sumar(&Events::default());
         assert_eq!(k, m(2.0 / 60.0, 1, 1, 1));
+    }
+
+    #[test]
+    fn el_par_de_la_noche_es_el_de_los_cinco_juntos() {
+        let suma: u64 = BossDef::default_bosses().iter().map(|d| par(&d.name)).sum();
+        assert_eq!(par(NOCHE), suma);
+        assert_eq!(suma, 428 * 60);
     }
 
     #[test]

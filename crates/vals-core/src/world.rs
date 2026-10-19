@@ -98,6 +98,11 @@ impl Dificultad {
 /// limite, morir solo cuesta tiempo y el juego deja de tener apuesta.
 pub const STARTING_LIVES: u32 = 3;
 
+/// Los bailes en el orden de la noche, como estan en la pista: por nivel, con
+/// el tango en el dificil y el flamenco al fondo. Es el orden de "toda la
+/// noche" ([`World::toda_la_noche`]) y el del programa del prologo.
+pub const ORDEN_DE_LA_NOCHE: [usize; crate::boss::BAILES] = [0, 2, 3, 1, 4];
+
 /// Capacidad del pool de disparos del jugador.
 ///
 /// Muy por encima de lo que cabe en pantalla: a 15 disparos por segundo con un
@@ -127,6 +132,9 @@ pub struct World {
     /// indice siempre es cero. Lo necesitan la musica y el replay, que quieren
     /// saber **que baile** es, no cual de los que hay cargados.
     pub baile: usize,
+    /// Si es "toda la noche": los cinco bailes seguidos con las mismas vidas.
+    /// Es una entrada, como el equipo: el replay lo guarda.
+    pub noche: bool,
     /// Vidas que quedan.
     pub lives: u32,
     /// Se pone a `true` al caer el ultimo jefe.
@@ -149,6 +157,9 @@ pub struct World {
     pub limpiadas: Vec<Vec2>,
     /// Los jefes de la partida, en orden.
     boss_defs: Vec<BossDef>,
+    /// Que baile es cada uno de `boss_defs`: de aqui sale `baile` al pasar al
+    /// siguiente.
+    bailes: Vec<usize>,
     /// Input del tick anterior. Hace falta para detectar flancos (el dash
     /// reacciona a la pulsacion, no a mantener la tecla) y vive en el mundo
     /// para que un replay lo reproduzca sin depender de nada externo.
@@ -171,6 +182,7 @@ impl World {
             boss: Boss::from_def(&defs[0]),
             boss_index: 0,
             baile: 0,
+            noche: false,
             lives: STARTING_LIVES,
             victory: false,
             defeat: false,
@@ -179,6 +191,7 @@ impl World {
             dificultad: Dificultad::Normal,
             events: Events::default(),
             limpiadas: Vec::new(),
+            bailes: (0..defs.len()).collect(),
             boss_defs: defs,
             prev_input: InputFrame::NONE,
             boss_enabled: true,
@@ -229,6 +242,7 @@ impl World {
         // no cayendo desde tres cuartos de pantalla, que es donde nace volando.
         w.player = Player::new(Self::spawn_pos_for(w.mode));
         w.baile = i;
+        w.bailes = vec![i];
         w.boss_defs = vec![w.boss_defs[i].clone()];
         w.boss_index = 0;
         w.boss = Boss::from_def(&w.boss_defs[0]);
@@ -244,6 +258,33 @@ impl World {
         w.equipo = equipo;
         w.lives = w.vidas_de_salida();
         w
+    }
+
+    /// Toda la noche: los cinco bailes seguidos, en el orden de la pista, y
+    /// con **las mismas vidas** de principio a fin. Entre baile y baile no se
+    /// rellena nada: lo que se pierde en el vals falta en el flamenco.
+    ///
+    /// Va en el aire de punta a punta.
+    // ponytail: ningun baile de serie declara `suelo`; si alguno lo hace, el
+    // modo tendra que cambiar en `advance_boss` como lo cambia `empezar_en`.
+    pub fn toda_la_noche(seed: u64, equipo: Equipo) -> Self {
+        let mut w = Self::with_mode(seed, Mode::Flight);
+        w.boss_defs = ORDEN_DE_LA_NOCHE
+            .iter()
+            .map(|&i| w.boss_defs[i].clone())
+            .collect();
+        w.bailes = ORDEN_DE_LA_NOCHE.to_vec();
+        w.baile = ORDEN_DE_LA_NOCHE[0];
+        w.boss = Boss::from_def(&w.boss_defs[0]);
+        w.noche = true;
+        w.equipo = equipo;
+        w.lives = w.vidas_de_salida();
+        w
+    }
+
+    /// Que baile es cada jefe de la partida, en orden.
+    pub fn bailes(&self) -> &[usize] {
+        &self.bailes
     }
 
     /// El mismo mundo en otra dificultad. Hay que llamarlo antes del primer
@@ -365,6 +406,9 @@ impl World {
         if self.boss_index + 1 < self.boss_defs.len() {
             self.boss_index += 1;
             self.boss = Boss::from_def(&self.boss_defs[self.boss_index]);
+            if let Some(&b) = self.bailes.get(self.boss_index) {
+                self.baile = b;
+            }
             // Los disparos en vuelo tambien se limpian: heredarlos restaria
             // vida al jefe nuevo antes de que aparezca.
             self.player_shots.clear();
@@ -1800,6 +1844,56 @@ mod tests {
         let ultimo = BossDef::default_bosses().len() - 1;
         let w = World::empezar_en(0, Mode::Flight, 99);
         assert_eq!(w.baile, ultimo);
+    }
+
+    #[test]
+    fn toda_la_noche_son_los_cinco_en_orden_y_con_las_mismas_vidas() {
+        use crate::equipo::Amuleto;
+        let equipo = Equipo {
+            amuleto: Amuleto::Relicario,
+            ..Equipo::default()
+        };
+        let mut w = World::toda_la_noche(0, equipo);
+        assert!(w.noche && w.boss_count() == 5);
+        assert_eq!(
+            w.lives,
+            STARTING_LIVES + 1,
+            "el relicario se cobra al empezar"
+        );
+        let mut bailados = Vec::new();
+        let mut vidas = w.lives;
+        while !w.victory {
+            bailados.push((w.baile, w.boss.name.clone()));
+            // Una vida menos en cada baile, menos en el ultimo: tiene que
+            // llegar tal cual al siguiente, sin rellenar.
+            if w.lives > 1 {
+                w.player.iframes = 0;
+                bala_encima(&mut w);
+                w.step(NADA);
+                vidas -= 1;
+            }
+            w.saltar_el_baile();
+            assert_eq!(w.lives, vidas, "las vidas pasan de un baile al otro");
+        }
+        let nombres: Vec<&str> = bailados.iter().map(|(_, n)| n.as_str()).collect();
+        assert_eq!(
+            nombres,
+            [
+                "El Vals",
+                "El Charleston",
+                "El Cancan",
+                "El Tango",
+                "El Flamenco"
+            ]
+        );
+        let bailes: Vec<usize> = bailados.iter().map(|(b, _)| *b).collect();
+        assert_eq!(bailes, ORDEN_DE_LA_NOCHE, "`baile` sigue al jefe");
+        // Y empieza igual que el vals suelto: misma semilla, mismo mundo.
+        let noche = World::toda_la_noche(3, Equipo::default());
+        assert_eq!(
+            noche.state_hash(),
+            World::empezar_en(3, Mode::Flight, 0).state_hash()
+        );
     }
 
     /// El modo lo decide el baile si lo declara, y si no, quien llama.

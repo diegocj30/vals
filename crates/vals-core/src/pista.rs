@@ -463,6 +463,14 @@ mod tests {
     }
 
     #[test]
+    fn toda_la_noche_va_en_el_orden_de_la_pista() {
+        let defs = crate::boss::BossDef::default_bosses();
+        let p = Pista::new(defs.iter().map(|d| (d.name.clone(), d.nivel)).collect());
+        let orden: Vec<usize> = p.nodos.iter().map(|n| n.jefe).collect();
+        assert_eq!(orden, crate::world::ORDEN_DE_LA_NOCHE);
+    }
+
+    #[test]
     fn una_pista_vacia_no_esta_terminada() {
         // Si no hay bailes no se ha ganado nada; sin esto, un RON que no cargue
         // daria la partida por completada.
