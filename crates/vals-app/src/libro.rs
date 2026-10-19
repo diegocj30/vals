@@ -26,7 +26,7 @@ use vals_core::boss::BossDef;
 use vals_core::nota::{self, Marcador, Nota};
 use vals_core::paseo::{PaseoDef, VISTA_W};
 use vals_core::{ARENA_H, ARENA_W, TICK_HZ};
-use vals_core::{Dificultad, Events};
+use vals_core::{Dificultad, Events, World};
 
 use crate::acciones::{Accion, Entrada, Nombres};
 use crate::draw::{Layout, fade, paspartu};
@@ -78,9 +78,6 @@ mod textos {
     }
     pub fn cerrar(atras: &[Trozo]) -> Vec<Trozo> {
         txg(Texto::CerrarLibro, &[atras])
-    }
-    pub fn abrir(tecla: &[Trozo]) -> Vec<Trozo> {
-        txg(Texto::AbrirLibro, &[tecla])
     }
     /// Lo que hace el publico con cada nota.
     pub fn publico(n: Nota) -> &'static str {
@@ -582,21 +579,6 @@ pub fn tarjeta_de_paseo(t: &Tarjeta, nombre: &str, l: &Layout, teclas: &Nombres)
     }
 }
 
-/// Lo que dice el menu para abrir el libro: arriba a la izquierda, que es lo
-/// unico que el modo atractor deja libre (el centro es del titulo y de ella, y
-/// arriba a la derecha va el nombre de la figura).
-///
-/// Devuelve donde ha quedado, que con el dedo se abre tocandolo.
-pub fn aviso_en_el_menu(l: &Layout, teclas: &Nombres) -> Rect {
-    // Se abre con la L, o con el gatillo de focus: "L1" en PlayStation, "LB"
-    // en Xbox.
-    let s = l.to_screen(24.0, 40.0);
-    let texto = textos::abrir(&teclas.libro);
-    let tam = l.len(16.0);
-    glifos::texto(&texto, s.x, s.y, tam, fade(PAPEL, 0.8));
-    Rect::new(s.x, s.y - tam, glifos::ancho(&texto, tam), tam * 1.3)
-}
-
 /// Donde empiezan las columnas de golpes de cada baile, y lo que ocupa cada
 /// una con su hueco.
 const COLUMNAS: f32 = 470.0;
@@ -627,6 +609,16 @@ pub fn practicables(g: &Guardado, bailes: &[BossDef]) -> Vec<usize> {
             }
         })
         .collect()
+}
+
+/// La figura en que se ha caido, para practicarla desde el KO. Solo en un
+/// baile de los de siempre: toda la noche no se practica por figuras, y una
+/// practica ya se reintenta a si misma.
+pub fn practica_tras_caer(w: &World) -> Option<Eleccion> {
+    (w.defeat && !w.noche && !w.practica).then_some(Eleccion {
+        baile: w.baile,
+        figura: w.boss.phase,
+    })
 }
 
 /// La figura elegida en el libro para practicarla.
@@ -719,7 +711,7 @@ pub fn pagina(
         TINTA_TENUE,
     );
 
-    let s = p(320.0, 78.0);
+    let s = p(320.0, 70.0);
     fuentes::centrado(
         tx(Texto::ElLibro),
         s.x,
@@ -728,7 +720,7 @@ pub fn pagina(
         Cara::Titulo,
         TINTA,
     );
-    let s = p(320.0, 104.0);
+    let s = p(320.0, 95.0);
     fuentes::centrado(
         tx(Texto::Temporada),
         s.x,
@@ -858,7 +850,7 @@ pub fn pagina(
     if let Some(e) = eleccion
         && let Some(f) = bailes.get(e.baile).and_then(|d| d.phases.get(e.figura))
     {
-        let s = p(320.0, 128.0);
+        let s = p(320.0, 122.0);
         let ayuda = textos::practicar(&teclas.mover, &teclas.aceptar, nombre(&f.name));
         glifos::encajado(&ayuda, s.x, s.y, l.len(14.0), l.len(560.0), ROJO);
     }
@@ -1092,6 +1084,28 @@ mod tests {
         assert_eq!(n[1], bailes[1].phases.len());
         assert_eq!(n[3], bailes[3].phases.len());
         assert_eq!(n[0] + n[2] + n[4], 0);
+    }
+
+    #[test]
+    fn tras_caer_se_practica_esa_figura() {
+        let mut w = World::new(1);
+        w.baile = 2;
+        w.boss.phase = 1;
+        assert_eq!(practica_tras_caer(&w), None, "sin caer no se ofrece");
+        w.defeat = true;
+        assert_eq!(
+            practica_tras_caer(&w),
+            Some(Eleccion {
+                baile: 2,
+                figura: 1
+            })
+        );
+        // Ni en toda la noche ni en una practica.
+        w.noche = true;
+        assert_eq!(practica_tras_caer(&w), None);
+        w.noche = false;
+        w.practica = true;
+        assert_eq!(practica_tras_caer(&w), None);
     }
 
     #[test]

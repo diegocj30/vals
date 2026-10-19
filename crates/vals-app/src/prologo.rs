@@ -316,9 +316,25 @@ impl Prologo {
     }
 }
 
-/// La invitacion del menu a volver a verlo, arriba a la izquierda de la
-/// arena: discreta, que lo que se viene a hacer al menu es jugar. Debajo, el
-/// final, si ya se ha ganado, y toda la noche (`linea_de_la_noche`).
+/// Lo que ofrece el menu ademas de jugar, en orden: el libro de baile (y en
+/// el, practicar) y la historia siempre, el final si ya se ha ganado y toda
+/// la noche si toca (`linea_de_la_noche`).
+fn lineas_del_menu(hay_final: bool, noche: Option<&str>) -> Vec<(Accion, &str)> {
+    let mut lineas = vec![
+        (Accion::Libro, tx(Texto::ElLibroPracticar)),
+        (Accion::Historia, tx(Texto::LaHistoria)),
+    ];
+    if hay_final {
+        lineas.push((Accion::Final, tx(Texto::ElFinal)));
+    }
+    if let Some(n) = noche {
+        lineas.push((Accion::Noche, n));
+    }
+    lineas
+}
+
+/// Las invitaciones del menu (`lineas_del_menu`), arriba a la izquierda de la
+/// arena: discretas, que lo que se viene a hacer al menu es jugar.
 ///
 /// Devuelve donde ha quedado cada linea, que con el dedo se tocan.
 pub fn en_el_menu(
@@ -329,21 +345,20 @@ pub fn en_el_menu(
 ) -> Vec<(Rect, Accion)> {
     let o = l.to_screen(0.0, 0.0);
     let u = l.scale().clamp(0.55, 1.2);
-    let mut lineas = vec![(&teclas.historia, tx(Texto::LaHistoria), Accion::Historia)];
-    if hay_final {
-        lineas.push((&teclas.el_final, tx(Texto::ElFinal), Accion::Final));
-    }
-    if let Some(n) = noche {
-        lineas.push((&teclas.noche, n, Accion::Noche));
-    }
     let mut zonas = Vec::new();
-    for (i, (tecla, t, a)) in lineas.iter().enumerate() {
-        let texto = glifos::rellenar("{}   {}", &[tecla, &glifos::txt(*t)]);
+    for (i, (a, t)) in lineas_del_menu(hay_final, noche).into_iter().enumerate() {
+        let tecla = match a {
+            Accion::Libro => &teclas.libro,
+            Accion::Historia => &teclas.historia,
+            Accion::Final => &teclas.el_final,
+            _ => &teclas.noche,
+        };
+        let texto = glifos::rellenar("{}   {}", &[tecla, &glifos::txt(t)]);
         let (x, y, tam) = (o.x + 22.0 * u, o.y + (64.0 + 24.0 * i as f32) * u, 17.0 * u);
         glifos::texto(&texto, x, y, tam, draw::TEXT_DIM);
         zonas.push((
             Rect::new(x, y - tam, glifos::ancho(&texto, tam), tam * 1.3),
-            *a,
+            a,
         ));
     }
     zonas
@@ -904,6 +919,30 @@ mod tests {
     use super::*;
 
     const FRAME: f32 = 1.0 / 60.0;
+
+    #[test]
+    fn el_menu_siempre_ofrece_el_libro() {
+        let acciones = |f, n| {
+            lineas_del_menu(f, n)
+                .into_iter()
+                .map(|(a, _)| a)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(acciones(false, None), [Accion::Libro, Accion::Historia]);
+        assert_eq!(
+            acciones(true, Some("toda la noche")),
+            [
+                Accion::Libro,
+                Accion::Historia,
+                Accion::Final,
+                Accion::Noche
+            ]
+        );
+        assert_eq!(
+            acciones(false, Some("toda la noche")),
+            [Accion::Libro, Accion::Historia, Accion::Noche]
+        );
+    }
 
     #[test]
     fn las_laminas_pasan_solas_y_se_acaba() {

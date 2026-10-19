@@ -7,7 +7,7 @@ use vals_core::boss::RESPIRO_TICKS;
 use vals_core::bullets::{Bullets, FLAG_PARRYABLE};
 use vals_core::{ARENA_H, ARENA_W, Mode, World, player};
 
-use crate::acciones::Nombres;
+use crate::acciones::{Accion, Nombres};
 use crate::bailarines;
 use crate::bullet_renderer::BulletRenderer;
 use crate::cartela;
@@ -586,7 +586,7 @@ pub fn fin_de_partida(
     tarjeta: Option<&libro::Tarjeta>,
     bailado: u64,
     n: &Nombres,
-) {
+) -> Vec<(Rect, Accion)> {
     if world.victory {
         if caida >= 1.0 {
             sello_de_victoria(l, world, tarjeta.is_some(), n);
@@ -594,8 +594,9 @@ pub fn fin_de_partida(
                 libro::tarjeta_de_baile(t, l, n);
             }
         }
+        Vec::new()
     } else {
-        sello_de_derrota(l, world, bailado, n);
+        sello_de_derrota(l, world, bailado, n)
     }
 }
 
@@ -731,7 +732,11 @@ fn recorrido_de_la_noche(world: &World) -> f32 {
 ///
 /// En toda la noche la barra es la de la noche, con una marca por baile, y
 /// debajo cuantos se bailaron y en cuanto.
-fn sello_de_derrota(l: &Layout, world: &World, bailado: u64, n: &Nombres) {
+///
+/// Fuera de toda la noche se ofrece ademas practicar la figura en que se cayo
+/// (`libro::practica_tras_caer`). Devuelve donde ha quedado cada opcion, que
+/// con el dedo se tocan.
+fn sello_de_derrota(l: &Layout, world: &World, bailado: u64, n: &Nombres) -> Vec<(Rect, Accion)> {
     let o = l.to_screen(0.0, 0.0);
     let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
     draw_rectangle(o.x, o.y, w, h, VEIL);
@@ -800,13 +805,29 @@ fn sello_de_derrota(l: &Layout, world: &World, bailado: u64, n: &Nombres) {
     fuentes::centrado(&llegaste, cx, y, 17.0, Cara::Cuerpo, TEXT_DIM);
     y += 40.0;
 
-    for linea in [
-        txg(reintentar, &[&n.aceptar, &n.reintentar]),
-        txg(Texto::VolverPista, &[&n.atras]),
-    ] {
+    let figura = glifos::txt(nombre(world.boss.phase_name()));
+    let practicar = libro::practica_tras_caer(world).map(|_| {
+        (
+            txg(Texto::PracticarFigura, &[&n.libro, &figura]),
+            Accion::Libro,
+        )
+    });
+    let lineas = [
+        Some((
+            txg(reintentar, &[&n.aceptar, &n.reintentar]),
+            Accion::Aceptar,
+        )),
+        practicar,
+        Some((txg(Texto::VolverPista, &[&n.atras]), Accion::Atras)),
+    ];
+    let mut zonas = Vec::new();
+    for (linea, a) in lineas.into_iter().flatten() {
         glifos::centrado(&linea, cx, y, 19.0, TEXT);
+        let ancho = glifos::ancho(&linea, 19.0);
+        zonas.push((Rect::new(cx - ancho * 0.5, y - 19.0, ancho, 19.0 * 1.3), a));
         y += 27.0;
     }
+    zonas
 }
 
 /// El jefe: poligonos concentricos girando a distintas velocidades.

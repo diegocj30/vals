@@ -729,15 +729,24 @@ async fn run_game() {
         let hay_final = progreso.final_visto && pista.todo_vencido();
         let en_el_libro = escena == Escena::Libro && escena_antes == Escena::Libro;
         let antes = eleccion;
+        // Y desde el KO de un baile, con lo mismo que abre el libro: la
+        // figura en que se ha caido. Se vuelve al libro, como de toda practica.
+        let tras_caer = escena == Escena::Combate && acabado && listo && libro_pulsado;
         let practicar = en_el_libro
             .then(|| eleccion.entrada(&entrada, &libro::practicables(&progreso, &bailes)))
-            .flatten();
+            .flatten()
+            .or_else(|| {
+                tras_caer
+                    .then(|| libro::practica_tras_caer(&world))
+                    .flatten()
+            });
         if en_el_libro && (libro_pulsado || entrada.pulsado(Accion::Atras)) {
             escena = Escena::Menu;
             fundido.empezar(0.24);
         } else if let Some(e) = practicar {
             // Sin grabar, sin marcas y sin tachar nada: ver `Intento`.
             audio.play(Sfx::Empezar, 1.0);
+            eleccion = e;
             escena = Escena::Combate;
             world = World::practicar(
                 SEED,
@@ -1276,7 +1285,6 @@ async fn run_game() {
             }
             if escena == Escena::Menu {
                 draw::menu(&layout, mostrado, intentos, &n);
-                zonas.push((libro::aviso_en_el_menu(&layout, &n), Accion::Libro));
                 let la_noche = prologo::linea_de_la_noche(&pista, &progreso.marcas);
                 zonas.extend(prologo::en_el_menu(
                     &layout,
@@ -1285,7 +1293,7 @@ async fn run_game() {
                     la_noche.as_deref(),
                 ));
             } else if world.is_over() {
-                draw::fin_de_partida(
+                zonas = draw::fin_de_partida(
                     &layout,
                     &world,
                     jefes::caida(caida.unwrap_or(0.0)),
@@ -1325,6 +1333,7 @@ async fn run_game() {
             } else {
                 match escena {
                     Escena::Menu => tactil::Modo::Titulo(zonas),
+                    Escena::Combate => tactil::Modo::Fin(zonas),
                     Escena::Pista => tactil::Modo::Pista { pasear: se_pasea },
                     _ => tactil::Modo::Menu,
                 }

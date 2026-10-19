@@ -346,7 +346,7 @@ textos! {
     MenuSuper: "llena, {} limpia la pantalla y hace mucho daño.", "when full, {} clears the screen and hits hard.";
     MenuPausa: "{} pausa y opciones    {} reintentar", "{} pause and options    {} retry";
     LaHistoria: "la historia", "the story";
-    AbrirLibro: "{}  el libro de baile", "{}  the dance card";
+    ElLibroPracticar: "el libro de baile · practicar", "the dance card · practise";
 
     // --- El combate ---
     ABailar: "¡A BAILAR!", "LET'S DANCE!";
@@ -372,6 +372,7 @@ textos! {
     SeAcabo: "SE ACABÓ", "CURTAINS";
     LlegasteBaile: "llegaste al {}% del baile", "you made it {}% through the dance";
     ReintentarBaile: "{} o {}  reintentar este baile", "{} or {}  retry this dance";
+    PracticarFigura: "{}  practicar «{}»", "{}  practise “{}”";
     VolverPista: "{}  volver a la pista", "{}  back to the dance floor";
 
     // --- Toda la noche ---

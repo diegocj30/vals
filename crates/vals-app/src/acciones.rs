@@ -77,7 +77,8 @@ pub enum Accion {
     Derecha,
     /// Volver a andar un paseo ya andado, desde la pista.
     Pasear,
-    /// Abrir y cerrar el libro de baile, desde el titulo.
+    /// Abrir y cerrar el libro de baile, desde el titulo. En el KO de un
+    /// baile, practicar la figura en que se ha caido, que es cosa del libro.
     Libro,
     /// Volver a ver el prologo, desde el titulo. Es el mismo boton secundario
     /// que pasear en la pista.

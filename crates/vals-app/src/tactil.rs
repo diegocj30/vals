@@ -40,6 +40,8 @@ pub enum Modo {
     Pista { pasear: bool },
     /// El titulo, con las ayudas que se pueden tocar y lo que hace cada una.
     Titulo(Vec<(Rect, Accion)>),
+    /// Al acabar un baile: como el titulo, pero con volver y no la pausa.
+    Fin(Vec<(Rect, Accion)>),
     /// Las opciones y la tienda: el sitio tocado lo mira cada una.
     Lista,
     /// Todo lo demas: tocar acepta.
@@ -113,7 +115,7 @@ pub fn teclas(modo: &Modo, sw: f32, sh: f32) -> Vec<Puesto> {
             v
         }
         Modo::Titulo(_) => vec![pausa],
-        Modo::Lista | Modo::Menu => vec![atras],
+        Modo::Lista | Modo::Menu | Modo::Fin(_) => vec![atras],
     }
 }
 
@@ -329,7 +331,7 @@ impl Tactil {
         match &self.modo {
             Modo::Juego => {}
             Modo::Lista => self.toque = Some(p),
-            Modo::Titulo(zonas) => {
+            Modo::Titulo(zonas) | Modo::Fin(zonas) => {
                 let zona = zonas
                     .iter()
                     .filter(|(r, _)| ensanchar(*r, 40.0 * u).contains(p))
