@@ -289,6 +289,7 @@ impl Intento {
             record,
             fichas,
             sencillo,
+            noche: self.nombre == vals_core::nota::NOCHE,
             desde: ahora(),
         });
     }
@@ -303,6 +304,8 @@ pub struct Tarjeta {
     fichas: Option<(usize, usize)>,
     /// Ganado en sencillo: lo dice debajo del titulo.
     sencillo: bool,
+    /// La de toda la noche: otro titulo, y los bailes que lleva.
+    noche: bool,
     /// Reloj de pared al ganar: la tarjeta se presenta sola, sin estado.
     desde: f64,
 }
@@ -470,18 +473,24 @@ pub fn tarjeta_de_baile(t: &Tarjeta, l: &Layout, teclas: &Nombres) {
     if t.record {
         tiempo = format!("{}  {tiempo}", tx(Texto::Record));
     }
-    let filas = [
+    let mut filas = vec![
         (tx(Texto::Tiempo), tiempo),
         (tx(Texto::Golpes), m.golpes.to_string()),
         (tx(Texto::Parries), m.parries.to_string()),
         (tx(Texto::Supers), m.supers.to_string()),
     ];
+    let mut titulo = tx(Texto::TarjetaDeBaile);
+    if t.noche {
+        let n = vals_core::boss::BAILES;
+        filas.insert(1, (tx(Texto::BailesFila), format!("{n} / {n}")));
+        titulo = tx(Texto::TarjetaDeLaNoche);
+    }
     let sub = if t.sencillo {
         tx(Texto::EnSencillo)
     } else {
         ""
     };
-    tarjeta(l, r, tx(Texto::TarjetaDeBaile), sub, &filas, a);
+    tarjeta(l, r, titulo, sub, &filas, a);
     if let Some(n) = t.nota {
         let c = l.to_screen(r.x + 345.0, r.y + 165.0);
         sello(c, l.len(52.0), n, false, jefes::tramo(edad, 1.1, 1.3));

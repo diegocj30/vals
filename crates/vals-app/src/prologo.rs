@@ -25,10 +25,11 @@
 
 use macroquad::prelude::*;
 use vals_core::boss::BossDef;
-use vals_core::nota::Nota;
+use vals_core::nota::{self, Nota};
 use vals_core::paseo::{VISTA_H, VISTA_W};
 use vals_core::pista::Pista;
 use vals_core::player::PLAYER_SPEED;
+use vals_core::world::ORDEN_DE_LA_NOCHE;
 use vals_core::{Player, World};
 
 use crate::acciones::{Accion, Nombres};
@@ -89,9 +90,6 @@ const NUMEROS: [&str; 5] = [
     "El Flamenco",
 ];
 const ROMANOS: [&str; 5] = ["I.", "II.", "III.", "IV.", "V."];
-/// El orden de la pista: por nivel, con el tango en el dificil y el flamenco
-/// al fondo (`Pista::new`).
-const ORDEN_DE_LA_NOCHE: [usize; 5] = [0, 2, 3, 1, 4];
 
 /// Una linea por jefe, para su cartela de entrada.
 const LEMAS_BAILE: [Texto; vals_core::boss::BAILES] = [
@@ -144,6 +142,19 @@ const TELON: f32 = 1.6;
 /// orden que sea, y sin haberlo visto todavia.
 pub fn toca_el_final(pista: &Pista, visto: bool) -> bool {
     pista.todo_vencido() && !visto
+}
+
+/// La linea de toda la noche en el menu, con su mejor tiempo si lo hay. Solo
+/// sale con los cinco bailes ganados: es para quien ya se ha pasado el juego.
+pub fn linea_de_la_noche(pista: &Pista, marcas: &Marcas) -> Option<String> {
+    if !pista.todo_vencido() {
+        return None;
+    }
+    let mut s = tx(Texto::TodaLaNoche).to_owned();
+    if let Some(t) = marcas.por_nombre.get(nota::NOCHE).and_then(|m| m.mejor) {
+        s = format!("{s}  ({})", txf(Texto::Mejor, &[&libro::reloj(t)]));
+    }
+    Some(s)
 }
 
 /// Lo que se ensena de la temporada en los creditos: cada baile, en el orden
@@ -307,19 +318,27 @@ impl Prologo {
 
 /// La invitacion del menu a volver a verlo, arriba a la izquierda de la
 /// arena: discreta, que lo que se viene a hacer al menu es jugar. Debajo, el
-/// final, si ya se ha ganado.
+/// final, si ya se ha ganado, y toda la noche (`linea_de_la_noche`).
 ///
 /// Devuelve donde ha quedado cada linea, que con el dedo se tocan.
-pub fn en_el_menu(l: &Layout, teclas: &Nombres, hay_final: bool) -> Vec<(Rect, Accion)> {
+pub fn en_el_menu(
+    l: &Layout,
+    teclas: &Nombres,
+    hay_final: bool,
+    noche: Option<&str>,
+) -> Vec<(Rect, Accion)> {
     let o = l.to_screen(0.0, 0.0);
     let u = l.scale().clamp(0.55, 1.2);
-    let lineas = [
-        (&teclas.historia, Texto::LaHistoria, Accion::Historia),
-        (&teclas.el_final, Texto::ElFinal, Accion::Final),
-    ];
+    let mut lineas = vec![(&teclas.historia, tx(Texto::LaHistoria), Accion::Historia)];
+    if hay_final {
+        lineas.push((&teclas.el_final, tx(Texto::ElFinal), Accion::Final));
+    }
+    if let Some(n) = noche {
+        lineas.push((&teclas.noche, n, Accion::Noche));
+    }
     let mut zonas = Vec::new();
-    for (i, (tecla, t, a)) in lineas.iter().take(1 + hay_final as usize).enumerate() {
-        let texto = glifos::rellenar("{}   {}", &[tecla, &glifos::txt(tx(*t))]);
+    for (i, (tecla, t, a)) in lineas.iter().enumerate() {
+        let texto = glifos::rellenar("{}   {}", &[tecla, &glifos::txt(*t)]);
         let (x, y, tam) = (o.x + 22.0 * u, o.y + (64.0 + 24.0 * i as f32) * u, 17.0 * u);
         glifos::texto(&texto, x, y, tam, draw::TEXT_DIM);
         zonas.push((
@@ -953,6 +972,23 @@ mod tests {
             assert!(toca_el_final(&p, false), "con los cuatro si");
             assert!(!toca_el_final(&p, true), "y una vez visto, ya no");
         }
+    }
+
+    #[test]
+    fn toda_la_noche_se_abre_con_los_cinco_ganados_y_dice_su_mejor_tiempo() {
+        let defs = BossDef::default_bosses();
+        let mut p = Pista::new(defs.iter().map(|d| (d.name.clone(), d.nivel)).collect());
+        let mut marcas = Marcas::default();
+        for i in 0..p.nodos.len() {
+            assert_eq!(linea_de_la_noche(&p, &marcas), None, "con {i} no");
+            p.marcar_vencido(i);
+        }
+        let sin = linea_de_la_noche(&p, &marcas).expect("con los cinco si");
+        let mut intento = marcas.empezar(nota::NOCHE);
+        intento.marcador.ticks = 7 * 60 * 60;
+        intento.cerrar_baile(&mut marcas, vals_core::Dificultad::Normal);
+        let con = linea_de_la_noche(&p, &marcas).unwrap();
+        assert!(con.starts_with(&sin) && con.contains("7:00.0"), "{con}");
     }
 
     #[test]

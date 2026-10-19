@@ -255,6 +255,9 @@ pub fn frame(
     draw_hp_bar(world, alpha, layout);
     draw_cartas(world, layout, corazones, &n.super_);
     draw_hud(world, layout);
+    if world.noche && !world.is_over() {
+        reloj_de_la_noche(world, layout);
+    }
     fogonazo_de_figura(world, alpha);
 }
 
@@ -392,6 +395,34 @@ fn draw_hud(world: &World, l: &Layout) {
     }
 }
 
+/// El reloj de toda la noche, arriba a la izquierda: cual de los cinco se
+/// baila y cuanto se lleva. Sale de los ticks del mundo, que no corren
+/// mientras se lee una cartela, asi que mide lo mismo que la tarjeta del final.
+/// A la escala de la lamina, como los corazones.
+fn reloj_de_la_noche(world: &World, l: &Layout) {
+    let k = l.scale().clamp(0.75, 1.4);
+    let o = l.to_screen(0.0, 0.0);
+    let texto = format!(
+        "{}/{}   {}",
+        world.boss_index + 1,
+        world.boss_count(),
+        libro::reloj(world.tick)
+    );
+    con_sombra(
+        |dx, c| {
+            fuentes::texto(
+                &texto,
+                o.x + 12.0 * k + dx,
+                o.y + 40.0 * k + dx,
+                20.0 * k,
+                Cara::Titulo,
+                c,
+            )
+        },
+        TITLE,
+    );
+}
+
 /// Menu. De fondo corre el replay dorado, que es el modo atractor.
 /// El menu, con los controles de lo que se este usando.
 ///
@@ -516,12 +547,14 @@ pub fn menu(l: &Layout, world: &World, intentos: u32, n: &Nombres) {
 /// (`caida` a 1): primero se ve morir, y luego se celebra.
 ///
 /// Con `tarjeta`, la victoria lleva debajo la tarjeta de resultado con la nota
-/// (ver `libro`), y el sello sube para dejarle sitio.
+/// (ver `libro`), y el sello sube para dejarle sitio. `bailado` son los ticks
+/// del intento, que en toda la noche dice el KO.
 pub fn fin_de_partida(
     l: &Layout,
     world: &World,
     caida: f32,
     tarjeta: Option<&libro::Tarjeta>,
+    bailado: u64,
     n: &Nombres,
 ) {
     if world.victory {
@@ -532,7 +565,7 @@ pub fn fin_de_partida(
             }
         }
     } else {
-        sello_de_derrota(l, world, n);
+        sello_de_derrota(l, world, bailado, n);
     }
 }
 
@@ -575,7 +608,11 @@ fn sello_de_victoria(l: &Layout, world: &World, con_tarjeta: bool, n: &Nombres) 
         tinta,
     );
     y += rh + 48.0;
-    let entero = txf(Texto::BailadoEntero, &[&nombre(&world.boss.name)]);
+    let entero = if world.noche {
+        tx(Texto::NocheEntera).to_owned()
+    } else {
+        txf(Texto::BailadoEntero, &[&nombre(&world.boss.name)])
+    };
     con_sombra(
         |dx, c| fuentes::centrado(&entero, cx + dx, y + dx, 24.0, Cara::Cuerpo, c),
         TITLE,
@@ -646,13 +683,23 @@ fn recorrido(world: &World) -> f32 {
     ((hechas + (1.0 - world.boss.hp_ratio())) / total).clamp(0.0, 1.0)
 }
 
+/// Lo mismo en toda la noche: los bailes hechos enteros y el de ahora por lo
+/// que se le habia comido.
+fn recorrido_de_la_noche(world: &World) -> f32 {
+    let total = world.boss_count().max(1) as f32;
+    ((world.boss_index as f32 + recorrido(world)) / total).clamp(0.0, 1.0)
+}
+
 /// El sello del KO y la barra de lo que te falto.
 ///
 /// La barra es lo mas Cuphead que hay aqui, y no por el dibujo: es que **un
 /// juego duro tiene que decirte si te acercaste**. Si llevas cien intentos en
 /// la ultima figura, cien intentos con esta barra son cien intentos con informacion, y
 /// sin ella son cien intentos a ciegas.
-fn sello_de_derrota(l: &Layout, world: &World, n: &Nombres) {
+///
+/// En toda la noche la barra es la de la noche, con una marca por baile, y
+/// debajo cuantos se bailaron y en cuanto.
+fn sello_de_derrota(l: &Layout, world: &World, bailado: u64, n: &Nombres) {
     let o = l.to_screen(0.0, 0.0);
     let (w, h) = (l.len(ARENA_W), l.len(ARENA_H));
     draw_rectangle(o.x, o.y, w, h, VEIL);
@@ -689,32 +736,40 @@ fn sello_de_derrota(l: &Layout, world: &World, n: &Nombres) {
     y += 34.0;
 
     // Y la barra: cuanto del baile te habias comido.
-    let hecho = recorrido(world);
+    let (hecho, marcas) = if world.noche {
+        (recorrido_de_la_noche(world), world.boss_count())
+    } else {
+        (recorrido(world), world.boss.phase_count())
+    };
     let barra = w * 0.56;
     let x0 = cx - barra * 0.5;
     draw_rectangle(x0, y, barra, 9.0, HP_BAR_BG);
     draw_rectangle(x0, y, barra * hecho, 9.0, HP_BAR);
     draw_rectangle_lines(x0, y, barra, 9.0, 1.5, fade(TEXT_DIM, 0.9));
     // Las marcas de cada figura, para que la barra diga algo y no solo llene.
-    let figuras = world.boss.phase_count().max(1);
-    for i in 1..figuras {
-        let x = x0 + barra * i as f32 / figuras as f32;
+    let marcas = marcas.max(1);
+    for i in 1..marcas {
+        let x = x0 + barra * i as f32 / marcas as f32;
         draw_line(x, y, x, y + 9.0, 1.5, fade(TEXT_DIM, 0.9));
     }
     y += 26.0;
     let pct = (hecho * 100.0).round() as u32;
-    fuentes::centrado(
-        &txf(Texto::LlegasteBaile, &[&pct]),
-        cx,
-        y,
-        17.0,
-        Cara::Cuerpo,
-        TEXT_DIM,
-    );
+    let (llegaste, reintentar) = if world.noche {
+        let hechos = world.boss_index;
+        let reloj = libro::reloj(bailado);
+        let total = world.boss_count();
+        (
+            txf(Texto::LlegasteNoche, &[&hechos, &total, &reloj]),
+            Texto::ReintentarNoche,
+        )
+    } else {
+        (txf(Texto::LlegasteBaile, &[&pct]), Texto::ReintentarBaile)
+    };
+    fuentes::centrado(&llegaste, cx, y, 17.0, Cara::Cuerpo, TEXT_DIM);
     y += 40.0;
 
     for linea in [
-        txg(Texto::ReintentarBaile, &[&n.aceptar, &n.reintentar]),
+        txg(reintentar, &[&n.aceptar, &n.reintentar]),
         txg(Texto::VolverPista, &[&n.atras]),
     ] {
         glifos::centrado(&linea, cx, y, 19.0, TEXT);

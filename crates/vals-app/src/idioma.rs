@@ -374,6 +374,14 @@ textos! {
     ReintentarBaile: "{} o {}  reintentar este baile", "{} or {}  retry this dance";
     VolverPista: "{}  volver a la pista", "{}  back to the dance floor";
 
+    // --- Toda la noche ---
+    TodaLaNoche: "toda la noche", "all night long";
+    TarjetaDeLaNoche: "TODA LA NOCHE", "ALL NIGHT LONG";
+    NocheEntera: "la noche entera, bailada", "the whole night, danced through";
+    BailesFila: "Bailes", "Dances";
+    LlegasteNoche: "{} de {} bailes, en {}", "{} of {} dances, in {}";
+    ReintentarNoche: "{} o {}  otra vez desde el vals", "{} or {}  again from the waltz";
+
     // --- Avisos ---
     TrazoVivo: "tinta temblorosa", "wobbly ink";
     TrazoQuieto: "tinta quieta", "steady ink";

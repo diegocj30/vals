@@ -24,7 +24,9 @@
 //!
 //! Las marcas del libro de baile (`marca:` y `jugado:`) entran igual: una
 //! version vieja las tomaria por bailes que no existen, y al guardar las
-//! devolveria tal cual.
+//! devolveria tal cual. Toda la noche es una marca mas, con su nombre
+//! (`marca:Toda la noche|...`): el mismo formato y las mismas reglas que las
+//! de un baile, sencillo incluido, sin prefijo nuevo que leer.
 
 use vals_core::Equipo;
 use vals_core::equipo::{Amuleto, Tiro};
@@ -474,6 +476,31 @@ mod tests {
         let viejo = Guardado::desde_texto("VALS1;El Vals;ficha:El paseo de Viena:2;tiro:Abanico");
         assert!(viejo.tiene("El Vals") && viejo.tiene_ficha("El paseo de Viena", 1));
         assert_eq!(viejo.marcas, crate::libro::Marcas::default());
+    }
+
+    #[test]
+    fn el_mejor_tiempo_de_toda_la_noche_se_guarda_y_lo_de_antes_no_lo_tiene() {
+        use vals_core::nota::NOCHE;
+        let viejo = Guardado::desde_texto("VALS1;El Vals;marca:El Vals|i2|t6000|nB");
+        assert!(!viejo.marcas.por_nombre.contains_key(NOCHE));
+        let mut g = viejo.clone();
+        let mut i = g.marcas.empezar(NOCHE);
+        i.marcador.ticks = 25_000;
+        i.cerrar_baile(&mut g.marcas, vals_core::Dificultad::Normal);
+        let texto = g.a_texto();
+        assert!(
+            texto.contains(";marca:Toda la noche|i1|t25000|n"),
+            "{texto}"
+        );
+        let leido = Guardado::desde_texto(&texto);
+        assert_eq!(leido, g);
+        assert_eq!(leido.marcas.por_nombre[NOCHE].mejor, Some(25_000));
+        assert!(!leido.tiene("marca:Toda la noche"), "no es un baile");
+        // Lo de antes sigue igual.
+        assert_eq!(
+            leido.marcas.por_nombre["El Vals"],
+            viejo.marcas.por_nombre["El Vals"]
+        );
     }
 
     #[test]

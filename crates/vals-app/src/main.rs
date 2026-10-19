@@ -9,7 +9,7 @@ use vals_core::boss::BossDef;
 use vals_core::paseo::{Paseo, PaseoDef, VISTA_H, VISTA_W};
 use vals_core::pista::Pista;
 use vals_core::replay::{GOLDEN_REPLAY, Replay};
-use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World};
+use vals_core::{DT, Events, InputFrame, MAX_BULLETS, Mode, Recorder, World, nota};
 
 mod acciones;
 mod audio;
@@ -350,6 +350,9 @@ async fn run_game() {
     // caido.
     let mut caida: Option<f32> = None;
     let mut repaso = false;
+    // Si el combate es toda la noche: los cinco bailes seguidos, desde el
+    // menu. Se reintenta entera y no se tacha nada en la pista.
+    let mut noche = false;
     let mut tienda = modista::Modista::new();
     // El prologo en curso, y adonde se va al acabarlo: a la pista la primera
     // vez, y de vuelta al menu si se ha pedido desde alli.
@@ -367,10 +370,15 @@ async fn run_game() {
         if frames.is_multiple_of(HOT_RELOAD_EVERY)
             && let Some(defs) = hot.poll()
         {
-            // El mundo solo tiene el baile en curso, asi que se le recarga
-            // solo ese: pasarle la lista entera le devolveria los demas.
-            if let Some(def) = defs.get(world.baile) {
-                world.reload_bosses(vec![def.clone()]);
+            // Se le recargan sus bailes y no la lista entera: un baile suelto
+            // recibiria los demas detras, y toda la noche, otro orden.
+            let suyos: Option<Vec<_>> = world
+                .bailes()
+                .iter()
+                .map(|&i| defs.get(i).cloned())
+                .collect();
+            if let Some(suyos) = suyos {
+                world.reload_bosses(suyos);
             }
             // El replay en curso ya no reproduce nada: el jefe ha cambiado.
             recorder = Recorder::for_world(&world);
@@ -510,17 +518,28 @@ async fn run_game() {
             //
             // La dificultad, la de las opciones: si se ha cambiado en el
             // entreacto, reintentar es la forma de estrenarla.
+            //
+            // Toda la noche se reintenta entera, desde el vals: reintentar solo
+            // el baile en que se cae seria rellenar las vidas.
             let dificultad = progreso.opciones.dificultad;
-            if world.defeat && world.dificultad == dificultad {
-                world.retry_current_boss();
+            if noche {
+                (world, recorder, cartela) = empezar_noche(&progreso);
             } else {
-                world = World::empezar_con(SEED, world.mode, world.baile, world.equipo)
-                    .con_dificultad(dificultad);
+                if world.defeat && world.dificultad == dificultad {
+                    world.retry_current_boss();
+                } else {
+                    world = World::empezar_con(SEED, world.mode, world.baile, world.equipo)
+                        .con_dificultad(dificultad);
+                }
+                recorder = Recorder::for_world(&world);
             }
-            recorder = Recorder::for_world(&world);
             accumulator = 0.0;
             intentos += 1;
-            intento = progreso.marcas.empezar(&pista.nodos[nodo_actual].nombre);
+            intento = progreso.marcas.empezar(if noche {
+                nota::NOCHE
+            } else {
+                &pista.nodos[nodo_actual].nombre
+            });
         }
         // En el paseo, reintentar vuelve a empezar la calle. Morir en el
         // paseo no te lleva al jefe ni te lo quita: se reintenta el paseo,
@@ -546,6 +565,7 @@ async fn run_game() {
                 _ => Escena::Menu,
             };
             cartela = None;
+            noche = false;
             fundido.empezar(0.24);
         }
         // Mientras se espera una tecla nueva para un control, ninguna otra
@@ -718,6 +738,21 @@ async fn run_game() {
             historia = prologo::Prologo::nuevo();
             tras_prologo = Escena::Menu;
             fundido.empezar(0.30);
+        } else if escena == Escena::Menu
+            && libre
+            && pista.todo_vencido()
+            && entrada.pulsado(Accion::Noche)
+        {
+            // Toda la noche, para quien ya los ha ganado todos: a la pista no
+            // se pasa, se entra directo al vals.
+            audio.play(Sfx::Empezar, 1.0);
+            escena = Escena::Combate;
+            noche = true;
+            (world, recorder, cartela) = empezar_noche(&progreso);
+            intentos += 1;
+            intento = progreso.marcas.empezar(nota::NOCHE);
+            accumulator = 0.0;
+            fundido.empezar(0.30);
         } else if escena == Escena::Menu && libre && hay_final && entrada.pulsado(Accion::Final) {
             // El final tambien se vuelve a ver, con el boton del super.
             escena = Escena::Prologo;
@@ -796,6 +831,9 @@ async fn run_game() {
             p.a_la_porteria();
             intento.trampa = true;
         }
+        // El baile de antes de la simulacion y del F3: si cambia, en toda la
+        // noche ha caido uno y entra el siguiente.
+        let jefe_antes = (world.boss_index, world.baile);
         if libre && is_key_pressed(KeyCode::F3) && escena == Escena::Combate && !world.is_over() {
             world.saltar_el_baile();
             intento.trampa = true;
@@ -902,8 +940,15 @@ async fn run_game() {
                         let barridas = world.limpiadas.iter().map(|p| vec2(p.x, p.y));
                         ovacion.figura(world.baile, barridas.collect());
                     }
+                    // En toda la noche los golpes se apuntan por baile y no
+                    // por figura.
+                    let donde = if noche {
+                        world.boss_index
+                    } else {
+                        world.boss.phase
+                    };
                     if bailando {
-                        intento.apuntar(&mut progreso.marcas, &world.events, world.boss.phase);
+                        intento.apuntar(&mut progreso.marcas, &world.events, donde);
                     }
                     if world.events.player_died {
                         fantasma = Some((antes, get_time()));
@@ -917,6 +962,13 @@ async fn run_game() {
             chispas.step(DT);
             zumo.step();
             ovacion.step();
+        }
+        // En toda la noche, al caer un baile entra el siguiente con su
+        // cartela, como si se entrara desde la pista: para el mundo mientras
+        // se lee, y suena la caida del que se va.
+        if noche && escena == Escena::Combate && world.boss_index != jefe_antes.0 {
+            audio.play(Sfx::caida(jefe_antes.1), 1.0);
+            cartela = Some(presentar(&world));
         }
         // La cartela y el fundido corren con el reloj de pared, no con los
         // ticks. Es presentacion —tiene que durar igual a 60 que a 144 Hz— y,
@@ -1035,7 +1087,7 @@ async fn run_game() {
 
         // Ganar un baile lo tacha en la pista. Una sola vez, que la pantalla
         // de victoria se queda puesta muchos frames.
-        if escena == Escena::Combate && world.victory && !marcado {
+        if escena == Escena::Combate && world.victory && !marcado && !noche {
             pista.marcar_vencido(nodo_actual);
             progreso.marcar(&pista.nodos[nodo_actual].nombre);
             progreso.guardar();
@@ -1167,13 +1219,20 @@ async fn run_game() {
             if escena == Escena::Menu {
                 draw::menu(&layout, mostrado, intentos, &n);
                 zonas.push((libro::aviso_en_el_menu(&layout, &n), Accion::Libro));
-                zonas.extend(prologo::en_el_menu(&layout, &n, hay_final));
+                let la_noche = prologo::linea_de_la_noche(&pista, &progreso.marcas);
+                zonas.extend(prologo::en_el_menu(
+                    &layout,
+                    &n,
+                    hay_final,
+                    la_noche.as_deref(),
+                ));
             } else if world.is_over() {
                 draw::fin_de_partida(
                     &layout,
                     &world,
                     jefes::caida(caida.unwrap_or(0.0)),
                     intento.tarjeta.as_ref(),
+                    intento.marcador.ticks,
                     &n,
                 );
             }
@@ -1262,6 +1321,23 @@ fn empezar_baile(jefe: usize, progreso: &Guardado) -> (World, Recorder, Option<C
     let world = World::empezar_con(SEED, Mode::Flight, jefe, progreso.equipo)
         .con_dificultad(progreso.opciones.dificultad);
     let recorder = Recorder::for_world(&world);
+    let cartela = presentar(&world);
+    (world, recorder, Some(cartela))
+}
+
+/// Lo mismo para toda la noche: los cinco bailes, con lo que se lleve puesto
+/// y en la dificultad de las opciones.
+fn empezar_noche(progreso: &Guardado) -> (World, Recorder, Option<Cartela>) {
+    let world =
+        World::toda_la_noche(SEED, progreso.equipo).con_dificultad(progreso.opciones.dificultad);
+    let recorder = Recorder::for_world(&world);
+    let cartela = presentar(&world);
+    (world, recorder, Some(cartela))
+}
+
+/// La cartela de entrada del baile en curso, y la letra de lo que saldra en
+/// el. Al entrar desde la pista y, en toda la noche, al pasar al siguiente.
+fn presentar(world: &World) -> Cartela {
     let cartela = Cartela::entrada(
         nombre(&world.boss.name),
         nombre(world.boss.phase_name()),
@@ -1275,8 +1351,8 @@ fn empezar_baile(jefe: usize, progreso: &Guardado) -> (World, Recorder, Option<C
         .take_while(|f| !f.is_empty());
     cartela::precalentar(&draw::Layout::compute(), figuras.map(nombre));
     ovacion::precalentar(world.baile);
-    draw::precalentar_hud(&world);
-    (world, recorder, Some(cartela))
+    draw::precalentar_hud(world);
+    cartela
 }
 
 /// Un paseo recien empezado con lo que se lleva puesto, y sin las fichas que
