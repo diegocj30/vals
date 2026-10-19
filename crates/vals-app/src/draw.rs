@@ -992,7 +992,7 @@ fn cartel_del_baile(world: &World, alpha: f32, cx: f32, y0: f32, ancho: f32, alt
     );
 
     // La pieza, partida por el guion si no cabe: "El Danubio azul" arriba y
-    // "Johann Strauss II, 1866" debajo.
+    // "Johann Strauss II, 1867" debajo.
     let pieza = nombre(Tema::de(world.baile, world.boss.phase).titulo());
     let mut y = sy + sh + 28.0;
     for trozo in pieza.split(" - ") {

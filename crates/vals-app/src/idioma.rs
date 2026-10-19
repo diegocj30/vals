@@ -161,7 +161,7 @@ fn en_espanol(clave: &str) -> Option<&'static str> {
         "Por el puente de barcas" => "Por el puente de barcas",
         // Las piezas (music.rs).
         "la sala" => "la sala",
-        "El Danubio azul - Johann Strauss II, 1866" => "El Danubio azul - Johann Strauss II, 1866",
+        "El Danubio azul - Johann Strauss II, 1867" => "El Danubio azul - Johann Strauss II, 1867",
         "El Danubio azul, reflejado" => "El Danubio azul, reflejado",
         "Sobre las olas - Juventino Rosas, 1888" => "Sobre las olas - Juventino Rosas, 1888",
         "El Danubio azul, coda" => "El Danubio azul, coda",
@@ -228,7 +228,7 @@ fn en_ingles(es: &str) -> Option<&'static str> {
         "Por el puente de barcas" => "Over the bridge of boats",
         // Las piezas (music.rs).
         "la sala" => "the ballroom",
-        "El Danubio azul - Johann Strauss II, 1866" => "The Blue Danube - Johann Strauss II, 1866",
+        "El Danubio azul - Johann Strauss II, 1867" => "The Blue Danube - Johann Strauss II, 1867",
         "El Danubio azul, reflejado" => "The Blue Danube, mirrored",
         "Sobre las olas - Juventino Rosas, 1888" => "Over the Waves - Juventino Rosas, 1888",
         "El Danubio azul, coda" => "The Blue Danube, coda",

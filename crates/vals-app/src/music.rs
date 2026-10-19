@@ -15,13 +15,16 @@
 //! *compas*, no la *pieza*, y a los dos bucles cansaba. Ahora las melodias son
 //! transcripciones de valses reales de dominio publico:
 //!
-//! - **El Danubio azul**, Johann Strauss II (1866). El primer tema completo,
-//!   32 compases, con su armonia.
-//! - **Sobre las olas**, Juventino Rosas (1888). Parte A, 16 compases.
+//! - **El Danubio azul**, Johann Strauss II (1867). El primer vals entero,
+//!   32 compases con la anacrusa, con su armonia.
+//! - **Sobre las olas**, Juventino Rosas (1888). El primer vals, la parte A
+//!   entera, 32 compases.
 //!
-//! Ambas salen de transcripciones publicas en notacion ABC, que es texto y por
-//! tanto se pasa a esta tabla sin ambiguedad. Las dos piezas son de dominio
-//! publico (1866 y 1888, autores muertos en 1899 y 1894).
+//! Las dos estan leidas compas a compas de ediciones antiguas para piano de
+//! dominio publico (cada tabla dice cual). Antes salian de transcripciones
+//! en ABC escritas de memoria, con el ritmo y la mitad de las notas mal, y no
+//! se reconocian. Las dos piezas son de dominio publico (1867 y 1888, autores
+//! muertos en 1899 y 1894).
 //!
 //! El tercero no es una tercera pieza: **es el Danubio reflejado**. El Espejo
 //! toca la segunda mitad del Danubio con cada intervalo invertido alrededor de
@@ -62,11 +65,12 @@ pub enum Tema {
     Sala(u8),
 
     // --- El Vals ---
-    /// El Danubio azul entero. 3/4, oom-pah-pah, el vals de toda la vida.
+    /// El primer vals del Danubio azul. 3/4, oom-pah-pah, el vals de toda la
+    /// vida.
     PasoBase,
     /// El mismo Danubio, reflejado y en menor. Mas lento y mas oscuro.
     Espejo,
-    /// Sobre las olas: corriendo en corcheas, donde el Danubio sostenia.
+    /// Sobre las olas: se mece por grados, donde el Danubio salta.
     Molinete,
     /// El tema del principio otra vez, un tono mas arriba y a toda velocidad.
     /// Una coda, en musica, es exactamente eso.
@@ -285,100 +289,126 @@ impl Acorde {
 // Partituras
 // ---------------------------------------------------------------------------
 
-/// **El Danubio azul**, Johann Strauss II (1866), primer tema completo.
+/// **El Danubio azul**, Johann Strauss II (1867), el primer vals entero.
 ///
-/// En do mayor: los tonos son semitonos sobre el do central. Un compas son
-/// doce unidades, asi que cada linea de aqui abajo suma doce (salvo las notas
-/// ligadas, que valen por dos compases).
+/// Leido de la primera edicion para piano (Viena, C. A. Spina, 1867, plancha
+/// C.S. 19.216), que lo tiene en re mayor: los tonos son semitonos sobre el
+/// re4. Un compas son doce unidades, asi que cada linea de aqui abajo suma
+/// doce (salvo las notas ligadas, que valen por dos compases).
 ///
-/// Lo que hace que se reconozca a la primera son los dos primeros compases:
-/// el arpegio 1-3-5 y la quinta sostenida. Los dos golpes de acorde que
-/// contestan —el "pam, pam"— no estan aqui: los pone el acompanamiento, que
-/// toca precisamente en los tiempos dos y tres.
+/// El primer compas es la anacrusa, re fa# la, sola sobre un silencio del
+/// bajo; aqui el bajo la toca, porque el bucle no tiene compas de silencio.
+/// Despues viene lo que se reconoce: el la del uno, y en el tres y en el uno
+/// siguiente los dos golpes una octava arriba —el "pam, pam"—, que en la
+/// partitura van en la melodia, separados por silencios. La version de antes
+/// los dejaba al acompanamiento y ligaba el la, y por eso no era el Danubio.
+///
+/// Las notas de adorno de antes de cada golpe no estan: cuatro unidades por
+/// tiempo no dan para ellas sin comerse el golpe.
 #[rustfmt::skip]
-const DANUBIO: [Nota; 70] = [
-    n(0, 4), n(4, 4), n(7, 4),                          // 1  do mi sol
-    n(7, 8), n(19, 4),                                  // 2  sol -- sol'
-    n(19, 8), n(16, 4),                                 // 3
-    n(16, 8), n(0, 4),                                  // 4
-    n(0, 4), n(4, 4), n(7, 4),                          // 5
-    n(7, 8), n(19, 4),                                  // 6
-    n(19, 8), n(17, 4),                                 // 7
-    n(17, 8), n(-1, 4),                                 // 8
-    n(-1, 4), n(2, 4), n(9, 4),                         // 9
-    n(9, 8), n(21, 4),                                  // 10
-    n(21, 8), n(17, 4),                                 // 11
-    n(17, 8), n(-1, 4),                                 // 12
-    n(-1, 4), n(2, 4), n(9, 4),                         // 13
-    n(9, 8), n(21, 4),                                  // 14
-    n(21, 8), n(16, 4),                                 // 15
-    n(16, 8), n(0, 4),                                  // 16
+const DANUBIO: [Nota; 90] = [
+    n(0, 4), n(4, 4), n(7, 4),                          // 0  re fa# la (anacrusa)
+    n(7, 4), z(4), n(19, 4),                            // 1  la, y el la de arriba
+    n(19, 4), z(4), n(16, 4),                           // 2
+    n(16, 4), z(4), n(0, 4),                            // 3
+    n(0, 4), n(4, 4), n(7, 4),                          // 4
+    n(7, 4), z(4), n(19, 4),                            // 5
+    n(19, 4), z(4), n(17, 4),                           // 6  y ahora al sol
+    n(17, 4), z(4), n(-1, 4),                           // 7
+    n(-1, 4), n(2, 4), n(9, 4),                         // 8  do# mi si
+    n(9, 4), z(4), n(21, 4),                            // 9
+    n(21, 4), z(4), n(17, 4),                           // 10
+    n(17, 4), z(4), n(-1, 4),                           // 11
+    n(-1, 4), n(2, 4), n(9, 4),                         // 12
+    n(9, 4), z(4), n(21, 4),                            // 13
+    n(21, 4), z(4), n(16, 4),                           // 14
+    n(16, 4), z(4), n(0, 4),                            // 15
     // --- MITAD: de aqui en adelante es lo que toca El Espejo, reflejado.
-    n(0, 4), n(4, 4), n(7, 4),                          // 17
-    n(12, 8), n(24, 4),                                 // 18
-    n(24, 8), n(19, 4),                                 // 19
-    n(19, 8), n(0, 4),                                  // 20
-    n(0, 4), n(4, 4), n(7, 4),                          // 21
-    n(12, 8), n(24, 4),                                 // 22
-    n(24, 8), n(21, 4),                                 // 23
-    n(21, 8), n(2, 4),                                  // 24
-    n(2, 4), n(5, 4), n(9, 4),                          // 25
-    n(9, 16), n(6, 4), n(7, 4),                         // 26-27 (la ligada)
-    n(16, 16), n(12, 4), n(4, 4),                       // 28-29 (la otra)
-    n(4, 8), n(2, 4),                                   // 30
-    n(9, 8), n(7, 4),                                   // 31
-    n(0, 6), n(0, 2), n(0, 4),                          // 32 (el puntillo)
+    n(0, 4), n(4, 4), n(7, 4),                          // 16
+    n(12, 4), z(4), n(24, 4),                           // 17 re, y el re de arriba
+    n(24, 4), z(4), n(19, 4),                           // 18
+    n(19, 4), z(4), n(0, 4),                            // 19
+    n(0, 4), n(4, 4), n(7, 4),                          // 20
+    n(12, 4), z(4), n(24, 4),                           // 21
+    n(24, 4), z(4), n(21, 4),                           // 22
+    n(21, 4), z(4), n(14, 4),                           // 23
+    n(14, 4), n(17, 4), n(21, 2), z(2),                 // 24 mi sol si, a las dos manos
+    n(21, 16), n(18, 4), n(19, 4),                      // 25-26 el si ligado, ff
+    n(28, 16), n(24, 4), n(16, 4),                      // 27-28 el fa# de arriba
+    n(16, 8), n(14, 4),                                 // 29
+    n(21, 8), n(19, 4),                                 // 30
+    n(12, 4), z(2), n(12, 2), n(12, 4),                 // 31 y el re del final
 ];
 
 /// Donde empieza la segunda mitad del Danubio, la que refleja El Espejo.
-const DANUBIO_MITAD: usize = 36;
+const DANUBIO_MITAD: usize = 48;
 
 #[rustfmt::skip]
 const DANUBIO_ACORDES: [Acorde; 32] = [
-    may(0), may(0), may(0), may(0), may(0),                     // 1-5    do
-    sep(7), sep(7), sep(7), sep(7),                             // 6-9    sol7
-    sep(7), sep(7), sep(7), sep(7),                             // 10-13
-    may(0), may(0), may(0), may(0),                             // 14-17  do
-    may(0), may(0), may(0), may(0),                             // 18-21
-    may(5), may(5), may(5), may(5),                             // 22-25  fa
-    sep(7), sep(7),                                             // 26-27  sol7
-    may(0), may(0),                                             // 28-29  do
-    men(2),                                                     // 30     re menor
-    sep(7),                                                     // 31     sol7
-    may(0),                                                     // 32     do
+    may(0), may(0), may(0), may(0), may(0),                     // 0-4    re
+    sep(7), sep(7), sep(7), sep(7),                             // 5-8    la7
+    sep(7), sep(7), sep(7), sep(7),                             // 9-12
+    may(0), may(0), may(0), may(0),                             // 13-16  re
+    may(0), may(0), may(0), may(0),                             // 17-20
+    may(5), may(5), may(5),                                     // 21-23  sol
+    men(2),                                                     // 24     mi menor
+    sep(7), sep(7),                                             // 25-26  la7
+    may(0), may(0),                                             // 27-28  re
+    may(5),                                                     // 29     sol
+    sep(7),                                                     // 30     la7
+    may(0),                                                     // 31     re
 ];
 
-/// **Sobre las olas**, Juventino Rosas (1888), parte A.
+/// **Sobre las olas**, Juventino Rosas (1888), el primer vals, parte A entera.
 ///
-/// En sol mayor: los tonos son semitonos sobre el sol. Es el otro extremo del
-/// genero respecto al Danubio —donde aquel sostiene notas largas, este corre
-/// en corcheas y cromatismos— y por eso le toca al ultimo jefe.
+/// La primera edicion, la mexicana, no esta escaneada en IMSLP; esto esta
+/// leido de la de Viena (Rudolf Pawliska, sin fecha, plancha R.P. 31), para
+/// piano, que es la mas completa de las antiguas. En sol mayor: los tonos son
+/// semitonos sobre el sol3.
+///
+/// Es el otro extremo del genero respecto al Danubio: donde aquel salta por
+/// el acorde y contesta a golpes, este se mece por grados, con notas largas
+/// ligadas y el cromatismo de la#, mi#. La version de antes corria en corcheas,
+/// que no estan en la partitura. En la parte fuerte el piano dobla a la
+/// octava; aqui va la de abajo, porque la de arriba pasa de los 2 kHz.
 #[rustfmt::skip]
 const OLAS: [Nota; 60] = [
-    n(-8, 6), n(-9, 2), n(-8, 2), n(-5, 2),                     // 1
-    n(0, 8), n(-1, 2), n(0, 2),                                 // 2
-    n(2, 2), n(0, 2), n(-1, 2), n(0, 2), n(-8, 2), n(-5, 2),    // 3
-    n(-1, 6), z(6),                                             // 4
-    n(-7, 6), n(-8, 2), n(-7, 2), n(-5, 2),                     // 5
-    n(-1, 8), n(-2, 2), n(-1, 2),                               // 6
-    n(0, 2), n(-1, 2), n(-2, 2), n(-1, 2), n(-7, 2), n(-1, 2),  // 7
-    n(-8, 6), z(6),                                             // 8
-    n(-8, 6), n(-9, 2), n(-8, 2), n(-5, 2),                     // 9
-    n(0, 8), n(-1, 2), n(0, 2),                                 // 10
-    n(2, 2), n(0, 2), n(-1, 2), n(0, 2), n(-8, 2), n(-5, 2),    // 11
-    n(-3, 6), z(6),                                             // 12
-    n(-3, 6), n(2, 2), n(5, 2), n(9, 2),                        // 13
-    n(7, 8), n(5, 2), n(4, 2),                                  // 14
-    n(2, 2), n(0, 2), n(-1, 2), n(-3, 2), n(-1, 2), n(2, 2),    // 15
-    n(0, 6), z(6),                                              // 16
+    n(4, 12),                                                   // 1  si
+    n(3, 4), n(4, 4), n(7, 4),                                  // 2  la# si re
+    n(12, 16), n(11, 4), n(12, 4),                              // 3-4 sol, ligado
+    n(14, 4), n(12, 4), n(11, 4),                               // 5
+    n(12, 4), n(4, 4), n(7, 4),                                 // 6
+    n(11, 16), z(8),                                            // 7-8 fa#
+    n(5, 12),                                                   // 9  do
+    n(4, 4), n(5, 4), n(7, 4),                                  // 10
+    n(11, 16), n(10, 4), n(11, 4),                              // 11-12 fa# mi# fa#
+    n(12, 4), n(11, 4), n(10, 4),                               // 13
+    n(11, 4), n(5, 4), n(11, 4),                                // 14
+    n(4, 16), z(8),                                             // 15-16 si
+    n(4, 12),                                                   // 17 otra vez
+    n(3, 4), n(4, 4), n(7, 4),                                  // 18
+    n(12, 16), n(11, 4), n(12, 4),                              // 19-20
+    n(14, 4), n(12, 4), n(11, 4),                               // 21
+    n(12, 4), n(4, 4), n(9, 4),                                 // 22 y ahora al mi
+    n(9, 16), z(8),                                             // 23-24
+    n(9, 12),                                                   // 25 ff
+    n(14, 4), n(17, 4), n(21, 4),                               // 26 la do mi
+    n(19, 16), n(17, 4), n(16, 4),                              // 27-28 re do si
+    n(14, 4), n(12, 4), n(11, 4),                               // 29
+    n(9, 4), n(11, 4), n(14, 4),                                // 30
+    n(12, 16), z(8),                                            // 31-32 sol
 ];
 
 #[rustfmt::skip]
-const OLAS_ACORDES: [Acorde; 16] = [
-    may(0), may(0), may(0), sep(7),                             // 1-4
-    men(2), sep(7), sep(7), may(0),                             // 5-8
-    may(0), may(0), may(0), may(5),                             // 9-12
-    men(2), may(0), sep(7), may(0),                             // 13-16
+const OLAS_ACORDES: [Acorde; 32] = [
+    may(0), may(0), may(0), may(0), may(0), may(0),             // 1-6    sol
+    sep(7), sep(7),                                             // 7-8    re7
+    sep(7), sep(7), sep(7), sep(7), sep(7), sep(7),             // 9-14
+    may(0), may(0),                                             // 15-16  sol
+    may(0), may(0), may(0), may(0), may(0), may(0),             // 17-22
+    men(2), men(2), men(2), men(2),                             // 23-26  la menor
+    sep(7), sep(7), sep(7), sep(7),                             // 27-30  re7
+    may(0), may(0),                                             // 31-32  sol
 ];
 
 /// **La Cumparsita**, Matos Rodriguez (1916), primera parte.
@@ -789,17 +819,19 @@ fn partitura(t: Tema) -> Partitura {
         },
 
         Tema::PasoBase => vals(
-            "El Danubio azul - Johann Strauss II, 1866",
+            "El Danubio azul - Johann Strauss II, 1867",
             174.0,
-            15, // do central
+            17, // re4, el de la partitura
             &DANUBIO,
             &DANUBIO_ACORDES,
             false,
         ),
+        // Reflejado alrededor del mismo re: el espejo de re mayor es re menor.
+        // Mas abajo, el fa# de arriba se reflejaria por debajo de los 200 Hz.
         Tema::Espejo => vals(
             "El Danubio azul, reflejado",
             132.0,
-            12, // la
+            17, // re
             &DANUBIO[DANUBIO_MITAD..],
             &DANUBIO_ACORDES[16..],
             true,
@@ -819,7 +851,7 @@ fn partitura(t: Tema) -> Partitura {
         Tema::Coda => vals(
             "El Danubio azul, coda",
             232.0,
-            17, // re: un tono por encima del principio
+            19, // mi: un tono por encima del principio
             &DANUBIO[DANUBIO_MITAD..],
             &DANUBIO_ACORDES[16..],
             false,
@@ -971,8 +1003,9 @@ const MENOR: [i32; 7] = [0, 2, 3, 5, 7, 8, 10];
 
 /// A que grado de la escala mayor corresponde un semitono.
 ///
-/// Lo que no cae en la escala baja al grado inmediatamente inferior. En el
-/// Danubio eso solo le pasa a un fa sostenido de paso, en el compas 27.
+/// Lo que no cae en la escala baja al grado inmediatamente inferior. En la
+/// mitad del Danubio que se refleja eso solo le pasa a un sol sostenido de
+/// paso, en el compas 26.
 fn grado_mayor(semitonos: i32) -> i32 {
     let dentro = semitonos.rem_euclid(12);
     let mut g = 0;
@@ -1413,13 +1446,27 @@ mod tests {
 
     #[test]
     fn el_danubio_empieza_por_donde_tiene_que_empezar() {
-        // El arpegio 1-3-5 y la quinta sostenida. Es *la* figura reconocible
-        // del Danubio; si alguien la toca al editar la tabla, esto avisa.
-        assert_eq!(DANUBIO[0].tono, 0);
-        assert_eq!(DANUBIO[1].tono, 4);
-        assert_eq!(DANUBIO[2].tono, 7);
-        assert_eq!(DANUBIO[3].tono, 7);
-        assert_eq!(DANUBIO[3].unidades, 2 * UNIDADES_POR_TIEMPO);
+        // La anacrusa re fa# la, el la del uno, y los dos golpes una octava
+        // arriba, en el tres y en el uno, con un silencio en medio. Es *la*
+        // figura reconocible del Danubio; si alguien la toca al editar la
+        // tabla, esto avisa.
+        let tonos: Vec<i32> = DANUBIO[..7].iter().map(|n| n.tono).collect();
+        assert_eq!(tonos, vec![0, 4, 7, 7, SILENCIO, 19, 19]);
+        assert!(
+            DANUBIO[..7]
+                .iter()
+                .all(|n| n.unidades == UNIDADES_POR_TIEMPO)
+        );
+    }
+
+    #[test]
+    fn sobre_las_olas_empieza_por_donde_tiene_que_empezar() {
+        // Si, y la# si re hasta el sol, que se queda ligado: se mece por
+        // grados. Y nada de corcheas, que no estan en la partitura.
+        let tonos: Vec<i32> = OLAS[..5].iter().map(|n| n.tono).collect();
+        assert_eq!(tonos, vec![4, 3, 4, 7, 12]);
+        assert_eq!(OLAS[0].unidades, 3 * UNIDADES_POR_TIEMPO);
+        assert!(OLAS.iter().all(|n| n.unidades >= UNIDADES_POR_TIEMPO));
     }
 
     #[test]
@@ -1443,7 +1490,7 @@ mod tests {
 
     #[test]
     fn el_reflejo_del_danubio_da_una_progresion_menor() {
-        // do - sol7 - fa - re menor, reflejado, sale i - iv - v - bVII.
+        // re - la7 - sol - mi menor, reflejado, sale i - iv - v - bVII.
         let raices: Vec<i32> = [may(0), sep(7), may(5), men(2)]
             .iter()
             .map(|a| reflejar_acorde(*a).raiz)
