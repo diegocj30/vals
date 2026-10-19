@@ -246,6 +246,8 @@ pub struct Carta {
     /// Abierta desde el titulo: no hay entreacto al que volver, ni partida
     /// que reintentar.
     desde_titulo: bool,
+    /// Desde una practica: volver es volver al libro, no a la pista.
+    al_libro: bool,
     /// Esperando la tecla o el boton nuevo para una accion.
     esperando: Option<Juego>,
     aviso: Option<(Texto, f64)>,
@@ -258,8 +260,17 @@ impl Carta {
             pantalla: Pantalla::Entreacto,
             cursor: 0,
             desde_titulo: false,
+            al_libro: false,
             esperando: None,
             aviso: None,
+        }
+    }
+
+    /// El entreacto de una practica.
+    pub fn entreacto_de_practica() -> Self {
+        Self {
+            al_libro: true,
+            ..Self::entreacto()
         }
     }
 
@@ -344,6 +355,7 @@ impl Carta {
             pantalla: p,
             cursor: 0,
             desde_titulo: self.desde_titulo,
+            al_libro: self.al_libro,
             esperando: None,
             aviso: None,
         }
@@ -638,6 +650,7 @@ impl Carta {
         let (texto, valor) = match f {
             Fila::Seguir => (Texto::FilaSeguir, Some(n.pausa.clone())),
             Fila::Reintentar => (Texto::FilaReintentar, Some(n.reintentar.clone())),
+            Fila::Mapa if self.al_libro => (Texto::FilaLibro, None),
             Fila::Mapa => (Texto::FilaMapa, None),
             Fila::Opciones => (Texto::FilaOpciones, None),
             Fila::Idioma => (Texto::FilaIdioma, Some(txt(op.idioma.nombre()))),

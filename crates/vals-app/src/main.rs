@@ -361,6 +361,8 @@ async fn run_game() {
     // El intento en curso, de baile o de paseo: lo que se apunta para la
     // tarjeta del final y para el libro.
     let mut intento = libro::Intento::default();
+    // La figura que se practicaria desde el libro.
+    let mut eleccion = libro::Eleccion::default();
 
     loop {
         tirones.empezar(get_time());
@@ -377,7 +379,8 @@ async fn run_game() {
                 .iter()
                 .map(|&i| defs.get(i).cloned())
                 .collect();
-            if let Some(suyos) = suyos {
+            // Una practica no: volveria a la primera figura del baile entero.
+            if let Some(suyos) = suyos.filter(|_| !world.practica) {
                 world.reload_bosses(suyos);
             }
             // El replay en curso ya no reproduce nada: el jefe ha cambiado.
@@ -477,7 +480,9 @@ async fn run_game() {
         {
             // En un baile o un paseo, el entreacto; en el titulo, las
             // opciones.
-            carta = Some(if jugando {
+            carta = Some(if escena == Escena::Combate && world.practica {
+                Carta::entreacto_de_practica()
+            } else if jugando {
                 Carta::entreacto()
             } else {
                 Carta::opciones()
@@ -521,9 +526,15 @@ async fn run_game() {
             //
             // Toda la noche se reintenta entera, desde el vals: reintentar solo
             // el baile en que se cae seria rellenar las vidas.
+            //
+            // Una practica vuelve a empezar su figura, sin cartela.
             let dificultad = progreso.opciones.dificultad;
             if noche {
                 (world, recorder, cartela) = empezar_noche(&progreso);
+            } else if world.practica {
+                let fase = world.boss.phase;
+                world = World::practicar(SEED, world.baile, fase, progreso.equipo, dificultad);
+                recorder = Recorder::for_world(&world);
             } else {
                 if world.defeat && world.dificultad == dificultad {
                     world.retry_current_boss();
@@ -535,11 +546,15 @@ async fn run_game() {
             }
             accumulator = 0.0;
             intentos += 1;
-            intento = progreso.marcas.empezar(if noche {
-                nota::NOCHE
+            intento = if world.practica {
+                libro::Intento::de_practica()
             } else {
-                &pista.nodos[nodo_actual].nombre
-            });
+                progreso.marcas.empezar(if noche {
+                    nota::NOCHE
+                } else {
+                    &pista.nodos[nodo_actual].nombre
+                })
+            };
         }
         // En el paseo, reintentar vuelve a empezar la calle. Morir en el
         // paseo no te lleva al jefe ni te lo quita: se reintenta el paseo,
@@ -561,6 +576,8 @@ async fn run_game() {
             && (entrada.pulsado(Accion::Atras) || entrada.pulsado(Accion::Pausa));
         if salir || atras {
             escena = match escena {
+                // De la practica se vuelve al libro, que es de donde se vino.
+                Escena::Combate if world.practica => Escena::Libro,
                 Escena::Combate | Escena::Paseo | Escena::Modista => Escena::Pista,
                 _ => Escena::Menu,
             };
@@ -703,12 +720,39 @@ async fn run_game() {
         // El libro de baile: L, o el gatillo de focus del mando (L1), que en el
         // menu no hace nada; el cuadrado ya cuenta la historia. Se cierra con
         // lo mismo, con ESC o con el circulo.
+        //
+        // En el se elige una figura y aceptar la practica. No escucha el
+        // frame en que se vuelve de practicar: la tecla que cierra la tarjeta
+        // lo cerraria tambien, o volveria a empezar la misma figura.
         let libro_pulsado = libre && entrada.pulsado(Accion::Libro);
         // El final se ofrece en el menu cuando ya se ha ganado y visto.
         let hay_final = progreso.final_visto && pista.todo_vencido();
-        if escena == Escena::Libro && (libro_pulsado || entrada.pulsado(Accion::Atras)) {
+        let en_el_libro = escena == Escena::Libro && escena_antes == Escena::Libro;
+        let antes = eleccion;
+        let practicar = en_el_libro
+            .then(|| eleccion.entrada(&entrada, &libro::practicables(&progreso, &bailes)))
+            .flatten();
+        if en_el_libro && (libro_pulsado || entrada.pulsado(Accion::Atras)) {
             escena = Escena::Menu;
             fundido.empezar(0.24);
+        } else if let Some(e) = practicar {
+            // Sin grabar, sin marcas y sin tachar nada: ver `Intento`.
+            audio.play(Sfx::Empezar, 1.0);
+            escena = Escena::Combate;
+            world = World::practicar(
+                SEED,
+                e.baile,
+                e.figura,
+                progreso.equipo,
+                progreso.opciones.dificultad,
+            );
+            recorder = Recorder::for_world(&world);
+            cartela = Some(presentar(&world));
+            intento = libro::Intento::de_practica();
+            accumulator = 0.0;
+            fundido.empezar(0.30);
+        } else if eleccion != antes {
+            audio.play(Sfx::Graze, 0.7);
         } else if escena == Escena::Menu && libro_pulsado {
             escena = Escena::Libro;
             fundido.empezar(0.24);
@@ -953,7 +997,11 @@ async fn run_game() {
                     if world.events.player_died {
                         fantasma = Some((antes, get_time()));
                     }
-                    recorder.record(input, &world);
+                    // La practica no se graba: el replay no sabe empezar en
+                    // mitad de un baile.
+                    if !world.practica {
+                        recorder.record(input, &world);
+                    }
                     eventos.merge(&world.events);
                 }
             }
@@ -1087,7 +1135,7 @@ async fn run_game() {
 
         // Ganar un baile lo tacha en la pista. Una sola vez, que la pantalla
         // de victoria se queda puesta muchos frames.
-        if escena == Escena::Combate && world.victory && !marcado && !noche {
+        if escena == Escena::Combate && world.victory && !marcado && !noche && !world.practica {
             pista.marcar_vencido(nodo_actual);
             progreso.marcar(&pista.nodos[nodo_actual].nombre);
             progreso.guardar();
@@ -1160,7 +1208,17 @@ async fn run_game() {
         } else if escena == Escena::Prologo {
             historia.dibujar(&layout, &n);
         } else if escena == Escena::Libro {
-            libro::pagina(&layout, &progreso, &bailes, &paseos, &n);
+            let hay = libro::practicables(&progreso, &bailes)
+                .iter()
+                .any(|&f| f > 0);
+            libro::pagina(
+                &layout,
+                &progreso,
+                &bailes,
+                &paseos,
+                &n,
+                hay.then_some(eleccion),
+            );
         } else if escena == Escena::Modista {
             tienda.dibujar(&progreso, &layout, &n);
         } else if escena == Escena::Paseo
@@ -1259,17 +1317,18 @@ async fn run_game() {
             Escena::Paseo => paseo.as_ref().is_some_and(|(_, p)| !p.terminado()),
             _ => false,
         };
-        entrada.tactil.modo = if carta.is_some() || escena == Escena::Modista {
-            tactil::Modo::Lista
-        } else if bailando {
-            tactil::Modo::Juego
-        } else {
-            match escena {
-                Escena::Menu => tactil::Modo::Titulo(zonas),
-                Escena::Pista => tactil::Modo::Pista { pasear: se_pasea },
-                _ => tactil::Modo::Menu,
-            }
-        };
+        entrada.tactil.modo =
+            if carta.is_some() || matches!(escena, Escena::Modista | Escena::Libro) {
+                tactil::Modo::Lista
+            } else if bailando {
+                tactil::Modo::Juego
+            } else {
+                match escena {
+                    Escena::Menu => tactil::Modo::Titulo(zonas),
+                    Escena::Pista => tactil::Modo::Pista { pasear: se_pasea },
+                    _ => tactil::Modo::Menu,
+                }
+            };
         if entrada.ultimo == Dispositivo::Tactil {
             entrada.tactil.dibujar();
         }

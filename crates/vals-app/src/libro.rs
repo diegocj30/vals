@@ -9,7 +9,10 @@
 //! - **La tarjeta de resultado**, al ganar un baile o llegar a la puerta de un
 //!   paseo. Es la de Cuphead, impresa como una tarjeta de baile, con la nota
 //!   estampada encima.
-//! - **La pagina del libro**, que se abre desde el menu.
+//! - **La pagina del libro**, que se abre desde el menu. Desde ella se elige
+//!   una figura de un baile ya pisado y se practica sola (ver
+//!   `World::practicar`). La practica no apunta nada: ni marcas, ni golpes,
+//!   ni tiempo jugado.
 //!
 //! La nota se calcula en `vals_core::nota`, sin ventana y con sus tests; aqui
 //! solo se apunta y se pinta. Nada de esto toca la simulacion: se lee de los
@@ -25,7 +28,7 @@ use vals_core::paseo::{PaseoDef, VISTA_W};
 use vals_core::{ARENA_H, ARENA_W, TICK_HZ};
 use vals_core::{Dificultad, Events};
 
-use crate::acciones::Nombres;
+use crate::acciones::{Accion, Entrada, Nombres};
 use crate::draw::{Layout, fade, paspartu};
 use crate::fuentes::{self, Cara};
 use crate::glifos;
@@ -44,6 +47,12 @@ mod textos {
 
     pub fn volver(ok: &[Trozo], otra: &[Trozo]) -> Vec<Trozo> {
         txg(Texto::TarjetaVolver, &[ok, otra])
+    }
+    pub fn volver_al_libro(ok: &[Trozo], otra: &[Trozo]) -> Vec<Trozo> {
+        txg(Texto::PracticaVolver, &[ok, otra])
+    }
+    pub fn practicar(mover: &[Trozo], ok: &[Trozo], figura: &str) -> Vec<Trozo> {
+        txg(Texto::Practicar, &[mover, ok, &crate::glifos::txt(figura)])
     }
     pub fn seguir(ok: &[Trozo]) -> Vec<Trozo> {
         txg(Texto::Seguir, &[ok])
@@ -239,14 +248,28 @@ pub struct Intento {
     /// Saltado con F3. Se ve la tarjeta, pero no cuenta para las marcas: si
     /// no, el mejor tiempo de todos seria el de la trampa.
     pub trampa: bool,
+    /// Una practica: lleva su marcador para la tarjeta, y nada mas.
+    practica: bool,
     pub tarjeta: Option<Tarjeta>,
 }
 
 impl Intento {
+    /// El intento de una practica. No pasa por `Marcas::empezar`: no es un
+    /// intento del baile.
+    pub fn de_practica() -> Self {
+        Self {
+            practica: true,
+            ..Default::default()
+        }
+    }
+
     /// Un tick bailado: al marcador, al tiempo jugado y, si ha habido golpe, a
     /// la figura donde ha sido.
     pub fn apuntar(&mut self, marcas: &mut Marcas, e: &Events, figura: usize) {
         self.marcador.sumar(e);
+        if self.practica {
+            return;
+        }
         marcas.jugado += 1;
         if e.player_died && !self.nombre.is_empty() {
             let c = &mut marcas.marca(&self.nombre).caidas;
@@ -259,8 +282,9 @@ impl Intento {
 
     /// Baile ganado: su nota, sus marcas y su tarjeta.
     pub fn cerrar_baile(&mut self, marcas: &mut Marcas, d: Dificultad) {
-        let n = nota::nota_en(&self.marcador, nota::par(&self.nombre), d);
-        self.cerrar(marcas, Some(n), None, d == Dificultad::Sencillo);
+        // Una figura sola no tiene par con el que ponerle nota.
+        let n = (!self.practica).then(|| nota::nota_en(&self.marcador, nota::par(&self.nombre), d));
+        self.cerrar(marcas, n, None, d == Dificultad::Sencillo);
     }
 
     /// Paseo andado hasta la puerta, con las fichas que son tuyas de las que
@@ -276,7 +300,7 @@ impl Intento {
         fichas: Option<(usize, usize)>,
         sencillo: bool,
     ) {
-        let (record, _) = if self.trampa {
+        let (record, _) = if self.trampa || self.practica {
             (false, false)
         } else {
             marcas
@@ -290,6 +314,7 @@ impl Intento {
             fichas,
             sencillo,
             noche: self.nombre == vals_core::nota::NOCHE,
+            practica: self.practica,
             desde: ahora(),
         });
     }
@@ -306,6 +331,8 @@ pub struct Tarjeta {
     sencillo: bool,
     /// La de toda la noche: otro titulo, y los bailes que lleva.
     noche: bool,
+    /// La de una practica: otro titulo, y se vuelve al libro.
+    practica: bool,
     /// Reloj de pared al ganar: la tarjeta se presenta sola, sin estado.
     desde: f64,
 }
@@ -485,6 +512,9 @@ pub fn tarjeta_de_baile(t: &Tarjeta, l: &Layout, teclas: &Nombres) {
         filas.insert(1, (tx(Texto::BailesFila), format!("{n} / {n}")));
         titulo = tx(Texto::TarjetaDeLaNoche);
     }
+    if t.practica {
+        titulo = tx(Texto::FiguraSuperada);
+    }
     let sub = if t.sencillo {
         tx(Texto::EnSencillo)
     } else {
@@ -508,7 +538,11 @@ pub fn tarjeta_de_baile(t: &Tarjeta, l: &Layout, teclas: &Nombres) {
     }
     if t.lista() {
         let s = l.to_screen(r.x + r.w * 0.5, r.y + r.h - 22.0);
-        let ayuda = textos::volver(&teclas.aceptar, &teclas.reintentar);
+        let ayuda = if t.practica {
+            textos::volver_al_libro(&teclas.aceptar, &teclas.reintentar)
+        } else {
+            textos::volver(&teclas.aceptar, &teclas.reintentar)
+        };
         glifos::encajado(
             &ayuda,
             s.x,
@@ -563,9 +597,114 @@ pub fn aviso_en_el_menu(l: &Layout, teclas: &Nombres) -> Rect {
     Rect::new(s.x, s.y - tam, glifos::ancho(&texto, tam), tam * 1.3)
 }
 
+/// Donde empiezan las columnas de golpes de cada baile, y lo que ocupa cada
+/// una con su hueco.
+const COLUMNAS: f32 = 470.0;
+const COLUMNA: f32 = 30.0;
+
+/// Lo alto de cada fila de bailes. Se aprietan para que quepa lo que haya:
+/// con cuatro bailes van a 92, y con el quinto ya no cabian.
+fn fila_de_baile(bailes: usize) -> f32 {
+    (390.0 / bailes.max(1) as f32).min(92.0)
+}
+
+/// Cuantas figuras se pueden practicar de cada baile: todas las de los que ya
+/// se han pisado, ganados o solo intentados, y ninguna de los demas. Lo que
+/// no se ha visto no se ensaya: seria hacerse el spoiler.
+pub fn practicables(g: &Guardado, bailes: &[BossDef]) -> Vec<usize> {
+    bailes
+        .iter()
+        .map(|d| {
+            let intentado = g
+                .marcas
+                .por_nombre
+                .get(&d.name)
+                .is_some_and(|m| m.intentos > 0);
+            if g.tiene(&d.name) || intentado {
+                d.phases.len()
+            } else {
+                0
+            }
+        })
+        .collect()
+}
+
+/// La figura elegida en el libro para practicarla.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Eleccion {
+    pub baile: usize,
+    pub figura: usize,
+}
+
+impl Eleccion {
+    /// Se mueve `dy` bailes y `dx` figuras sin salirse de lo que se puede
+    /// practicar (`figuras`, de `practicables`). Si la de ahora no se puede,
+    /// salta al primer baile que si. Sin ninguno, devuelve `false`.
+    fn mover(&mut self, figuras: &[usize], dy: i32, dx: i32) -> bool {
+        let abiertos: Vec<usize> = (0..figuras.len()).filter(|&i| figuras[i] > 0).collect();
+        if abiertos.is_empty() {
+            return false;
+        }
+        let k = match abiertos.iter().position(|&i| i == self.baile) {
+            Some(k) => (k as i32 + dy).clamp(0, abiertos.len() as i32 - 1) as usize,
+            None => 0,
+        };
+        self.baile = abiertos[k];
+        let n = figuras[self.baile] as i32;
+        self.figura = (self.figura as i32 + dx).clamp(0, n - 1) as usize;
+        true
+    }
+
+    /// Las teclas, el mando y el dedo en el libro: arriba y abajo cambian de
+    /// baile, los lados de figura, y aceptar la empieza. Con el dedo, tocar
+    /// una columna la elige y tocar la elegida la empieza, como en la tienda.
+    ///
+    /// Devuelve la eleccion si hay que empezar a practicarla.
+    pub fn entrada(&mut self, e: &Entrada, figuras: &[usize]) -> Option<Eleccion> {
+        let eje = |menos, mas| i32::from(e.pulsado(mas)) - i32::from(e.pulsado(menos));
+        let dy = eje(Accion::Arriba, Accion::Abajo);
+        let dx = eje(Accion::Izquierda, Accion::Derecha);
+        if !self.mover(figuras, dy, dx) {
+            return None;
+        }
+        let tocada = e
+            .toque()
+            .and_then(|p| figura_en(Layout::compute().to_world(p), figuras.len()))
+            .filter(|t| figuras.get(t.baile).is_some_and(|&n| t.figura < n));
+        match tocada {
+            Some(t) if t == *self => Some(t),
+            Some(t) => {
+                *self = t;
+                None
+            }
+            None => e.pulsado(Accion::Aceptar).then_some(*self),
+        }
+    }
+}
+
+/// La columna de golpes que hay en `p`, en unidades de lamina: su baile y su
+/// figura.
+fn figura_en(p: Vec2, bailes: usize) -> Option<Eleccion> {
+    let fila = fila_de_baile(bailes);
+    let baile = ((p.y - 176.0) / fila).floor();
+    let figura = ((p.x - COLUMNAS + 4.0) / COLUMNA).floor();
+    (baile >= 0.0 && figura >= 0.0 && (baile as usize) < bailes).then_some(Eleccion {
+        baile: baile as usize,
+        figura: figura as usize,
+    })
+}
+
 /// La pagina del libro: cada baile con su sello, su mejor tiempo, sus
-/// intentos y donde se cae; cada paseo con lo suyo; y el tiempo jugado.
-pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef], teclas: &Nombres) {
+/// intentos y donde se cae; cada paseo con lo suyo; y el tiempo jugado. Con
+/// `eleccion`, la figura que se practicaria, recuadrada.
+pub fn pagina(
+    l: &Layout,
+    g: &Guardado,
+    bailes: &[BossDef],
+    paseos: &[PaseoDef],
+    teclas: &Nombres,
+    eleccion: Option<Eleccion>,
+) {
     clear_background(PAPEL);
     let p = |x: f32, y: f32| l.to_screen(x, y);
     let o = p(0.0, 0.0);
@@ -614,10 +753,10 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
 
     seccion(150.0, tx(Texto::LosBailes));
     let vacia = Marca::default();
-    // Las filas se aprietan para que quepa lo que haya: con cuatro bailes van
-    // a 92 y 40, y con el quinto ya no cabian. 488 es lo que hay entre la
-    // primera fila de bailes y la ultima de paseos, menos los titulos.
-    let fila = (390.0 / bailes.len().max(1) as f32).min(92.0);
+    // Los paseos se aprietan como los bailes, a 40 como mucho. 488 es lo que
+    // hay entre la primera fila de bailes y la ultima de paseos, menos los
+    // titulos.
+    let fila = fila_de_baile(bailes.len());
     let resto = 488.0 - bailes.len() as f32 * fila;
     let fila_paseo = (resto / paseos.len().saturating_sub(1).max(1) as f32).min(40.0);
     for (i, def) in bailes.iter().enumerate() {
@@ -676,7 +815,11 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
         };
         let s = p(124.0, y + 70.0);
         fuentes::texto(&caes, s.x, s.y, l.len(14.0), Cara::Cuerpo, TINTA_TENUE);
-        caidas(l, m, def.phases.len(), vec2(470.0, y + 14.0));
+        caidas(l, m, def.phases.len(), vec2(COLUMNAS, y + 14.0));
+        if let Some(e) = eleccion.filter(|e| e.baile == i) {
+            let c = p(COLUMNAS + e.figura as f32 * COLUMNA - 4.0, y + 8.0);
+            draw_rectangle_lines(c.x, c.y, l.len(30.0), l.len(76.0), l.len(2.0), ROJO);
+        }
     }
 
     let y0 = 176.0 + bailes.len() as f32 * fila + 22.0;
@@ -709,6 +852,15 @@ pub fn pagina(l: &Layout, g: &Guardado, bailes: &[BossDef], paseos: &[PaseoDef],
         };
         let s = p(580.0, y);
         fuentes::derecha(&detalle, s.x, s.y, l.len(14.0), Cara::Cuerpo, TINTA_TENUE);
+    }
+
+    // Entre el subtitulo y los bailes: abajo, con cinco paseos, no cabe.
+    if let Some(e) = eleccion
+        && let Some(f) = bailes.get(e.baile).and_then(|d| d.phases.get(e.figura))
+    {
+        let s = p(320.0, 128.0);
+        let ayuda = textos::practicar(&teclas.mover, &teclas.aceptar, nombre(&f.name));
+        glifos::encajado(&ayuda, s.x, s.y, l.len(14.0), l.len(560.0), ROJO);
     }
 
     let s = p(48.0, 756.0);
@@ -864,6 +1016,82 @@ mod tests {
         assert_eq!((rara.mejor, rara.nota), (None, None));
         assert_eq!(rara.caidas, [0, 4]);
         assert_eq!(Marca::desde_texto("|i3"), None);
+    }
+
+    #[test]
+    fn la_eleccion_no_se_sale_de_lo_practicable() {
+        let figuras = [4, 0, 5, 0];
+        // Desde un baile que no se puede, al primero que si.
+        let mut e = Eleccion {
+            baile: 1,
+            figura: 2,
+        };
+        assert!(e.mover(&figuras, 0, 0));
+        assert_eq!((e.baile, e.figura), (0, 2));
+        // Abajo salta el cerrado, y no pasa del ultimo abierto.
+        e.mover(&figuras, 1, 9);
+        assert_eq!((e.baile, e.figura), (2, 4));
+        e.mover(&figuras, 1, 0);
+        assert_eq!(e.baile, 2);
+        // Al subir, la figura se recorta a las que tiene.
+        e.mover(&figuras, -1, 0);
+        assert_eq!((e.baile, e.figura), (0, 3));
+        e.mover(&figuras, -1, -9);
+        assert_eq!((e.baile, e.figura), (0, 0));
+        assert!(!e.mover(&[0, 0], 1, 1), "sin nada practicable");
+    }
+
+    #[test]
+    fn se_toca_la_columna_de_cada_figura() {
+        let fila = fila_de_baile(5);
+        let en = |b: usize, f: usize| {
+            vec2(
+                COLUMNAS + f as f32 * COLUMNA + 11.0,
+                176.0 + b as f32 * fila + 40.0,
+            )
+        };
+        assert_eq!(
+            figura_en(en(2, 3), 5),
+            Some(Eleccion {
+                baile: 2,
+                figura: 3
+            })
+        );
+        assert_eq!(figura_en(vec2(100.0, 100.0), 5), None);
+        assert_eq!(figura_en(en(5, 0), 5), None, "debajo del ultimo baile");
+    }
+
+    #[test]
+    fn la_practica_no_apunta_nada() {
+        let mut g = Guardado::default();
+        g.marcas.empezar("El Vals");
+        let antes = g.clone();
+        let mut i = Intento::de_practica();
+        let golpe = Events {
+            player_died: true,
+            ..Default::default()
+        };
+        i.apuntar(&mut g.marcas, &golpe, 1);
+        i.apuntar(&mut g.marcas, &Events::default(), 1);
+        i.cerrar_baile(&mut g.marcas, Dificultad::Normal);
+        assert_eq!(g, antes, "el guardado no se toca");
+        // Y la tarjeta sale con lo suyo, sin nota ni record.
+        let t = i.tarjeta.as_ref().unwrap();
+        assert!(t.practica && t.nota.is_none() && !t.record);
+        assert_eq!((t.marcador.ticks, t.marcador.golpes), (2, 1));
+    }
+
+    #[test]
+    fn se_practica_lo_que_se_ha_pisado() {
+        let bailes = BossDef::default_bosses();
+        let mut g = Guardado::default();
+        assert!(practicables(&g, &bailes).iter().all(|&n| n == 0));
+        g.marcas.empezar(&bailes[1].name);
+        g.marcar(&bailes[3].name);
+        let n = practicables(&g, &bailes);
+        assert_eq!(n[1], bailes[1].phases.len());
+        assert_eq!(n[3], bailes[3].phases.len());
+        assert_eq!(n[0] + n[2] + n[4], 0);
     }
 
     #[test]

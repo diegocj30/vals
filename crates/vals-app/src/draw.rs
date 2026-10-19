@@ -258,6 +258,9 @@ pub fn frame(
     if world.noche && !world.is_over() {
         reloj_de_la_noche(world, layout);
     }
+    if world.practica && !world.is_over() {
+        rotulo_de_practica(world, layout);
+    }
     fogonazo_de_figura(world, alpha);
 }
 
@@ -407,6 +410,33 @@ fn reloj_de_la_noche(world: &World, l: &Layout) {
         world.boss_index + 1,
         world.boss_count(),
         libro::reloj(world.tick)
+    );
+    con_sombra(
+        |dx, c| {
+            fuentes::texto(
+                &texto,
+                o.x + 12.0 * k + dx,
+                o.y + 40.0 * k + dx,
+                20.0 * k,
+                Cara::Titulo,
+                c,
+            )
+        },
+        TITLE,
+    );
+}
+
+/// Arriba a la izquierda, donde toda la noche lleva su reloj: que se esta
+/// practicando y cuantos golpes van. La figura ya la dice el HUD de la
+/// derecha.
+fn rotulo_de_practica(world: &World, l: &Layout) {
+    let k = l.scale().clamp(0.75, 1.4);
+    let o = l.to_screen(0.0, 0.0);
+    let texto = format!(
+        "{}   {} {}",
+        tx(Texto::EnPractica),
+        tx(Texto::Golpes),
+        world.player.deaths
     );
     con_sombra(
         |dx, c| {
@@ -610,6 +640,8 @@ fn sello_de_victoria(l: &Layout, world: &World, con_tarjeta: bool, n: &Nombres) 
     y += rh + 48.0;
     let entero = if world.noche {
         tx(Texto::NocheEntera).to_owned()
+    } else if world.practica {
+        txf(Texto::FiguraBailada, &[&nombre(world.boss.phase_name())])
     } else {
         txf(Texto::BailadoEntero, &[&nombre(&world.boss.name)])
     };

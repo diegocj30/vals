@@ -466,6 +466,11 @@ textos! {
     FichasFila: "Fichas", "Tokens";
     Record: "nuevo récord", "new record";
     TarjetaDeBaile: "TARJETA DE BAILE", "DANCE CARD";
+    FiguraSuperada: "FIGURA SUPERADA", "FIGURE CLEARED";
+    PracticaVolver: "{}  volver al libro       {}  otra vez", "{}  back to the dance card       {}  again";
+    Practicar: "{}  elegir    {}  practicar «{}»", "{}  choose    {}  practise “{}”";
+    EnPractica: "PRÁCTICA", "PRACTICE";
+    FiguraBailada: "{}, bailada", "{}, danced";
     HastaLaPuerta: "hasta la puerta", "to the door";
     ElLibro: "El libro de baile", "The Dance Card";
     Temporada: "la temporada, apuntada a pluma", "the season, written down in ink";
@@ -496,6 +501,7 @@ textos! {
     FilaSeguir: "Seguir", "Continue";
     FilaReintentar: "Reintentar", "Retry";
     FilaMapa: "Volver a la pista", "Back to the dance floor";
+    FilaLibro: "Volver al libro", "Back to the dance card";
     FilaOpciones: "Opciones", "Options";
     FilaIdioma: "Idioma / Language", "Idioma / Language";
     FilaDificultad: "Dificultad", "Difficulty";
