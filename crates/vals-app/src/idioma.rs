@@ -337,7 +337,7 @@ macro_rules! textos {
 
 textos! {
     // --- El titulo ---
-    Subtitulo: "cuatro bailes, cuatro jefes", "four dances, four bosses";
+    Subtitulo: "cinco bailes, cinco jefes", "five dances, five bosses";
     MenuEntrar: "{}   entrar a la pista{}", "{}   step onto the dance floor{}";
     MenuIntentos: "   ({} intentos)", "   ({} attempts)";
     MenuMover: "{} mover    {} disparar    {} dash", "{} move    {} shoot    {} dash";
