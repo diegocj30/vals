@@ -12,7 +12,7 @@ Cinco jefes que son cinco bailes, y sus balas son la coreografía.
 [![CI](https://github.com/diegocj30/vals/actions/workflows/ci.yml/badge.svg)](https://github.com/diegocj30/vals/actions/workflows/ci.yml)
 ![Rust](https://img.shields.io/badge/Rust-stable-1a1418?logo=rust)
 ![WebAssembly](https://img.shields.io/badge/WebAssembly-sin_wasm--bindgen-654ff0?logo=webassembly&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-521-2f7d5b)
+![Tests](https://img.shields.io/badge/tests-523-2f7d5b)
 ![Arte](https://img.shields.io/badge/arte-todo_código-c9a227)
 
 **Español** · [English](README.en.md)
@@ -144,7 +144,7 @@ vez de huir de todas.
 
 ## Cómo está hecho
 
-| 0 imágenes | 32.000 balas a 144 fps | 4 KB por 30 s de partida | 521 tests |
+| 0 imágenes | 32.000 balas a 144 fps | 4 KB por 30 s de partida | 523 tests |
 |:---:|:---:|:---:|:---:|
 | Todo se dibuja con código, y la música se sintetiza al arrancar | Render instanciado; con las primitivas de macroquad, 30 fps | Una partida es una semilla y la lista de inputs | Entre ellos, bots que recorren cada paseo de punta a punta |
 
@@ -283,7 +283,6 @@ cargo run -p vals-app -- --replay replays/<fichero>.valsrpl   # F2 guarda la par
 cargo run -p vals-core --example partituras   # regenera docs/media/partituras
 cargo bench -p vals-core --bench sim
 cargo run -p vals-app --release -- --bench-scene 20000 --frames 400
-cargo run -p vals-app --release -- --pruebas  # registro de tirones y atajos de prueba
 ```
 
 | Crate | Qué hace |
