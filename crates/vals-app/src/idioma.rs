@@ -346,7 +346,11 @@ textos! {
     MenuSuper: "llena, {} limpia la pantalla y hace mucho daño.", "when full, {} clears the screen and hits hard.";
     MenuPausa: "{} pausa y opciones    {} reintentar", "{} pause and options    {} retry";
     LaHistoria: "la historia", "the story";
-    ElLibroPracticar: "el libro de baile · practicar", "the dance card · practise";
+    MenuLibro: "el libro de baile", "the dance card";
+    MenuLibroSub: "practicar figuras", "practise figures";
+    MenuHistoriaSub: "cómo empezó", "how it began";
+    MenuFinalSub: "cómo acaba", "how it ends";
+    MenuNocheSub: "los cinco, sin respiro", "all five, no rest";
 
     // --- El combate ---
     ABailar: "¡A BAILAR!", "LET'S DANCE!";
@@ -469,7 +473,11 @@ textos! {
     TarjetaDeBaile: "TARJETA DE BAILE", "DANCE CARD";
     FiguraSuperada: "FIGURA SUPERADA", "FIGURE CLEARED";
     PracticaVolver: "{}  volver al libro       {}  otra vez", "{}  back to the dance card       {}  again";
-    Practicar: "{}  elegir    {}  practicar «{}»", "{}  choose    {}  practise “{}”";
+    Practicar: "elige una figura     {}  elegir    {}  practicar «{}»", "pick a figure     {}  choose    {}  practise “{}”";
+    PracticarSello: "PRACTICAR", "PRACTISE";
+    PracticarBoton: "practicar", "practise";
+    PracticarNada: "baila un baile y aquí podrás practicar sus figuras", "dance once and you can practise its figures here";
+    AunNo: "aún no", "not yet";
     EnPractica: "PRÁCTICA", "PRACTICE";
     FiguraBailada: "{}, bailada", "{}, danced";
     HastaLaPuerta: "hasta la puerta", "to the door";

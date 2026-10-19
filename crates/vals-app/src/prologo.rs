@@ -144,17 +144,19 @@ pub fn toca_el_final(pista: &Pista, visto: bool) -> bool {
     pista.todo_vencido() && !visto
 }
 
-/// La linea de toda la noche en el menu, con su mejor tiempo si lo hay. Solo
-/// sale con los cinco bailes ganados: es para quien ya se ha pasado el juego.
+/// La segunda linea del billete de toda la noche en el menu: su mejor tiempo
+/// si lo hay, y si no lo que es. Solo sale con los cinco bailes ganados: es
+/// para quien ya se ha pasado el juego.
 pub fn linea_de_la_noche(pista: &Pista, marcas: &Marcas) -> Option<String> {
     if !pista.todo_vencido() {
         return None;
     }
-    let mut s = tx(Texto::TodaLaNoche).to_owned();
-    if let Some(t) = marcas.por_nombre.get(nota::NOCHE).and_then(|m| m.mejor) {
-        s = format!("{s}  ({})", txf(Texto::Mejor, &[&libro::reloj(t)]));
-    }
-    Some(s)
+    Some(
+        match marcas.por_nombre.get(nota::NOCHE).and_then(|m| m.mejor) {
+            Some(t) => txf(Texto::Mejor, &[&libro::reloj(t)]),
+            None => tx(Texto::MenuNocheSub).to_owned(),
+        },
+    )
 }
 
 /// Lo que se ensena de la temporada en los creditos: cada baile, en el orden
@@ -316,52 +318,253 @@ impl Prologo {
     }
 }
 
-/// Lo que ofrece el menu ademas de jugar, en orden: el libro de baile (y en
-/// el, practicar) y la historia siempre, el final si ya se ha ganado y toda
-/// la noche si toca (`linea_de_la_noche`).
-fn lineas_del_menu(hay_final: bool, noche: Option<&str>) -> Vec<(Accion, &str)> {
+/// Lo que ofrece el menu ademas de jugar, en orden y con sus dos lineas: el
+/// libro de baile (y en el, practicar) y la historia siempre, el final si ya
+/// se ha ganado y toda la noche si toca (`linea_de_la_noche`).
+fn lineas_del_menu(hay_final: bool, noche: Option<&str>) -> Vec<(Accion, &str, &str)> {
     let mut lineas = vec![
-        (Accion::Libro, tx(Texto::ElLibroPracticar)),
-        (Accion::Historia, tx(Texto::LaHistoria)),
+        (Accion::Libro, tx(Texto::MenuLibro), tx(Texto::MenuLibroSub)),
+        (
+            Accion::Historia,
+            tx(Texto::LaHistoria),
+            tx(Texto::MenuHistoriaSub),
+        ),
     ];
     if hay_final {
-        lineas.push((Accion::Final, tx(Texto::ElFinal)));
+        lineas.push((Accion::Final, tx(Texto::ElFinal), tx(Texto::MenuFinalSub)));
     }
     if let Some(n) = noche {
-        lineas.push((Accion::Noche, n));
+        lineas.push((Accion::Noche, tx(Texto::TodaLaNoche), n));
     }
     lineas
 }
 
-/// Las invitaciones del menu (`lineas_del_menu`), arriba a la izquierda de la
-/// arena: discretas, que lo que se viene a hacer al menu es jugar.
+/// Lo que mide un billete del menu, en unidades de arena.
+const BILLETE: Vec2 = vec2(204.0, 60.0);
+
+/// Donde va el billete `i` de `n`, en unidades de arena: a los lados de ella,
+/// la primera mitad a la izquierda y el resto a la derecha, entre la
+/// invitacion y la carta de controles. Por el medio esta ella, y arriba el
+/// titulo.
+fn billete(i: usize, n: usize) -> Rect {
+    let izquierda = n.div_ceil(2);
+    let (x, fila) = if i < izquierda {
+        (18.0, i)
+    } else {
+        (vals_core::ARENA_W - 18.0 - BILLETE.x, i - izquierda)
+    };
+    let y = 420.0 + fila as f32 * (BILLETE.y + 12.0);
+    Rect::new(x, y, BILLETE.x, BILLETE.y)
+}
+
+/// Las invitaciones del menu (`lineas_del_menu`), como billetes de un
+/// programa de mano a los lados de ella: el talon con su dibujo en una tinta,
+/// el nombre, y debajo la tecla y lo que hay dentro. Con el raton encima, el
+/// billete se levanta del papel.
 ///
-/// Devuelve donde ha quedado cada linea, que con el dedo se tocan.
+/// Devuelve donde ha quedado cada billete, que con el dedo se tocan.
 pub fn en_el_menu(
     l: &Layout,
     teclas: &Nombres,
     hay_final: bool,
     noche: Option<&str>,
 ) -> Vec<(Rect, Accion)> {
-    let o = l.to_screen(0.0, 0.0);
-    let u = l.scale().clamp(0.55, 1.2);
+    let lineas = lineas_del_menu(hay_final, noche);
+    let raton = Vec2::from(mouse_position());
     let mut zonas = Vec::new();
-    for (i, (a, t)) in lineas_del_menu(hay_final, noche).into_iter().enumerate() {
+    for (i, &(a, titulo, sub)) in lineas.iter().enumerate() {
+        let r = billete(i, lineas.len());
+        let o = l.to_screen(r.x, r.y);
+        let zona = Rect::new(o.x, o.y, l.len(r.w), l.len(r.h));
         let tecla = match a {
             Accion::Libro => &teclas.libro,
             Accion::Historia => &teclas.historia,
             Accion::Final => &teclas.el_final,
             _ => &teclas.noche,
         };
-        let texto = glifos::rellenar("{}   {}", &[tecla, &glifos::txt(t)]);
-        let (x, y, tam) = (o.x + 22.0 * u, o.y + (64.0 + 24.0 * i as f32) * u, 17.0 * u);
-        glifos::texto(&texto, x, y, tam, draw::TEXT_DIM);
-        zonas.push((
-            Rect::new(x, y - tam, glifos::ancho(&texto, tam), tam * 1.3),
-            a,
-        ));
+        let sub = glifos::rellenar("{}  {}", &[tecla, &glifos::txt(sub)]);
+        dibujar_billete(l, r, a, titulo, &sub, zona.contains(raton));
+        zonas.push((zona, a));
     }
     zonas
+}
+
+/// Un billete del menu en `r` (unidades de arena). Cada uno lleva la tinta
+/// de un baile, que en un programa de mano cada numero tenia su plancha.
+fn dibujar_billete(
+    l: &Layout,
+    r: Rect,
+    a: Accion,
+    titulo: &str,
+    sub: &[glifos::Trozo],
+    encima: bool,
+) {
+    let tinta = paleta::TINTAS[match a {
+        Accion::Libro => 1,
+        Accion::Historia => 0,
+        Accion::Final => 3,
+        _ => 2,
+    }]
+    .0;
+    // La sombra se queda y el billete sube: asi se ve que se puede coger.
+    let alza = if encima { 3.0 } else { 0.0 };
+    rect(l, r.x + 4.0, r.y + 4.0, r.w, r.h, fade(TINTA, 0.7));
+    let (x, y) = (r.x - alza, r.y - alza);
+    let fondo = if encima {
+        mezcla(PAPEL, LUZ, 0.45)
+    } else {
+        PAPEL
+    };
+    rect(l, x, y, r.w, r.h, fondo);
+    // El talon, cuadrado, con su dibujo; y el trepado que lo separa.
+    let talon = r.h;
+    rect(l, x, y, talon, r.h, tinta);
+    for k in 0..7 {
+        circulo(
+            l,
+            x + talon,
+            y + 6.0 + k as f32 * (r.h - 12.0) / 6.0,
+            1.4,
+            TINTA,
+        );
+    }
+    icono(
+        l,
+        a,
+        vec2(x + talon * 0.5, y + r.h * 0.5),
+        talon * 0.34,
+        tinta,
+    );
+    let p = l.to_screen(x, y);
+    let grueso = l.len(if encima { 2.6 } else { 1.6 }).max(1.0);
+    draw_rectangle_lines(p.x, p.y, l.len(r.w), l.len(r.h), grueso, TINTA);
+
+    // El nombre y, debajo, la tecla y lo que hay dentro. Se encogen si no
+    // caben, que en un movil la arena es pequena.
+    let x0 = l.to_screen(x + talon + 9.0, 0.0).x;
+    let ancho = l.len(r.w - talon - 16.0);
+    let tam = l.len(19.0).max(9.0);
+    let tam = tam.min(tam * ancho / fuentes::medir(titulo, tam, Cara::Cuerpo).width);
+    let s = l.to_screen(0.0, y + 26.0);
+    fuentes::texto(titulo, x0, s.y, tam, Cara::Cuerpo, TINTA);
+    let m = l.to_screen(0.0, y + 31.0);
+    let fin = x0 + fuentes::medir(titulo, tam, Cara::Cuerpo).width;
+    draw_line(x0, m.y, fin, m.y, l.len(1.6).max(1.0), tinta);
+    let tam = glifos::encoger(sub, l.len(14.5).max(8.0), ancho);
+    let s = l.to_screen(0.0, y + 50.0);
+    glifos::texto(sub, x0, s.y, tam, paleta::TINTA_TENUE);
+}
+
+/// El dibujo del talon de cada billete, en papel y tinta sobre la tinta del
+/// billete (`tinta`), centrado en `c` y de radio `r` (unidades de arena): un libro
+/// abierto, un pergamino, un telon con su estrella y una luna.
+fn icono(l: &Layout, a: Accion, c: Vec2, r: f32, tinta: Color) {
+    let g = 1.3;
+    let p = |dx: f32, dy: f32| (c.x + dx * r, c.y + dy * r);
+    let caja = |x0: f32, y0: f32, x1: f32, y1: f32| {
+        rect(
+            l,
+            c.x + x0 * r,
+            c.y + y0 * r,
+            (x1 - x0) * r,
+            (y1 - y0) * r,
+            PAPEL,
+        );
+        let q = l.to_screen(c.x + x0 * r, c.y + y0 * r);
+        let (w, h) = (l.len((x1 - x0) * r), l.len((y1 - y0) * r));
+        draw_rectangle_lines(q.x, q.y, w, h, l.len(g).max(1.0), TINTA);
+    };
+    match a {
+        Accion::Libro => {
+            // Las dos paginas, abiertas en uve, y la cinta de marcar.
+            for s in [-1.0, 1.0] {
+                let (a, b, cc, d) = (
+                    p(0.0, -0.45),
+                    p(s * 1.05, -0.65),
+                    p(s * 1.05, 0.5),
+                    p(0.0, 0.7),
+                );
+                tri(l, a, b, cc, PAPEL);
+                tri(l, a, cc, d, PAPEL);
+                for (u, v) in [(a, b), (b, cc), (cc, d)] {
+                    linea(l, u, v, g, TINTA);
+                }
+                for k in 0..3 {
+                    let yy = -0.3 + k as f32 * 0.28;
+                    linea(l, p(s * 0.2, yy), p(s * 0.85, yy - 0.12), 0.9, TINTA);
+                }
+            }
+            linea(l, p(0.0, -0.45), p(0.0, 0.7), g, TINTA);
+            linea(l, p(0.12, 0.55), p(0.22, 1.05), 2.2, TINTA);
+        }
+        Accion::Historia => {
+            // Un pergamino: la hoja, sus renglones y los dos rollos.
+            caja(-0.6, -0.75, 0.6, 0.75);
+            for k in 0..4 {
+                let yy = -0.4 + k as f32 * 0.25;
+                linea(
+                    l,
+                    p(-0.38, yy),
+                    p(0.38 - 0.12 * (k % 2) as f32, yy),
+                    0.9,
+                    TINTA,
+                );
+            }
+            for yy in [-0.95, 0.75] {
+                caja(-0.85, yy, 0.85, yy + 0.22);
+            }
+        }
+        Accion::Final => {
+            // El telon recogido a los lados, la galeria arriba y una estrella.
+            for s in [-1.0, 1.0] {
+                let (a, b, d) = (p(s * 1.0, -0.7), p(s * 0.2, -0.7), p(s * 1.0, 1.0));
+                let cintura = p(s * 0.62, 0.35);
+                tri(l, a, b, cintura, PAPEL);
+                tri(l, a, cintura, d, PAPEL);
+                for (u, v) in [(b, cintura), (cintura, d)] {
+                    linea(l, u, v, g, TINTA);
+                }
+            }
+            caja(-1.05, -0.95, 1.05, -0.65);
+            estrella(l, vec2(c.x, c.y + 0.25 * r), 0.4 * r);
+        }
+        _ => {
+            // La luna en cuarto, mordida por la noche, y dos estrellas.
+            let (x, y) = p(-0.15, 0.05);
+            circulo(l, x, y, 0.78 * r, TINTA);
+            circulo(l, x, y, 0.78 * r - g, PAPEL);
+            let (x, y) = p(0.22, -0.15);
+            circulo(l, x, y, 0.62 * r, tinta);
+            for (dx, dy, k) in [(0.75, -0.65, 0.2), (0.85, 0.45, 0.14)] {
+                estrella(l, vec2(c.x + dx * r, c.y + dy * r), k * r);
+            }
+        }
+    }
+}
+
+/// Una estrella de cinco puntas de papel, de radio `r`.
+fn estrella(l: &Layout, c: Vec2, r: f32) {
+    let punta = |k: f32, radio: f32| {
+        let ang = (k * 72.0 - 90.0).to_radians();
+        (c.x + ang.cos() * radio, c.y + ang.sin() * radio)
+    };
+    for k in 0..5 {
+        let k = k as f32;
+        tri(
+            l,
+            punta(k, r),
+            punta(k - 0.5, r * 0.42),
+            punta(k + 0.5, r * 0.42),
+            PAPEL,
+        );
+        tri(
+            l,
+            (c.x, c.y),
+            punta(k - 0.5, r * 0.42),
+            punta(k + 0.5, r * 0.42),
+            PAPEL,
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -925,7 +1128,7 @@ mod tests {
         let acciones = |f, n| {
             lineas_del_menu(f, n)
                 .into_iter()
-                .map(|(a, _)| a)
+                .map(|(a, _, _)| a)
                 .collect::<Vec<_>>()
         };
         assert_eq!(acciones(false, None), [Accion::Libro, Accion::Historia]);
@@ -942,6 +1145,25 @@ mod tests {
             acciones(false, Some("toda la noche")),
             [Accion::Libro, Accion::Historia, Accion::Noche]
         );
+    }
+
+    #[test]
+    fn los_billetes_del_menu_no_se_pisan_ni_la_tapan() {
+        for n in 1..=4 {
+            let r: Vec<Rect> = (0..n).map(|i| billete(i, n)).collect();
+            for (i, a) in r.iter().enumerate() {
+                // Ella va de 235 a 413, y abajo empieza la carta de controles.
+                assert!(a.right() < 235.0 || a.x > 413.0, "{n}: {i} la tapa");
+                assert!(
+                    a.x >= 0.0 && a.right() <= vals_core::ARENA_W,
+                    "{n}: {i} fuera"
+                );
+                assert!(a.y > 400.0 && a.bottom() < 560.0, "{n}: {i} fuera");
+                for b in &r[i + 1..] {
+                    assert!(a.intersect(*b).is_none(), "{n}: {a:?} pisa {b:?}");
+                }
+            }
+        }
     }
 
     #[test]
@@ -1027,7 +1249,7 @@ mod tests {
         intento.marcador.ticks = 7 * 60 * 60;
         intento.cerrar_baile(&mut marcas, vals_core::Dificultad::Normal);
         let con = linea_de_la_noche(&p, &marcas).unwrap();
-        assert!(con.starts_with(&sin) && con.contains("7:00.0"), "{con}");
+        assert!(con != sin && con.contains("7:00.0"), "{con}");
     }
 
     #[test]

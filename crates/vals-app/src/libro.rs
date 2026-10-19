@@ -649,7 +649,8 @@ impl Eleccion {
 
     /// Las teclas, el mando y el dedo en el libro: arriba y abajo cambian de
     /// baile, los lados de figura, y aceptar la empieza. Con el dedo, tocar
-    /// una columna la elige y tocar la elegida la empieza, como en la tienda.
+    /// una columna la elige y tocar la elegida, o su boton de practicar, la
+    /// empieza, como en la tienda.
     ///
     /// Devuelve la eleccion si hay que empezar a practicarla.
     pub fn entrada(&mut self, e: &Entrada, figuras: &[usize]) -> Option<Eleccion> {
@@ -659,9 +660,12 @@ impl Eleccion {
         if !self.mover(figuras, dy, dx) {
             return None;
         }
-        let tocada = e
-            .toque()
-            .and_then(|p| figura_en(Layout::compute().to_world(p), figuras.len()))
+        let toque = e.toque().map(|p| Layout::compute().to_world(p));
+        if toque.is_some_and(|p| boton_practicar(*self, figuras.len()).contains(p)) {
+            return Some(*self);
+        }
+        let tocada = toque
+            .and_then(|p| figura_en(p, figuras.len()))
             .filter(|t| figuras.get(t.baile).is_some_and(|&n| t.figura < n));
         match tocada {
             Some(t) if t == *self => Some(t),
@@ -686,9 +690,75 @@ fn figura_en(p: Vec2, bailes: usize) -> Option<Eleccion> {
     })
 }
 
+/// El boton de practicar la figura elegida, en unidades de lamina: en su
+/// fila, a la izquierda de las columnas, donde no llega el texto del baile.
+fn boton_practicar(e: Eleccion, bailes: usize) -> Rect {
+    let y = 176.0 + e.baile as f32 * fila_de_baile(bailes);
+    Rect::new(COLUMNAS - 104.0, y + 10.0, 94.0, 25.0)
+}
+
+/// El boton de practicar en `r` (unidades de lamina): un billete en la tinta
+/// del baile, con su sombra, un "play" y la palabra. Late un poco, que es lo
+/// que hay que tocar.
+fn boton_de_practicar(l: &Layout, r: Rect, tinta: Color) {
+    let alza = 1.5 * (1.0 + (get_time() as f32 * 4.0).sin());
+    let o = l.to_screen(r.x + 3.0, r.y + 3.0);
+    let (w, h) = (l.len(r.w), l.len(r.h));
+    draw_rectangle(o.x, o.y, w, h, TINTA);
+    let o = l.to_screen(r.x - alza, r.y - alza);
+    draw_rectangle(o.x, o.y, w, h, tinta);
+    draw_rectangle_lines(o.x, o.y, w, h, l.len(1.6).max(1.0), TINTA);
+    // La letra, de papel en las tintas oscuras y de tinta en las claras.
+    let letra = if 0.3 * tinta.r + 0.59 * tinta.g + 0.11 * tinta.b > 0.6 {
+        TINTA
+    } else {
+        PAPEL
+    };
+    let c = l.to_screen(r.x - alza + 16.0, r.y - alza + r.h * 0.5);
+    draw_triangle(
+        c + vec2(-l.len(5.0), -l.len(6.0)),
+        c + vec2(-l.len(5.0), l.len(6.0)),
+        c + vec2(l.len(6.0), 0.0),
+        letra,
+    );
+    let s = l.to_screen(r.x - alza + 28.0, r.y - alza + r.h * 0.5 + 5.5);
+    let texto = tx(Texto::PracticarBoton);
+    let tam = l.len(16.0);
+    let tam = tam.min(tam * l.len(r.w - 34.0) / fuentes::medir(texto, tam, Cara::Cuerpo).width);
+    fuentes::texto(texto, s.x, s.y, tam, Cara::Cuerpo, letra);
+}
+
+/// Un candado de tinta aguada con el centro del cuerpo en `c` (unidades de
+/// lamina): lo que aun no se puede practicar.
+fn candado(l: &Layout, c: Vec2) {
+    let p = l.to_screen(c.x, c.y);
+    draw_rectangle(
+        p.x - l.len(7.0),
+        p.y - l.len(5.0),
+        l.len(14.0),
+        l.len(11.0),
+        TINTA_TENUE,
+    );
+    let a = l.to_screen(c.x, c.y - 5.0);
+    draw_arc(
+        a.x,
+        a.y,
+        24,
+        l.len(4.5),
+        180.0,
+        l.len(2.0).max(1.0),
+        180.0,
+        TINTA_TENUE,
+    );
+}
+
 /// La pagina del libro: cada baile con su sello, su mejor tiempo, sus
-/// intentos y donde se cae; cada paseo con lo suyo; y el tiempo jugado. Con
-/// `eleccion`, la figura que se practicaria, recuadrada.
+/// intentos y donde se cae; cada paseo con lo suyo; y el tiempo jugado.
+///
+/// Y es donde se practica, y tiene que verse: el sello de PRACTICAR arriba
+/// con lo que hay que hacer, un triangulo de "play" sobre cada figura que se
+/// puede bailar sola, un candado en los bailes aun no pisados y, con
+/// `eleccion`, la figura elegida recuadrada y su boton de practicar.
 pub fn pagina(
     l: &Layout,
     g: &Guardado,
@@ -751,9 +821,11 @@ pub fn pagina(
     let fila = fila_de_baile(bailes.len());
     let resto = 488.0 - bailes.len() as f32 * fila;
     let fila_paseo = (resto / paseos.len().saturating_sub(1).max(1) as f32).min(40.0);
+    let abiertos = practicables(g, bailes);
     for (i, def) in bailes.iter().enumerate() {
         let y = 176.0 + i as f32 * fila;
         let m = g.marcas.por_nombre.get(&def.name).unwrap_or(&vacia);
+        let abierto = abiertos.get(i).is_some_and(|&n| n > 0);
         let c = p(78.0, y + 34.0);
         match m.nota {
             Some(n) => sello(c, l.len(28.0), n, false, 1.0),
@@ -761,14 +833,15 @@ pub fn pagina(
         }
         let (tinta, _) = paleta::del_baile(i);
         let s = p(124.0, y + 26.0);
-        // El nombre, con un filete en la tinta de su baile debajo.
+        // El nombre, con un filete en la tinta de su baile debajo. Aguado si
+        // aun no se ha pisado.
         fuentes::texto(
             nombre(&def.name),
             s.x,
             s.y,
             l.len(27.0),
             Cara::Titulo,
-            TINTA,
+            if abierto { TINTA } else { TINTA_TENUE },
         );
         let ancho = fuentes::medir(nombre(&def.name), l.len(27.0), Cara::Titulo).width;
         draw_line(
@@ -807,10 +880,40 @@ pub fn pagina(
         };
         let s = p(124.0, y + 70.0);
         fuentes::texto(&caes, s.x, s.y, l.len(14.0), Cara::Cuerpo, TINTA_TENUE);
+        if !abierto {
+            // Lo que no se ha pisado no se ensaya: un candado y "aun no".
+            candado(l, vec2(COLUMNAS + 14.0, y + 40.0));
+            let s = p(COLUMNAS + 30.0, y + 45.0);
+            fuentes::texto(
+                tx(Texto::AunNo),
+                s.x,
+                s.y,
+                l.len(15.0),
+                Cara::Cuerpo,
+                TINTA_TENUE,
+            );
+            continue;
+        }
         caidas(l, m, def.phases.len(), vec2(COLUMNAS, y + 14.0));
-        if let Some(e) = eleccion.filter(|e| e.baile == i) {
-            let c = p(COLUMNAS + e.figura as f32 * COLUMNA - 4.0, y + 8.0);
-            draw_rectangle_lines(c.x, c.y, l.len(30.0), l.len(76.0), l.len(2.0), ROJO);
+        let elegida = eleccion.filter(|e| e.baile == i);
+        // Un "play" sobre cada figura: cada columna se puede bailar sola.
+        for f in 0..def.phases.len() {
+            let x = COLUMNAS + f as f32 * COLUMNA + 11.0;
+            let color = match elegida {
+                Some(e) if e.figura == f => ROJO,
+                _ => fade(tinta, 0.8),
+            };
+            let (a, b, c) = (
+                p(x - 3.5, y + 3.0),
+                p(x - 3.5, y + 11.0),
+                p(x + 4.0, y + 7.0),
+            );
+            draw_triangle(a, b, c, color);
+        }
+        if let Some(e) = elegida {
+            let c = p(COLUMNAS + e.figura as f32 * COLUMNA - 4.0, y);
+            draw_rectangle_lines(c.x, c.y, l.len(30.0), l.len(78.0), l.len(2.0), ROJO);
+            boton_de_practicar(l, boton_practicar(e, bailes.len()), tinta);
         }
     }
 
@@ -846,14 +949,35 @@ pub fn pagina(
         fuentes::derecha(&detalle, s.x, s.y, l.len(14.0), Cara::Cuerpo, TINTA_TENUE);
     }
 
-    // Entre el subtitulo y los bailes: abajo, con cinco paseos, no cabe.
-    if let Some(e) = eleccion
-        && let Some(f) = bailes.get(e.baile).and_then(|d| d.phases.get(e.figura))
-    {
-        let s = p(320.0, 122.0);
-        let ayuda = textos::practicar(&teclas.mover, &teclas.aceptar, nombre(&f.name));
-        glifos::encajado(&ayuda, s.x, s.y, l.len(14.0), l.len(560.0), ROJO);
-    }
+    // Entre el subtitulo y los bailes, el sello de PRACTICAR y lo que hay que
+    // hacer: abajo, con cinco paseos, no cabe. Sin nada practicable, el sello
+    // sale aguado y dice como se abre.
+    let figura = eleccion.and_then(|e| bailes.get(e.baile)?.phases.get(e.figura));
+    let tinta = if figura.is_some() { ROJO } else { TINTA_TENUE };
+    let sello = tx(Texto::PracticarSello);
+    let tam = l.len(17.0);
+    let ancho = fuentes::medir(sello, tam, Cara::Titulo).width / l.len(1.0) + 30.0;
+    let (x0, y0) = (48.0, 108.0);
+    let c = p(x0, y0);
+    draw_rectangle(c.x, c.y, l.len(ancho), l.len(24.0), tinta);
+    let c = p(x0 + 2.5, y0 + 2.5);
+    draw_rectangle_lines(c.x, c.y, l.len(ancho - 5.0), l.len(19.0), l.len(1.0), PAPEL);
+    let (a, b, c) = (
+        p(x0 + 9.0, y0 + 7.0),
+        p(x0 + 9.0, y0 + 17.0),
+        p(x0 + 17.0, y0 + 12.0),
+    );
+    draw_triangle(a, b, c, PAPEL);
+    let s = p(x0 + 22.0, y0 + 18.0);
+    fuentes::texto(sello, s.x, s.y, tam, Cara::Titulo, PAPEL);
+    let ayuda = match figura {
+        Some(f) => textos::practicar(&teclas.mover, &teclas.aceptar, nombre(&f.name)),
+        None => glifos::txt(tx(Texto::PracticarNada)),
+    };
+    let x = x0 + ancho + 12.0;
+    let tam = glifos::encoger(&ayuda, l.len(14.0), l.len(592.0 - x));
+    let s = p(x, y0 + 17.0);
+    glifos::texto(&ayuda, s.x, s.y, tam, tinta);
 
     let s = p(48.0, 756.0);
     let jugado = textos::jugado(&horas(g.marcas.jugado));
@@ -1051,6 +1175,21 @@ mod tests {
         );
         assert_eq!(figura_en(vec2(100.0, 100.0), 5), None);
         assert_eq!(figura_en(en(5, 0), 5), None, "debajo del ultimo baile");
+    }
+
+    #[test]
+    fn el_boton_de_practicar_no_tapa_ninguna_columna() {
+        for bailes in 1..=5 {
+            for baile in 0..bailes {
+                let r = boton_practicar(Eleccion { baile, figura: 2 }, bailes);
+                for p in [r.point(), r.center(), r.point() + r.size()] {
+                    assert_eq!(figura_en(p, bailes), None, "{bailes}: {baile}");
+                }
+                // Y queda en su fila.
+                let y = 176.0 + baile as f32 * fila_de_baile(bailes);
+                assert!(r.y > y && r.bottom() < y + fila_de_baile(bailes));
+            }
+        }
     }
 
     #[test]
