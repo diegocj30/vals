@@ -542,47 +542,71 @@ const RAG_B_ACORDES: [Acorde; 8] = [
 /// escandalizo a Paris, se bailaba en music-halls y llego a estar prohibido:
 /// hace el mismo papel sin salirse de epoca.
 ///
-/// Esta transcrito de la notacion ABC en re mayor, y es la unica pieza del
-/// juego **en dos tiempos**. Un compas son ocho unidades, o sea que cada unidad
-/// es una semicorchea y cada corchea son dos; el original esta escrito en 4/4,
-/// pero sus acordes cambian a mitad de compas, que es la propia partitura
-/// diciendo que en realidad va en dos.
+/// Leido de la primera edicion de la reduccion para canto y piano (Paris,
+/// Heugel, sin fecha [1858]), el galop del final del segundo acto. Offenbach
+/// murio en 1880.
+///
+/// Esto es el coro, "Ce bal est original, d'un galop infernal": el tema que se
+/// reconoce. En 2/4, y es la unica pieza del juego **en dos tiempos**: un
+/// compas son ocho unidades, cada corchea dos. Las cuatro corcheas que bajan y
+/// las dos negras repetidas que contestan, y otra vez. El galop va en re mayor,
+/// pero el coro esta en sol (todos los do llevan becuadro), y en sol va aqui.
+///
+/// Dieciseis compases, la vuelta entera con la primera casilla: el ultimo
+/// compas acaba en el re de "ce", que es la anacrusa de "bal" y cierra el bucle.
 #[rustfmt::skip]
-const GALOP_A: [Nota; 22] = [
-    n(16, 4), n(12, 4),                                                     // 1
-    n(9, 4), n(7, 4),                                                       // 2
-    n(7, 2), n(2, 2), n(4, 2), n(5, 2),                                     // 3
-    n(4, 2), n(2, 2), n(0, 4),                                              // 4
-    n(16, 4), n(12, 4),                                                     // 5
-    n(9, 4), n(7, 4),                                                       // 6
-    n(6, 2), n(7, 2), n(9, 2), n(11, 2),                                    // 7
+const GALOP_A: [Nota; 48] = [
+    n(0, 8),                                                                // 1  bal
+    n(2, 2), n(5, 2), n(4, 2), n(2, 2),                                     // 2  est o-ri-gi
+    n(7, 4), n(7, 4),                                                       // 3  nal, d'un
+    n(7, 2), n(9, 2), n(4, 2), n(5, 2),                                     // 4  ga-lop in-fer
+    n(2, 4), n(2, 4),                                                       // 5  nal, don-
+    n(2, 2), n(5, 2), n(4, 2), n(2, 2),                                     // 6  nons tous le si
+    n(0, 2), n(12, 2), n(11, 2), n(9, 2),                                   // 7  gnal, vi-ve le
+    n(7, 2), n(5, 2), n(4, 2), n(2, 2),                                     // 8  ga-lop in-fer
+    n(0, 8),                                                                // 9  nal!
+    n(2, 2), n(5, 2), n(4, 2), n(2, 2),                                     // 10 Don-nons le si
+    n(7, 4), n(7, 4),                                                       // 11 gnal d'un
+    n(7, 2), n(9, 2), n(4, 2), n(5, 2),                                     // 12 ga-lop in-fer
+    n(2, 4), n(2, 4),                                                       // 13 nal! A-
+    n(2, 2), n(5, 2), n(4, 2), n(2, 2),                                     // 14 mis vi-ve le
+    n(0, 2), n(7, 2), n(2, 2), n(4, 2),                                     // 15 bal! vi-ve le
+    n(0, 4), n(-5, 4),                                                      // 16 bal! ce
+];
+
+/// Bajo en octavas al uno y el acorde al dos: el oom-pah de la partitura, que
+/// es el `OomPahPah` metido en dos tiempos. Solo sol y re7.
+///
+/// En el 15 el piano cambia a re7 en la segunda parte; aqui va sol entero,
+/// que es lo que hace el bajo en el uno.
+#[rustfmt::skip]
+const GALOP_A_ACORDES: [Acorde; 16] = [
+    may(0), sep(7), may(0), may(0), sep(7), sep(7), may(0), sep(7),
+    may(0), sep(7), may(0), may(0), sep(7), sep(7), may(0), may(0),
+];
+
+/// La entrada del galop, la de la orquesta antes del coro ("Tutti", *p*), de
+/// la misma edicion: en re mayor y en el agudo de flautas y violines.
+///
+/// Corcheas de punta a punta: el la, y el mi repetido, y el arpegio de sol
+/// que sube hasta el re de arriba. Ocho compases con la segunda casilla, que
+/// cae en el re para volver a empezar.
+#[rustfmt::skip]
+const GALOP_B: [Nota; 30] = [
+    n(7, 2), n(14, 2), n(14, 2), n(16, 2),                                  // 1
+    n(14, 2), n(12, 2), n(12, 2), n(16, 2),                                 // 2
+    n(17, 2), n(21, 2), n(24, 2), n(21, 2),                                 // 3
+    n(21, 2), n(19, 2), n(19, 4),                                           // 4
+    n(21, 2), n(11, 2), n(11, 2), n(21, 2),                                 // 5
+    n(19, 2), n(12, 2), n(12, 2), n(16, 2),                                 // 6
+    n(16, 2), n(14, 2), n(16, 2), n(14, 2),                                 // 7
     n(14, 2), n(12, 2), n(12, 4),                                           // 8
 ];
 
 #[rustfmt::skip]
-const GALOP_A_ACORDES: [Acorde; 8] = [
-    may(0), may(0), sep(7), may(0),
-    may(0), may(0), sep(7), may(0),
-];
-
-/// La segunda parte, que en el original cambia a sol mayor. Se transcribe tal
-/// cual y lo que se mueve es la tonica de la partitura, no las notas.
-#[rustfmt::skip]
-const GALOP_B: [Nota; 25] = [
-    n(0, 8),                                                                // 1
-    n(2, 2), n(5, 2), n(4, 2), n(2, 2),                                     // 2
-    n(7, 4), n(7, 4),                                                       // 3
-    n(7, 2), n(9, 2), n(4, 2), n(5, 2),                                     // 4
-    n(2, 4), n(2, 4),                                                       // 5
-    n(2, 2), n(5, 2), n(4, 2), n(2, 2),                                     // 6
-    n(0, 2), n(12, 2), n(11, 2), n(9, 2),                                   // 7
-    n(7, 2), n(5, 2), n(4, 2), n(2, 2),                                     // 8
-];
-
-#[rustfmt::skip]
 const GALOP_B_ACORDES: [Acorde; 8] = [
-    may(0), sep(7), may(0), may(0),
-    may(7), sep(7), may(0), sep(7),
+    sep(7), may(0), may(5), may(0),
+    sep(7), may(0), sep(7), may(0),
 ];
 
 /// **Asturias (Leyenda)**, Isaac Albeniz (1892), el principio.
@@ -833,7 +857,7 @@ fn partitura(t: Tema) -> Partitura {
             bpm: 150.0,
             tiempos: 2,
             acompanamiento: Acompanamiento::OomPahPah,
-            tonica: 17, // re
+            tonica: 22, // sol, sol4: el coro en su sitio
             melodia: &GALOP_A,
             acordes: &GALOP_A_ACORDES,
             espejo: false,
@@ -844,7 +868,7 @@ fn partitura(t: Tema) -> Partitura {
             bpm: 150.0,
             tiempos: 2,
             acompanamiento: Acompanamiento::OomPahPah,
-            tonica: 22, // sol: el original tambien cambia de tono aqui
+            tonica: 17, // re: la orquesta toca en el tono del galop
             melodia: &GALOP_B,
             acordes: &GALOP_B_ACORDES,
             espejo: false,
@@ -858,7 +882,7 @@ fn partitura(t: Tema) -> Partitura {
             bpm: 180.0,
             tiempos: 2,
             acompanamiento: Acompanamiento::OomPahPah,
-            tonica: 19, // mi
+            tonica: 24, // la: un tono por encima del coro
             melodia: &GALOP_A,
             acordes: &GALOP_A_ACORDES,
             espejo: false,
@@ -1697,6 +1721,16 @@ mod tests {
         let tonos: Vec<i32> = CUMPARSITA_A[..4].iter().map(|n| n.tono).collect();
         assert_eq!(tonos, vec![-5, 5, 2, -1]);
         assert!(CUMPARSITA_A[..4].iter().all(|n| n.unidades == 4));
+    }
+
+    #[test]
+    fn el_cancan_empieza_por_donde_tiene_que_empezar() {
+        // "Ce bal est original": la blanca, las cuatro corcheas la do si la,
+        // y las dos negras repetidas en el re.
+        let tonos: Vec<i32> = GALOP_A[..7].iter().map(|n| n.tono).collect();
+        assert_eq!(tonos, vec![0, 2, 5, 4, 2, 7, 7]);
+        let largos: Vec<u32> = GALOP_A[..7].iter().map(|n| n.unidades).collect();
+        assert_eq!(largos, vec![8, 2, 2, 2, 2, 4, 4]);
     }
 
     #[test]
