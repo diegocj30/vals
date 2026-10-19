@@ -135,6 +135,10 @@ pub struct World {
     /// Si es "toda la noche": los cinco bailes seguidos con las mismas vidas.
     /// Es una entrada, como el equipo: el replay lo guarda.
     pub noche: bool,
+    /// Si es una practica: una sola figura, sin perder vidas, y que al caer
+    /// acaba ahi en vez de pasar a la siguiente. Ver [`World::practicar`].
+    /// No se graba: practicar no deja replay.
+    pub practica: bool,
     /// Vidas que quedan.
     pub lives: u32,
     /// Se pone a `true` al caer el ultimo jefe.
@@ -183,6 +187,7 @@ impl World {
             boss_index: 0,
             baile: 0,
             noche: false,
+            practica: false,
             lives: STARTING_LIVES,
             victory: false,
             defeat: false,
@@ -279,6 +284,36 @@ impl World {
         w.noche = true;
         w.equipo = equipo;
         w.lives = w.vidas_de_salida();
+        w
+    }
+
+    /// Una practica: la figura `fase` del baile `baile`, sola, para
+    /// aprendersela.
+    ///
+    /// Empieza en esa figura con la vida llena y **sin** el respiro ni el
+    /// barrido de un cambio de figura: no se viene de ninguna. Morir no quita
+    /// vidas, y tumbar la figura acaba la partida con `victory` en vez de
+    /// pasar a la siguiente.
+    ///
+    /// La dificultad va aqui dentro y no con `con_dificultad`, que rehace el
+    /// jefe desde su primera figura. Una figura que no existe en esa
+    /// dificultad (la ultima, en sencillo) se recorta a la ultima que hay.
+    pub fn practicar(
+        seed: u64,
+        baile: usize,
+        fase: usize,
+        equipo: Equipo,
+        dificultad: Dificultad,
+    ) -> Self {
+        let mut w = Self::empezar_con(seed, Mode::Flight, baile, equipo).con_dificultad(dificultad);
+        let fase = fase.min(w.boss.phase_count().saturating_sub(1));
+        while w.boss.phase < fase && !w.boss.defeated {
+            let hp = w.boss.hp.max(1);
+            w.boss.damage(hp);
+        }
+        w.boss.respiro = 0;
+        w.boss.hit_flash = 0;
+        w.practica = true;
         w
     }
 
@@ -546,7 +581,7 @@ impl World {
         // rematar con el super no sonaba, no sacudia y no pasaba de jefe, y
         // pasar de figura con el super tampoco sonaba a cambio de figura.
         // Respirando tras cambiar de figura no se le hace dano, como a tiros.
-        if !self.boss.defeated && self.boss.respiro == 0 && self.boss.damage(SUPER_DAMAGE) {
+        if !self.boss.defeated && self.boss.respiro == 0 && self.herir(SUPER_DAMAGE) {
             self.bullets.clear();
             if self.boss.defeated {
                 self.advance_boss();
@@ -554,6 +589,17 @@ impl World {
                 self.events.phase_changed = true;
             }
         }
+    }
+
+    /// Le hace dano al jefe, como `Boss::damage`. En una practica la figura
+    /// que cae no da paso a la siguiente: el jefe cae con ella.
+    fn herir(&mut self, dano: i32) -> bool {
+        if self.practica && !self.boss.defeated && dano >= self.boss.hp {
+            self.boss.hp = 0;
+            self.boss.defeated = true;
+            return true;
+        }
+        self.boss.damage(dano)
     }
 
     fn resolve_player_shots(&mut self) {
@@ -569,7 +615,7 @@ impl World {
             return;
         }
         self.events.boss_hit = true;
-        if self.boss.damage(impactos as i32 * self.equipo.tiro.dano()) {
+        if self.herir(impactos as i32 * self.equipo.tiro.dano()) {
             // Cambio de fase o caida: en ambos casos se limpia la pantalla.
             // Heredar la pared de balas de la fase anterior seria una muerte
             // imposible de evitar justo en el momento de celebrar.
@@ -598,7 +644,11 @@ impl World {
             .hit_circle(self.player.pos, self.equipo.amuleto.hitbox())
             .is_some()
         {
-            self.lives = self.lives.saturating_sub(1);
+            // Practicando no se pierden vidas: el golpe se cuenta en
+            // `player.deaths` y la figura sigue.
+            if !self.practica {
+                self.lives = self.lives.saturating_sub(1);
+            }
             self.events.player_died = true;
             if self.lives == 0 {
                 self.defeat = true;
@@ -669,6 +719,10 @@ impl World {
         // La dificultad, igual: la normal no deja rastro.
         if self.dificultad != Dificultad::Normal {
             h.write_u64(u64::from(self.dificultad.as_u8()));
+        }
+        // Y la practica.
+        if self.practica {
+            h.write_u64(0x5052);
         }
 
         h.finish()
@@ -778,6 +832,52 @@ mod tests {
             // Y no es el mismo mundo, aunque se juegue igual.
             assert_ne!(normal.state_hash(), w.state_hash());
         }
+    }
+
+    // --- Practica ---
+
+    #[test]
+    fn practicar_empieza_en_la_figura_y_no_pasa_a_la_siguiente() {
+        for baile in 0..BossDef::default_bosses().len() {
+            let figuras = World::empezar_en(1, Mode::Flight, baile).boss.phase_count();
+            for fase in 0..figuras {
+                let mut w = World::practicar(7, baile, fase, Equipo::default(), Dificultad::Normal);
+                assert_eq!(w.boss.phase, fase);
+                assert_eq!(w.boss.hp, w.boss.phase_max_hp());
+                assert_eq!((w.boss.respiro, w.boss.defeated), (0, false));
+                // A un golpe de caer, se dispara hasta tumbarla.
+                w.player.iframes = u32::MAX / 2;
+                w.boss.hp = 1;
+                for _ in 0..240 {
+                    w.step(pulsar(InputFrame::SHOOT));
+                    assert!(!w.events.phase_changed, "ha pasado de figura");
+                    if w.victory {
+                        break;
+                    }
+                }
+                assert!(w.victory && w.boss.defeated, "no ha caido");
+                assert_eq!(w.boss.phase, fase);
+            }
+        }
+    }
+
+    #[test]
+    fn en_practica_morir_no_acaba_nada() {
+        let mut w = World::practicar(7, 0, 1, Equipo::default(), Dificultad::Normal);
+        let vidas = w.lives;
+        // Quieta veinte segundos: ninguna figura deja sitios seguros.
+        correr(&mut w, NADA, 1200);
+        assert!(w.player.deaths > 1, "no la han tocado");
+        assert_eq!(w.lives, vidas);
+        assert!(!w.is_over());
+        assert_eq!(w.boss.phase, 1);
+    }
+
+    #[test]
+    fn en_sencillo_la_practica_se_recorta_a_la_ultima_figura() {
+        let w = World::practicar(7, 0, 99, Equipo::default(), Dificultad::Sencillo);
+        assert_eq!(w.boss.phase, w.boss.phase_count() - 1);
+        assert_eq!(w.dificultad, Dificultad::Sencillo);
     }
 
     // --- Movimiento ---
